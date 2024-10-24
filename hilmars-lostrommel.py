@@ -2,29 +2,28 @@ from group_draw import simulate_group_draw
 from main_draw import simulate_main_draw
 from mock_data import *
 from startup_info import print_startup_info
+import inquirer
 
 def main():
     print_startup_info()
 
-    print("Press [1] for group draw")
-    print("Press [2] for main/consolation draw")
-    print("Press any other key to exit")
-
-    choice = input("Enter your choice: ")
+    singles_or_doubles = inquirer.list_input("Draw for singles or doubles/mixed?", choices=['Singles', 'Doubles/Mixed'])
+    draw_type = inquirer.list_input("Select draw type:", choices=['Group Draw', 'Main/Consolation Draw'])
 
     # Call the corresponding function based on user input
-    if choice == '1':
-        group_size = int(input("Please enter desired group size: "))
-        print("Press [1] for singles")
-        print("Press [2] for doubles/mixed")
-        choice2 = input("Enter your choice: ")
-        if choice2 == '1':
+    if draw_type == 'Group Draw':
+        
+        group_size = int(inquirer.text("Please enter desired group size:"))
+        print("\n")
+        
+        if singles_or_doubles == 'Singles':
             players = mock_players(32)
             simulate_group_draw(players, group_size)
-        elif choice2 == '2':
+        elif singles_or_doubles == 'Doubles/Mixed':
             teams = mock_teams(16)
             simulate_group_draw(teams, group_size)
-    elif choice == '2':
+
+    elif draw_type == 'Main/Consolation Draw':
         simulate_main_draw()
     else:
         print("Exiting program.")
