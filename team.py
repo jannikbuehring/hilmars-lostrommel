@@ -8,4 +8,4 @@ class Team:
         self.player_b = player_b
 
     def __repr__(self):
-        return f"Team {self.rank} (Player A: {self.player_a.player_number}. Player B: {self.player_b.player_number})"
+        return f"Team {self.rank} (Player A: {self.player_a.start_number}. Player B: {self.player_b.start_number})"
