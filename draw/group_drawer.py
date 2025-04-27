@@ -2,15 +2,15 @@ from tabulate import tabulate
 import math
 import random
 from models.player import Player
-from models.draw_data import DrawData
+from models.draw_data import DrawDataRow
 
 random.seed(1000)
 
 class GroupDrawer:
-    def __init__(self, players):
+    def __init__(self, players: list[Player]):
         self.players = players
 
-    def draw_groups(self, class_subset: DrawData, group_size):
+    def draw_groups(self, class_subset: list[DrawDataRow], group_size):
         def can_place_in_group(player, group):
             if len(groups[group]) >= group_size:
                 return False

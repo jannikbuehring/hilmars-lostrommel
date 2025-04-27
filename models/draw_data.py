@@ -1,4 +1,4 @@
-class DrawData:
+class DrawDataRow:
     def __init__(self, competition, competition_class, seeding, amount_of_groups, group_no, group_pos, main_round: bool, consolation_round: bool, start_number_a, start_number_b):
         self.competition = competition
         self.competition_class = competition_class

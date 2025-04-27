@@ -1,8 +1,8 @@
 from draw.group_drawer import GroupDrawer
 from draw.bracket_drawer import simulate_main_draw
-from io.mock_data import *
+from io import mock_players, mock_teams
 from misc.startup_info import print_startup_info
-from io.input_reader import read_players, read_draw_data
+from io import read_players, read_draw_data
 import inquirer
 
 def main():
@@ -43,11 +43,10 @@ def main():
         print("\n")
         
         if singles_or_doubles == 'Singles':
-            players = mock_players(32)
-            simulate_group_draw(players, group_size)
+            group_drawer.simulate_group_draw(players, group_size)
         elif singles_or_doubles == 'Doubles/Mixed':
             teams = mock_teams(16)
-            simulate_group_draw(teams, group_size)
+            group_drawer.simulate_group_draw(teams, group_size)
 
     elif draw_type == 'Main/Consolation Draw':
         simulate_main_draw()
