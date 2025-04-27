@@ -1,5 +1,5 @@
 from models.player import Player
-from models.draw_data import DrawData
+from models.draw_data import DrawDataRow
 
 def read_draw_data():
     with open("input/draw_input.csv", "r") as file:
@@ -7,7 +7,7 @@ def read_draw_data():
         draw_data = []
         for line in lines[1:]:
             competition, competition_class, amount_of_groups, seeding, group_no, group_pos, main_round, consolation_round, start_number_a, start_number_b = line.strip().split(";")
-            draw_data.append(DrawData(competition=competition, competition_class=competition_class, seeding=seeding, amount_of_groups=amount_of_groups, group_no=group_no, group_pos=group_pos, main_round=bool(main_round), consolation_round=bool(consolation_round), start_number_a=start_number_a, start_number_b=start_number_b))
+            draw_data.append(DrawDataRow(competition=competition, competition_class=competition_class, seeding=seeding, amount_of_groups=amount_of_groups, group_no=group_no, group_pos=group_pos, main_round=bool(main_round), consolation_round=bool(consolation_round), start_number_a=start_number_a, start_number_b=start_number_b))
         return draw_data
 
 def read_players():
