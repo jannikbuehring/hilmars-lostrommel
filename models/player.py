@@ -1,11 +1,15 @@
+players_by_start_number = {}
+
 class Player:
-    def __init__(self, start_number, first_name, last_name, country, base, gender):
-        self.start_number = start_number
+    def __init__(self, start_number: int, first_name, last_name, country, base, gender):
+        self.start_number = int(start_number)
         self.first_name = first_name
         self.last_name = last_name
         self.country = country
-        self.base = base
+        self.base = base if base != '' else None
         self.gender = gender
+        players_by_start_number[self.start_number] = self
+        
 
     def __repr__(self):
-        return f"{self.start_number}: {self.first_name} {self.last_name} (Country: {self.country}, Base: {self.base})"
+        return f"{self.first_name} {self.last_name} (Gender: {self.gender}, Country: {self.country}, Base: {self.base})"
