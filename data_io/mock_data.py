@@ -22,7 +22,7 @@ def mock_players(amount_of_players, amount_of_groups=1):
         country = random.choice(countries)
         base = random.choice(bases[country])
         group = i % amount_of_groups
-        players.append(Player(start_number=start_number, country=country, base=base))
+        players.append(Player(start_number=start_number, country=country, base=base, first_name="Mockerino", last_name="Mockerini", gender="SKONG"))
 
     return players
 
