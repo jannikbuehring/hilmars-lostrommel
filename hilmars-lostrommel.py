@@ -13,15 +13,43 @@ from viewer.group_viewer import show_groups_table
 from viewer.player_viewer import show_players_table
 from models.player import players_by_start_number
 
+singles_groups = {}
+doubles_groups = {}
+mixed_groups = {}
+
 def show_main_menu():
     ########################################################################################
-    todo = inquirer.list_input("What do to?", choices=['View', 'Export'])
-    if todo == 'View':
-        what_to_view = inquirer.list_input("What to view?", choices=['Players', 'Groups'])
-        if what_to_view == 'Players':
+    action = inquirer.list_input("Choose what to do", choices=['View', 'Export all', 'Exit'])
+    match (action):
+        case 'View':
+            view_choice()
+        case 'Export all':
+            print("")
+        case 'Exit':
+            return
+
+def view_choice():
+    what_to_view = inquirer.list_input("Choose what to view", choices=['Players', 'Groups', 'Bracket', 'Back'])
+    match (what_to_view):
+        case 'Players':
             show_players_table()
-        if what_to_view == 'Groups':
-            show_groups_table(singles_groups)
+        case 'Groups':
+            groups_choice()
+        case 'Bracket':
+            return
+        case 'Back':
+            show_main_menu()
+
+def groups_choice():
+    choices = list(singles_groups.keys())
+    choices.sort()
+    choices.append('Back')
+    competition = inquirer.list_input("Choose a competition", choices=choices)
+    match (competition):
+        case 'Back':
+            view_choice()
+        case _:
+            show_groups_table(singles_groups[competition])
 
 def main():
     print_startup_info()
@@ -87,23 +115,73 @@ def main():
     # TODO: check if single draw has already been performed
 
     ########################################################################################
-    with yaspin(text="Drawing single groups...", color="cyan") as spinner:
+    with yaspin(text="Drawing singles groups...", color="cyan") as spinner:
         try:
-            # Create data subsets for each distinct competition class
-            singles_competition_classes = set(data.competition_class for data in singles_draw_data)
-            singles_groups = {}
-            for competition_class in singles_competition_classes:
-                class_subset = [data for data in singles_draw_data if data.competition_class == competition_class]
-                group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                singles_groups[competition_class] = group
+            if not singles_draw_data:
+                spinner.text = f"No singles draw data found - no groups created"
+                spinner.fail("INFO")
+            else:
+                # Create data subsets for each distinct competition class
+                singles_competition_classes = set(data.competition_class for data in singles_draw_data)
+                for competition_class in singles_competition_classes:
+                    class_subset = [data for data in singles_draw_data if data.competition_class == competition_class]
+                    group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    singles_groups[competition_class] = group
 
-            spinner.text = f"Successfully created single groups for competition classes {singles_competition_classes}"
-            spinner.ok()
+                competition_classes_list = list(singles_competition_classes)
+                competition_classes_list.sort()
+                spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"
+                spinner.ok()
 
         except Exception:
             spinner.fail()
             print("An error occurred:", e)
 
+    ########################################################################################
+    with yaspin(text="Drawing doubles groups...", color="cyan") as spinner:
+        try:
+            if not doubles_draw_data:
+                spinner.text = f"No doubles draw data found - no groups created"
+                spinner.fail("INFO")
+            else:
+                # Create data subsets for each distinct competition class
+                doubles_competition_classes = set(data.competition_class for data in doubles_draw_data)
+                for competition_class in doubles_competition_classes:
+                    class_subset = [data for data in doubles_draw_data if data.competition_class == competition_class]
+                    #group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    #doubles_groups[competition_class] = group
+
+                competition_classes_list = list(doubles_competition_classes)
+                competition_classes_list.sort()
+                spinner.text = f"Successfully created doubles groups for competition classes {competition_classes_list}"
+                spinner.ok()
+
+        except Exception:
+            spinner.fail()
+            print("An error occurred:", e)
+
+    ########################################################################################
+    with yaspin(text="Drawing mixed groups...", color="cyan") as spinner:
+        try:
+            if not mixed_draw_data:
+                spinner.text = f"No mixed draw data found - no groups created"
+                spinner.fail("INFO")
+            else:
+                # Create data subsets for each distinct competition class
+                mixed_competition_classes = set(data.competition_class for data in mixed_draw_data)
+                for competition_class in mixed_competition_classes:
+                    class_subset = [data for data in mixed_draw_data if data.competition_class == competition_class]
+                    #group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    #mixed_groups[competition_class] = group
+
+                competition_classes_list = list(mixed_competition_classes)
+                competition_classes_list.sort()
+                spinner.text = f"Successfully created mixed groups for competition classes {competition_classes_list}"
+                spinner.ok()
+
+        except Exception:
+            spinner.fail()
+            print("An error occurred:", e)
 
 
     print("")
