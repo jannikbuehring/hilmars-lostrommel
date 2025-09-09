@@ -23,10 +23,11 @@ def show_main_menu():
     match (action):
         case 'View':
             view_choice()
-        case 'Export all':
+        case 'Export':
             print("")
         case 'Exit':
-            return
+            exit()
+    show_main_menu()
 
 def view_choice():
     what_to_view = inquirer.list_input("Choose what to view", choices=['Players', 'Groups', 'Bracket', 'Back'])
@@ -78,7 +79,7 @@ def main():
 
     # Basic configuration
     logging.basicConfig(
-        level=logging.INFO,                     # minimum level to log
+        level=logging.DEBUG,                     # minimum level to log
         format="%(asctime)s [%(levelname)s] %(message)s",  # log format
         datefmt="%Y-%m-%d %H:%M:%S"            # timestamp format
     )

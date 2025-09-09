@@ -22,6 +22,7 @@ class GroupDrawer:
                 # Check if any player in the group is from the same country
                 for player_already_in_group in groups[group]:
                     if players_by_start_number[player_already_in_group.start_number_a].country == players_by_start_number[participant.start_number_a].country:
+                        logging.debug(f"Player {players_by_start_number[participant.start_number_a].start_number} has same country as someone in group {group}.")
                         return False
             # Team
             else:
@@ -32,6 +33,7 @@ class GroupDrawer:
                         and players_by_start_number[team_already_in_group.start_number_b].country 
                         == players_by_start_number[participant.start_number_b].country
                     ):
+                        logging.debug(f"Team {players_by_start_number[participant.start_number_a].start_number}/{players_by_start_number[participant.start_number_b].start_number} has same country as someone in group {group}.")
                         return False
                 
             return True
@@ -42,17 +44,25 @@ class GroupDrawer:
             if participant.start_number_b == None:
                 for player_already_in_group in groups[group]:
                     if players_by_start_number[player_already_in_group.start_number_a].base == players_by_start_number[participant.start_number_a].base:
+                        logging.debug(f"Player {players_by_start_number[participant.start_number_a].start_number} has same base as someone in group {group}.")
                         return False
             # Team
             else:
                 for team_already_in_group in groups[group]:
-                    if ...:
+                    if (
+                        players_by_start_number[team_already_in_group.start_number_a].base 
+                        == players_by_start_number[participant.start_number_a].base 
+                        and players_by_start_number[team_already_in_group.start_number_b].base 
+                        == players_by_start_number[participant.start_number_b].base
+                    ):
+                        logging.debug(f"Team {players_by_start_number[participant.start_number_a].start_number}/{players_by_start_number[participant.start_number_b].start_number} has same base as someone in group {group}.")
                         return False
 
             return True
 
         def backtrack(batch, index, assigned_groups):
             if index >= len(batch):
+                logging.debug(f"All players of batch {batch} placed successfully")
                 return True  # All players placed successfully
 
             participant = batch[index]
@@ -66,6 +76,7 @@ class GroupDrawer:
                         assigned_groups.add(group)
 
                         if backtrack(batch, index + 1, assigned_groups):
+                            logging.debug(f"Added {participant} to group {group}")
                             return True
                         
                         # Undo the placement (backtrack)
