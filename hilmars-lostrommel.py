@@ -34,14 +34,28 @@ def view_choice():
         case 'Players':
             show_players_table()
         case 'Groups':
-            groups_choice()
+            singles_doubles_mixed_choice()
         case 'Bracket':
             return
         case 'Back':
             show_main_menu()
 
-def groups_choice():
-    choices = list(singles_groups.keys())
+def singles_doubles_mixed_choice():
+    s_d_m = inquirer.list_input("Choose what to view", choices=['Singles', 'Doubles', 'Mixed'])
+    match (s_d_m):
+        case 'Singles':
+            choices = list(singles_groups.keys())
+            groups_choice('S', choices)
+        case 'Doubles':
+            choices = list(doubles_groups.keys())
+            groups_choice('D', choices)
+        case 'Mixed':
+            choices = list(mixed_groups.keys())
+            groups_choice('M', choices)
+        case 'Back':
+            view_choice()
+
+def groups_choice(s_d_m, choices):
     choices.sort()
     choices.append('Back')
     competition = inquirer.list_input("Choose a competition", choices=choices)
@@ -49,7 +63,15 @@ def groups_choice():
         case 'Back':
             view_choice()
         case _:
-            show_groups_table(singles_groups[competition])
+            match(s_d_m):
+                case 'S':
+                    show_groups_table(singles_groups[competition])
+                case 'D':
+                    show_groups_table(doubles_groups[competition])
+                case 'M':
+                    show_groups_table(mixed_groups[competition])
+                case _:
+                    return
 
 def main():
     print_startup_info()
@@ -133,9 +155,10 @@ def main():
                 spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
-        except Exception:
+        except Exception as e:
             spinner.fail()
-            print("An error occurred:", e)
+            logging.error("An error occurred:", e)
+            return
 
     ########################################################################################
     with yaspin(text="Drawing doubles groups...", color="cyan") as spinner:
@@ -148,17 +171,18 @@ def main():
                 doubles_competition_classes = set(data.competition_class for data in doubles_draw_data)
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_draw_data if data.competition_class == competition_class]
-                    #group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    #doubles_groups[competition_class] = group
+                    group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    doubles_groups[competition_class] = group
 
                 competition_classes_list = list(doubles_competition_classes)
                 competition_classes_list.sort()
                 spinner.text = f"Successfully created doubles groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
-        except Exception:
+        except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
+            return
 
     ########################################################################################
     with yaspin(text="Drawing mixed groups...", color="cyan") as spinner:
@@ -179,38 +203,14 @@ def main():
                 spinner.text = f"Successfully created mixed groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
-        except Exception:
+        except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
+            return
 
 
     print("")
     show_main_menu()
-
-
-
-
-
-    #singles_or_doubles = inquirer.list_input("Draw for singles or doubles/mixed?", choices=['Singles', 'Doubles/Mixed'])
-    #draw_type = inquirer.list_input("Select draw type:", choices=['Group Draw', 'Main/Consolation Draw'])
-
-    # Call the corresponding function based on user input
-    #if draw_type == 'Group Draw':
-    #    
-    #    group_size = int(inquirer.text("Please enter desired group size:"))
-    #    print("\n")
-        
-    #    if singles_or_doubles == 'Singles':
-    #        group_drawer.simulate_group_draw(players, group_size)
-    #    elif singles_or_doubles == 'Doubles/Mixed':
-    #        teams = mock_teams(16)
-    #        group_drawer.simulate_group_draw(teams, group_size)
-
-    #elif draw_type == 'Main/Consolation Draw':
-    #    simulate_main_draw()
-    #else:
-    #    print("Exiting program.")
-    #    exit
 
 if __name__ == "__main__":
     main()
