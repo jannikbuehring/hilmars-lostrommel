@@ -10,3 +10,6 @@ class DrawDataRow:
         self.consolation_round = consolation_round
         self.start_number_a = int(start_number_a)
         self.start_number_b = int(start_number_b) if start_number_b != '' else None
+
+    def __repr__(self):
+        return f"{self.competition} {self.competition_class} (Seeding: {self.seeding}, Start number a: {self.start_number_a}, Start number b: {self.start_number_b})"
