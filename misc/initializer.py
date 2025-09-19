@@ -9,6 +9,7 @@ import configparser
 from data_io.input_reader import read_players, read_draw_data
 
 from draw.group_drawer import GroupDrawer
+from draw.bracket_drawer import BracketDrawer
 
 from models.player import players_by_start_number
 
@@ -25,6 +26,9 @@ if random_seed != '':
 singles_groups = {}
 doubles_groups = {}
 mixed_groups = {}
+
+group_drawer = GroupDrawer()
+bracket_drawer = BracketDrawer()
 
 def initialize_config():
     
@@ -89,11 +93,6 @@ def initialize_data():
             spinner.fail()
             logging.error("Exception occurred:\n%s", traceback.format_exc())
             return
-
-
-    group_drawer = GroupDrawer(players=players)
-
-    # TODO: check if single draw has already been performed
 
     ########################################################################################
     with yaspin(text="Drawing singles groups...", color="cyan") as spinner:
@@ -178,7 +177,11 @@ def initialize_data():
                 singles_competition_classes = set(data.competition_class for data in singles_bracket_draw_data)
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_bracket_draw_data if data.competition_class == competition_class]
-                    # draw bracket
+                    main_round_participants = [data for data in class_subset if data.main_round == True]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+
+                    main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
+                    consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
 
                 competition_classes_list = list(singles_competition_classes)
                 competition_classes_list.sort()
