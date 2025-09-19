@@ -6,9 +6,6 @@ from models.draw_data import DrawDataRow
 import logging
 
 class GroupDrawer:
-    def __init__(self, players: list[Player]):
-        self.players = players
-
     def draw_groups(self, class_subset: list[DrawDataRow], amount_of_groups):
         
         def can_place_in_group(participant, group):

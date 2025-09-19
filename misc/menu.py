@@ -1,6 +1,7 @@
 import inquirer
 from viewer.group_viewer import show_groups_table
 from viewer.player_viewer import show_players_table
+from viewer.bracket_viewer import show_bracket_table
 from hilmars_lostrommel import *
 
 def show_main_menu():
@@ -23,7 +24,7 @@ def view_choice():
         case 'Groups':
             singles_doubles_mixed_choice()
         case 'Bracket':
-            return
+            show_bracket_table()
         case 'Back':
             show_main_menu()
 
