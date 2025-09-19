@@ -5,8 +5,6 @@ from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
 import logging
 
-random.seed(1000)
-
 class GroupDrawer:
     def __init__(self, players: list[Player]):
         self.players = players

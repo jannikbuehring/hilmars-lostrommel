@@ -4,8 +4,8 @@ class DrawDataRow:
         self.competition_class = competition_class
         self.seeding = int(seeding)
         self.amount_of_groups = int(amount_of_groups)
-        self.group_no = int(group_no)
-        self.group_pos = int(group_pos)
+        self.group_no = int(group_no) if group_no != '' else None
+        self.group_pos = int(group_pos) if group_pos != '' else None
         self.main_round = main_round
         self.consolation_round = consolation_round
         self.start_number_a = int(start_number_a)
