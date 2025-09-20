@@ -11,6 +11,8 @@ from data_io.input_reader import read_players, read_draw_data
 from draw.group_drawer import GroupDrawer
 from draw.bracket_drawer import BracketDrawer
 
+from checks.validity_checker import *
+
 from models.player import players_by_start_number
 
 config = configparser.ConfigParser()
@@ -88,6 +90,29 @@ def initialize_data():
             spinner.text = f"File 'draw_input.csv' in directory 'input' not found"
             spinner.fail()
             return
+
+        except Exception:
+            spinner.fail()
+            logging.error("Exception occurred:\n%s", traceback.format_exc())
+            return
+
+    ########################################################################################
+    with yaspin(text="Performing data validity checks...", color="cyan") as spinner:
+        try:
+            missing_players = find_missing_players(draw_data)
+            if missing_players:
+                spinner.text = f"The draw data contains references to players that are missing from the import"
+                spinner.fail()
+                print(f">>>> Missing players: {missing_players}")
+                return
+
+            players_not_in_draw_data = find_players_not_in_draw_data(draw_data)
+            if players_not_in_draw_data:
+                spinner.text = f"There were players imported that are not partaking in any competition: {players_not_in_draw_data}"
+                spinner.ok("WARN")    
+            else:
+                spinner.text = f"The imported data seems valid"
+                spinner.ok()
 
         except Exception:
             spinner.fail()
