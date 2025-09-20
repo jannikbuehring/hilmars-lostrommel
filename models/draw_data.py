@@ -1,9 +1,9 @@
 class DrawDataRow:
-    def __init__(self, competition, competition_class, seeding: int, amount_of_groups: int, group_no: int, group_pos: int, main_round: bool, consolation_round: bool, start_number_a: int, start_number_b: int | None = None):
+    def __init__(self, competition, competition_class, seeding: int, amount_of_groups: int, group_no: int, group_pos: int, main_round: bool, consolation_round: bool, start_number_a: int, start_number_b: int):
         self.competition = competition
         self.competition_class = competition_class
-        self.seeding = int(seeding)
-        self.amount_of_groups = int(amount_of_groups)
+        self.seeding = int(seeding) if seeding != '' else None
+        self.amount_of_groups = int(amount_of_groups) if amount_of_groups != '' else None
         self.group_no = int(group_no) if group_no != '' else None
         self.group_pos = int(group_pos) if group_pos != '' else None
         self.main_round = main_round
