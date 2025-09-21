@@ -2,6 +2,7 @@ import logging
 import traceback
 import random
 
+from viewer.group_viewer import *
 from yaspin import yaspin
 
 import configparser
@@ -130,8 +131,8 @@ def initialize_data():
                 singles_competition_classes = set(data.competition_class for data in singles_group_draw_data)
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
-                    group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    singles_groups[competition_class] = group
+                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(singles_competition_classes)
                 competition_classes_list.sort()
@@ -154,8 +155,8 @@ def initialize_data():
                 doubles_competition_classes = set(data.competition_class for data in doubles_group_draw_data)
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
-                    group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    doubles_groups[competition_class] = group
+                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(doubles_competition_classes)
                 competition_classes_list.sort()
@@ -178,8 +179,8 @@ def initialize_data():
                 mixed_competition_classes = set(data.competition_class for data in mixed_group_draw_data)
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
-                    group = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    mixed_groups[competition_class] = group
+                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(mixed_competition_classes)
                 competition_classes_list.sort()
