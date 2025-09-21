@@ -12,4 +12,4 @@ class Player:
         players_list.append(self)    
 
     def __repr__(self):
-        return f"{self.first_name} {self.last_name} (Gender: {self.gender}, Country: {self.country}, Base: {self.base})"
+        return f"[{self.start_number}] {self.first_name} {self.last_name} ({self.country}, {self.base if self.base != None else 'No base'})"

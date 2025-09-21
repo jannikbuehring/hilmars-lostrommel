@@ -97,6 +97,7 @@ class GroupDrawer:
                             groups[group].append(participant)
                             assigned_groups.add(group)
                             snapshot_delta("add", group, participant)
+                            logging.debug(f"Added {participant} to group {group}")
                             placed = True
                             break
 
@@ -106,6 +107,7 @@ class GroupDrawer:
                                 groups[group].append(participant)
                                 assigned_groups.add(group)
                                 snapshot_delta("add", group, participant)
+                                logging.debug(f"Added {participant} to group {group}")
                                 placed = True
                                 break
 

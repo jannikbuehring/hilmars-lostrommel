@@ -1,4 +1,5 @@
 from tabulate import tabulate
+from viewer.view_config import table_format
 from models.player import players_by_start_number
 
 def show_bracket_table(first_round_matches):
@@ -36,6 +37,6 @@ def show_bracket_table(first_round_matches):
             format_participant(match.slot_b)
         ])
 
-    print(tabulate(table_data, headers=["Match", "Player A", "", "Player B"], tablefmt="grid"))
+    print(tabulate(table_data, headers=["Match", "Player A", "", "Player B"], tablefmt=table_format))
 
     print("")

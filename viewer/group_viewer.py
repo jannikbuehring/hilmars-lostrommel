@@ -1,7 +1,8 @@
 import os
-from models.player import players_by_start_number
-from tabulate import tabulate
 import inquirer
+from tabulate import tabulate
+from viewer.view_config import table_format
+from models.player import players_by_start_number
 
 def clear_screen():
     """Cross-platform clear screen"""
@@ -18,14 +19,14 @@ def show_groups_table(groups):
             for index, member in enumerate(group):
                 player = players_by_start_number[member.start_number_a]
                 table_data.append([index + 1, member.seeding, player.first_name, player.last_name, player.start_number, player.country, player.base])
-            print(tabulate(table_data, headers=["#", "Seeding", "First Name", "Last Name", "Start Number", "Country", "Base"], tablefmt="grid"))
+            print(tabulate(table_data, headers=["#", "Seeding", "First Name", "Last Name", "Start Number", "Country", "Base"], tablefmt=table_format))
        # Team Group
         else:
             for index, participant in enumerate(group):
                 player_a = players_by_start_number[participant.start_number_a]
                 player_b = players_by_start_number[participant.start_number_b]
                 table_data.append([index + 1, participant.seeding, player_a.last_name + "/" + player_b.last_name, str(player_a.start_number) + "/" + str(player_b.start_number), player_a.country + "/" + player_b.country, str(player_a.base) + "/" + str(player_b.base)])
-            print(tabulate(table_data, headers=["#", "Seeding", "Last Names", "Start Numbers", "Countries", "Bases"], tablefmt="grid"))
+            print(tabulate(table_data, headers=["#", "Seeding", "Last Names", "Start Numbers", "Countries", "Bases"], tablefmt=table_format))
 
     print("")
 
@@ -67,7 +68,7 @@ def show_snapshot_viewer(groups, snapshots):
                         player.base,
                     ])
                 print(tabulate(table_data, headers=["#", "Seeding", "First Name", "Last Name",
-                                                    "Start Number", "Country", "Base"], tablefmt="grid"))
+                                                    "Start Number", "Country", "Base"], tablefmt=table_format))
             else:
                 # Team group
                 for idx, participant in enumerate(group):
@@ -82,8 +83,16 @@ def show_snapshot_viewer(groups, snapshots):
                         f"{player_a.base}/{player_b.base}",
                     ])
                 print(tabulate(table_data, headers=["#", "Seeding", "Last Names", "Start Numbers",
-                                                    "Countries", "Bases"], tablefmt="grid"))
+                                                    "Countries", "Bases"], tablefmt=table_format))
 
+        print("")
+        action = 'Added to' if snapshots[index]["action"] == 'add' else 'Removed from'
+        player_a = players_by_start_number[snapshots[index]['participant'].start_number_a]
+        player_b = players_by_start_number[snapshots[index]['participant'].start_number_b] if snapshots[index]['participant'].start_number_b != None else None
+        if player_b == None:
+            print(f"{action} group {snapshots[index]['group']}: {player_a}")
+        else:
+            print(f"{action} group {snapshots[index]['group']}: {player_a} / {player_b}")
         print(f"\nSnapshot {index + 1}/{len(snapshots)}")
 
     last_action = "Forward"  # start with "Forward" as default
