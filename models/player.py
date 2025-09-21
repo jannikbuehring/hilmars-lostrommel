@@ -1,3 +1,4 @@
+players_list = []
 players_by_start_number = {}
 
 class Player:
@@ -8,8 +9,7 @@ class Player:
         self.country = country
         self.base = base if base != '' else None
         self.gender = gender
-        players_by_start_number[self.start_number] = self
-        
+        players_list.append(self)    
 
     def __repr__(self):
         return f"{self.first_name} {self.last_name} (Gender: {self.gender}, Country: {self.country}, Base: {self.base})"
