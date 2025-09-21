@@ -100,20 +100,37 @@ def initialize_data():
     ########################################################################################
     with yaspin(text="Performing data validity checks...", color="cyan") as spinner:
         try:
+            wrongful_player_data = check_all_players_only_exist_once()
+            if wrongful_player_data:
+                spinner.text = f"There were multiple player entries found"
+                spinner.fail()
+                print(f">>>> Multiple player entries for start number(s): {wrongful_player_data}")
+                return
+
             missing_players = find_missing_players(draw_data)
             if missing_players:
                 spinner.text = f"The draw data contains references to players that are missing from the import"
                 spinner.fail()
-                print(f">>>> Missing players: {missing_players}")
+                print(f">>>> Missing player(s): {missing_players}")
                 return
 
             players_not_in_draw_data = find_players_not_in_draw_data(draw_data)
             if players_not_in_draw_data:
                 spinner.text = f"There were players imported that are not partaking in any competition: {players_not_in_draw_data}"
                 spinner.ok("WARN")    
+
+            errors = find_players_in_wrong_competition(draw_data)
+            if errors:
+                spinner.text = f"Competition integrity problems detected"
+                spinner.fail()
+                print("")
+                for e in errors:
+                    print("   ", e)
+                #return
             else:
                 spinner.text = f"The imported data seems valid"
                 spinner.ok()
+                
 
         except Exception:
             spinner.fail()
