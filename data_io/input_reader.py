@@ -1,8 +1,11 @@
 from models.player import Player
 from models.draw_data import DrawDataRow
 
+draw_data_file_path = "input/draw_input.csv"
+player_file_path = "input/players.csv"
+
 def read_draw_data():
-    with open("input/draw_input.csv", "r", encoding="utf-8") as file:
+    with open(draw_data_file_path, "r", encoding="utf-8") as file:
         lines = file.readlines()
         draw_data = []
         for line in lines[1:]:
@@ -11,7 +14,7 @@ def read_draw_data():
         return draw_data
 
 def read_players():
-    with open("input/players.csv", "r", encoding="utf-8") as file:
+    with open(player_file_path, "r", encoding="utf-8") as file:
         lines = file.readlines()
         players = []
         for line in lines[1:]:
