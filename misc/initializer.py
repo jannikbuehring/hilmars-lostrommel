@@ -8,6 +8,7 @@ from yaspin import yaspin
 import configparser
 
 from data_io.input_reader import read_players, read_draw_data
+from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
 
 from draw.group_drawer import GroupDrawer
 from draw.bracket_drawer import BracketDrawer
@@ -22,6 +23,8 @@ config.read("config.ini")
 log_level = config["settings"]["log_level"]
 mode = config["settings"]["mode"]
 random_seed = config["settings"]["random_seed"]
+
+export_data = []
 
 if random_seed != '':
     random.seed(random_seed)
@@ -223,8 +226,8 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
-                    consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
+                    #main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
+                    #consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
 
                 competition_classes_list = list(singles_competition_classes)
                 competition_classes_list.sort()
@@ -276,6 +279,36 @@ def initialize_data():
                 competition_classes_list.sort()
                 spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
                 spinner.ok()
+
+        except Exception as e:
+            spinner.fail()
+            logging.error("An error occurred:", e)
+            return
+
+    ########################################################################################
+    with yaspin(text="Preparing data for export...", color="cyan") as spinner:
+        try:
+            groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
+            brackets = {}
+            export_data.extend(prepare_export_from_group_draw(groups))
+            #export_data.append(prepare_export_from_bracket_draw(brackets))
+
+
+            spinner.text = f"Export successfully prepared"
+            spinner.ok()
+
+        except Exception as e:
+            spinner.fail()
+            logging.error("An error occurred:", e)
+            return
+
+    ########################################################################################
+    with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
+        try:
+            write_to_csv(export_data)
+
+            spinner.text = f"Successfully created output file"
+            spinner.ok()
 
         except Exception as e:
             spinner.fail()

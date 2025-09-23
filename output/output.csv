@@ -1,0 +1,464 @@
+S_D_M;class;seeding;group_no;group_pos;for_main_round;for_consolation;draw_number;startnumber_A;last_name_A;country_A;PPP_chapter_A;startnumber_B;last_name_B;country_B;PPP_chapter_B
+S;M1;300;1;;;;;13;Flues;Germany;Gütersloh;;;;
+S;M1;290;1;;;;;149;Jerslund;Denmark;;;;;
+S;M1;279;1;;;;;81;Hess;Germany;Homburg-Erbach;;;;
+S;M1;269;1;;;;;31;Schenker;Switzerland;;;;;
+S;M1;260;1;;;;;141;Naveh;Israel;;;;;
+S;M1;249;1;;;;;37;Müller;Germany;Marburg;;;;
+S;M1;299;2;;;;;137;Schmechel;Germany;Düsseldorf;;;;
+S;M1;286;2;;;;;192;Megla;Croatia;;;;;
+S;M1;278;2;;;;;1;Dawson;England;;;;;
+S;M1;270;2;;;;;151;Jensen;Denmark;;;;;
+S;M1;259;2;;;;;30;Rattai;Germany;Köln;;;;
+S;M1;248;2;;;;;309;Schmidt;Germany;Bad Homburg;;;;
+S;M1;298;3;;;;;77;Rozenblat;USA;;;;;
+S;M1;289;3;;;;;11;Boomhuis;Germany;Nordhorn;;;;
+S;M1;277;3;;;;;291;Leber;Germany;Reutlingen;;;;
+S;M1;268;3;;;;;265;Gourmon;France;;;;;
+S;M1;257;3;;;;;65;Bezerra de Albuquerque;Brazil;;;;;
+S;M1;247;3;;;;;142;Capuder;Slovenia;LJUBLJANA;;;;
+S;M1;297;4;;;;;123;Kouril;Czech Republic;;;;;
+S;M1;288;4;;;;;230;Rokitta;Germany;Eystrup;;;;
+S;M1;276;4;;;;;307;Sj�stedt;Sweden;;;;;
+S;M1;267;4;;;;;284;Caeiro;Portugal;;;;;
+S;M1;256;4;;;;;95;Dahm;Germany;Bad Homburg;;;;
+S;M1;246;4;;;;;47;Busch;Germany;Berlin Friedrichshain;;;;
+S;M1;296;5;;;;;197;Kure;Slovenia;NOVO MESTO;;;;
+S;M1;287;5;;;;;182;Gruve;Germany;Dresden;;;;
+S;M1;275;5;;;;;74;Pierrot;Germany;Homburg-Erbach;;;;
+S;M1;266;5;;;;;35;Capan;Croatia;;;;;
+S;M1;255;5;;;;;286;Ring;Israel;;;;;
+S;M1;245;5;;;;;181;DiPasquale;USA;;;;;
+S;M1;295;6;;;;;61;Teppe;Germany;Wuppertal;;;;
+S;M1;285;6;;;;;97;Kurent;Slovenia;MARIBOR;;;;
+S;M1;274;6;;;;;133;Stainthorpe;England;;;;;
+S;M1;265;6;;;;;48;Bachmann;Switzerland;;;;;
+S;M1;253;6;;;;;272;Kawai;Japan;;;;;
+S;M1;169;6;;;;;279;Graindorge;France;;;;;
+S;M1;294;7;;;;;24;Probst;Germany;Fulda;;;;
+S;M1;284;7;;;;;276;Cardadeiro;Portugal;;;;;
+S;M1;273;7;;;;;124;Schnittker;Germany;Spelle;;;;
+S;M1;264;7;;;;;194;Van Haute;France;;;;;
+S;M1;254;7;;;;;162;Markovic;Slovenia;NOVO MESTO;;;;
+S;M1;293;8;;;;;93;Ezzat-Ahmadi;USA;;;;;
+S;M1;283;8;;;;;193;Kaspersen;Denmark;;;;;
+S;M1;280;8;;;;;59;Rehse;Germany;Bad Salzuflen;;;;
+S;M1;263;8;;;;;305;Ribeiro Morand;Brazil;;;;;
+S;M1;250;8;;;;;28;Lutter;Germany;Großkarolinenfeld;;;;
+S;M1;292;9;;;;;89;Hughes;England;;;;;
+S;M1;281;9;;;;;5;Friedrichs;Germany;Warsingsfehn;;;;
+S;M1;272;9;;;;;32;Astrand;Sweden;;;;;
+S;M1;262;9;;;;;177;Planty;France;;;;;
+S;M1;252;9;;;;;184;Holm;Denmark;;;;;
+S;M1;291;10;;;;;76;Hase;Germany;Varel;;;;
+S;M1;282;10;;;;;114;Vitanc;Slovenia;CELJE;;;;
+S;M1;271;10;;;;;72;Schiefer;Germany;Steinheim;;;;
+S;M1;261;10;;;;;294;Berte;USA;;;;;
+S;M1;251;10;;;;;232;Wessolowski;Germany;;;;;
+S;M2;244;1;;;;;159;Chinitz;Israel;;;;;
+S;M2;231;1;;;;;7;Arends;Germany;Oldenburg;;;;
+S;M2;220;1;;;;;82;Schlup;Switzerland;;;;;
+S;M2;207;1;;;;;100;Peteri;Netherlands;;;;;
+S;M2;197;1;;;;;122;Marin;France;;;;;
+S;M2;171;1;;;;;154;Sprohar;Slovenia;LJUBLJANA;;;;
+S;M2;243;2;;;;;312;Simic;Croatia;;;;;
+S;M2;230;2;;;;;33;Pietrzyk;Poland;;;;;
+S;M2;219;2;;;;;308;Wissler;Germany;Bad Homburg;;;;
+S;M2;208;2;;;;;235;Glaubach;Israel;;;;;
+S;M2;196;2;;;;;225;Sommerhuber;Austria;;;;;
+S;M2;176;2;;;;;62;G�dl;Switzerland;;;;;
+S;M2;241;3;;;;;163;Zelenjak;Slovenia;MARIBOR;;;;
+S;M2;229;3;;;;;8;Bach;Croatia/USA;;;;;
+S;M2;218;3;;;;;144;Temr;Czech Republic;;;;;
+S;M2;206;3;;;;;270;Krebs;Germany;Thurnau;;;;
+S;M2;195;3;;;;;29;Hoelscher-Obermaier;Germany;Stahnsdorf;;;;
+S;M2;172;3;;;;;300;Jenal;Switzerland;;;;;
+S;M2;239;4;;;;;297;Sch�nhoff;Germany;Zwickau;;;;
+S;M2;228;4;;;;;27;Berz;Switzerland;;;;;
+S;M2;217;4;;;;;9;Schwarz;Germany;Köln;;;;
+S;M2;204;4;;;;;88;Hain;Germany;Bonn;;;;
+S;M2;194;4;;;;;92;Schunk;Germany;Oberhausen;;;;
+S;M2;168;4;;;;;46;Bednarz;Germany;H�fingen;;;;
+S;M2;238;5;;;;;187;Meister;Germany;Wehr;;;;
+S;M2;227;5;;;;;196;Fabjan;Slovenia;NOVO MESTO;;;;
+S;M2;216;5;;;;;63;Strobel;Germany;Schwabach;;;;
+S;M2;205;5;;;;;134;Hopf;Germany;Zwickau;;;;
+S;M2;193;5;;;;;104;Rauchmaul;Germany;Leipzig;;;;
+S;M2;154;5;;;;;57;Krackow;Germany;Kiel;;;;
+S;M2;237;6;;;;;101;Gazdic;Croatia;;;;;
+S;M2;226;6;;;;;113;K�hl;Germany;Kiel;;;;
+S;M2;215;6;;;;;111;Walser;Switzerland;;;;;
+S;M2;203;6;;;;;219;Stankovic;Sweden;;;;;
+S;M2;192;6;;;;;166;Thom;Germany;L�bow;;;;
+S;M2;164;6;;;;;303;Bogataj;Slovenia;KRANJ;;;;
+S;M2;236;7;;;;;280;Stangl;Austria;;;;;
+S;M2;225;7;;;;;69;Volkemer;Germany;Weißwasser;;;;
+S;M2;214;7;;;;;189;Herz;Germany;Karlsruhe;;;;
+S;M2;202;7;;;;;78;Lunde;Denmark;;;;;
+S;M2;191;7;;;;;248;Grzywacz;Poland;;;;;
+S;M2;150;7;;;;;251;Prange;Germany;Düsseldorf;;;;
+S;M2;235;8;;;;;171;Lee;England;;;;;
+S;M2;224;8;;;;;99;Kuhn;Germany;Eichstätt;;;;
+S;M2;211;8;;;;;2;Schliwinski;Germany;Chemnitz;;;;
+S;M2;201;8;;;;;119;Tetour;Czech Republic;;;;;
+S;M2;189;8;;;;;245;Achermann;Switzerland;;;;;
+S;M2;146;8;;;;;258;Frishman;Israel;;;;;
+S;M2;234;9;;;;;183;Zavrtanik;Slovenia;NOVA GORICA;;;;
+S;M2;222;9;;;;;255;Henrich;Germany;Sottrum;;;;
+S;M2;212;9;;;;;64;Cook;England;;;;;
+S;M2;200;9;;;;;228;Sch�n;Germany;Karlsruhe;;;;
+S;M2;181;9;;;;;14;Augstein;Germany;L�bower SV;;;;
+S;M2;136;9;;;;;207;Lovincic;Slovenia;LJUBLJANA;;;;
+S;M2;233;10;;;;;287;Philipp;Austria;;;;;
+S;M2;221;10;;;;;301;Wadle;Germany;Hamburg Nord;;;;
+S;M2;210;10;;;;;315;Neubeck;Germany;Hanau;;;;
+S;M2;199;10;;;;;190;Ocepek;Slovenia;MARIBOR;;;;
+S;M2;177;10;;;;;185;Droste;Germany;Mannheim;;;;
+S;M2;126;10;;;;;147;Halfon;Israel;;;;;
+S;M2;232;11;;;;;80;D�rr;Germany;Steinheim;;;;
+S;M2;223;11;;;;;17;Zanatta;Switzerland;;;;;
+S;M2;209;11;;;;;250;Kosar;Croatia;;;;;
+S;M2;198;11;;;;;108;Daun;Germany;Münster;;;;
+S;M2;187;11;;;;;271;Piletic;Slovenia;LJUBLJANA;;;;
+S;M2;122;11;;;;;160;Eldis;Israel;;;;;
+S;M3;190;1;;;;;239;Dietrich;Germany;Kiel;;;;
+S;M3;174;1;;;;;277;Brandovardi;Italy;;;;;
+S;M3;159;1;;;;;55;Zender;Germany;München-Ost;;;;
+S;M3;147;1;;;;;229;Shacham;Israel;;;;;
+S;M3;135;1;;;;;112;Stadelmann;Switzerland;;;;;
+S;M3;123;1;;;;;10;Galic;Croatia;;;;;
+S;M3;188;2;;;;;273;Baro;Germany;Mannheim;;;;
+S;M3;173;2;;;;;179;Nofta;Croatia;;;;;
+S;M3;158;2;;;;;86;Deters;Germany;Nordhorn;;;;
+S;M3;145;2;;;;;56;Sch�ler;Germany;Sottrum;;;;
+S;M3;134;2;;;;;148;Chresta;Switzerland;;;;;
+S;M3;121;2;;;;;152;Danihelka;Czech Republic;;;;;
+S;M3;186;3;;;;;39;Wottrich;Germany;Wenden;;;;
+S;M3;167;3;;;;;199;Jurkovic;Slovenia;LJUBLJANA;;;;
+S;M3;156;3;;;;;215;Anzlinger;Germany;Mannheim;;;;
+S;M3;144;3;;;;;138;Bakos;Hungary;;;;;
+S;M3;133;3;;;;;94;Polke;Germany;Fulda;;;;
+S;M3;120;3;;;;;213;Cufer;Slovenia;NOVA GORICA;;;;
+S;M3;184;4;;;;;79;Nierzwicki;Germany;Harrislee Nord;;;;
+S;M3;166;4;;;;;208;Butolen;Slovenia;MARIBOR;;;;
+S;M3;155;4;;;;;51;Hertlein;Germany;Nürnberg-West;;;;
+S;M3;142;4;;;;;58;Straeten;Germany;Düsseldorf;;;;
+S;M3;132;4;;;;;241;Raupach;Germany;Nordhorn;;;;
+S;M3;119;4;;;;;107;Groves;England;;;;;
+S;M3;183;5;;;;;304;Benedik;Slovenia;KRANJ;;;;
+S;M3;170;5;;;;;223;Becker;Germany;Flensburg;;;;
+S;M3;153;5;;;;;156;Zagar;Croatia;;;;;
+S;M3;141;5;;;;;146;Gremm-Roloff;Germany;Wehr;;;;
+S;M3;131;5;;;;;36;Müller;Germany;Homburg-Erbach;;;;
+S;M3;118;5;;;;;188;Kocjancic;Slovenia;NOVO MESTO;;;;
+S;M3;182;6;;;;;244;Lemos Monteiro Wanderley;Switzerland;;;;;
+S;M3;165;6;;;;;268;Oetken;Germany;Langenfeld;;;;
+S;M3;157;6;;;;;216;Trontelj;Slovenia;LJUBLJANA;;;;
+S;M3;139;6;;;;;261;Accarino;Malta;;;;;
+S;M3;130;6;;;;;178;Dumont;France;;;;;
+S;M3;117;6;;;;;224;Likar;Slovenia;MARIBOR;;;;
+S;M3;180;7;;;;;306;Fink;Slovenia;KRANJ;;;;
+S;M3;163;7;;;;;90;Klose;Germany;Berlin Lichterfelde;;;;
+S;M3;152;7;;;;;85;König;Germany;D�lmen;;;;
+S;M3;138;7;;;;;260;Barbara;Malta;;;;;
+S;M3;128;7;;;;;195;Jasa;Czech Republic;;;;;
+S;M3;116;7;;;;;298;Dragan;Slovenia;NOVO MESTO;;;;
+S;M3;179;8;;;;;254;Bayer;Austria;;;;;
+S;M3;162;8;;;;;42;Koch;Germany;Trier;;;;
+S;M3;151;8;;;;;103;Di Lena;Germany;Karlsruhe;;;;
+S;M3;143;8;;;;;150;Vivod;Slovenia;CELJE;;;;
+S;M3;127;8;;;;;242;Marincelj;Slovenia;LJUBLJANA;;;;
+S;M3;115;8;;;;;283;Vesligaj;Slovenia;MARIBOR;;;;
+S;M3;178;9;;;;;34;Ro�kothen;Germany;Neumarkt Sankt-Veit;;;;
+S;M3;160;9;;;;;233;Kaltenegger;Germany;Ingolstadt;;;;
+S;M3;149;9;;;;;262;Casha;Malta;;;;;
+S;M3;140;9;;;;;293;Logar;Slovenia;NOVA GORICA;;;;
+S;M3;124;9;;;;;175;Zavrsan;Slovenia;CELJE;;;;
+S;M3;114;9;;;;;274;Latino;Italy;;;;;
+S;M3;175;10;;;;;172;Benkic;Slovenia;MARIBOR;;;;
+S;M3;161;10;;;;;16;Schragner;Germany;Ingolstadt;;;;
+S;M3;148;10;;;;;66;Dufek;Czech Republic;;;;;
+S;M3;137;10;;;;;317;Alvarez Vina;Norway;;;;;
+S;M3;125;10;;;;;209;Orel;Slovenia;NOVA GORICA;;;;
+S;M3;113;10;;;;;275;Vullo;Italy;;;;;
+S;W1;300;1;;;;;202;Koyama;Japan;;;;;
+S;W1;292;1;;;;;211;Mursec;Slovenia;MARIBOR;;;;
+S;W1;289;1;;;;;238;Jeska;Germany;;;;;
+S;W1;284;1;;;;;143;Mark;Israel;;;;;
+S;W1;279;1;;;;;259;Tabone;Malta;;;;;
+S;W1;274;1;;;;;257;Czernicki;Germany;Berlin Olympiapark;;;;
+S;W1;299;2;;;;;140;Robinson;Israel;;;;;
+S;W1;294;2;;;;;203;Ando;Japan;;;;;
+S;W1;288;2;;;;;128;Leidenberger;Germany;Dietersheim;;;;
+S;W1;283;2;;;;;38;Jan;Austria;;;;;
+S;W1;278;2;;;;;174;Brauckmann;Germany;Gütersloh;;;;
+S;W1;271;2;;;;;15;Wilke;Germany;Gnoien;;;;
+S;W1;298;3;;;;;70;Alley;USA;;;;;
+S;W1;293;3;;;;;204;Kanie;Japan;;;;;
+S;W1;286;3;;;;;26;Busch-de Groot;Germany;Nordhorn;;;;
+S;W1;282;3;;;;;153;Jonckheere;Belgium;;;;;
+S;W1;277;3;;;;;41;Brandt;Germany;Gnoien;;;;
+S;W1;273;3;;;;;200;Hofner;Austria;;;;;
+S;W1;296;4;;;;;130;Ildal;Denmark;;;;;
+S;W1;290;4;;;;;12;Kind;Germany;Fulda;;;;
+S;W1;287;4;;;;;83;Kocbek;Slovenia;MARIBOR;;;;
+S;W1;281;4;;;;;198;Rehr;Germany;Dietersheim;;;;
+S;W1;276;4;;;;;73;Houghton;England;;;;;
+S;W1;266;4;;;;;53;Pazyna;Germany;Hamburg St. Pauli;;;;
+S;W1;295;5;;;;;129;Klein;Germany;Düsseldorf;;;;
+S;W1;291;5;;;;;214;Ishihara;Japan;;;;;
+S;W1;285;5;;;;;282;Nagy;Hungary;;;;;
+S;W1;280;5;;;;;117;Freund;Czech Republic;;;;;
+S;W1;275;5;;;;;87;Schulte-Sutrum;Germany;Münster;;;;
+S;W2;272;1;;;;;23;Fischer;Switzerland;;;;;
+S;W2;264;1;;;;;3;Stahlberg;Germany;Zwickau;;;;
+S;W2;259;1;;;;;115;Müller;Germany;Marburg;;;;
+S;W2;256;1;;;;;19;Müllner;Germany;Thurnau;;;;
+S;W2;251;1;;;;;236;Scheel;Germany;Potsdam;;;;
+S;W2;229;1;;;;;165;Slokan;Slovenia;MARIBOR;;;;
+S;W2;270;2;;;;;116;Krippner;Germany;Berlin Lichterfelde;;;;
+S;W2;263;2;;;;;161;Remec;Slovenia;NOVO MESTO;;;;
+S;W2;258;2;;;;;96;Jones;England;;;;;
+S;W2;255;2;;;;;173;Salak;Poland;;;;;
+S;W2;250;2;;;;;20;Mischo;Germany;Trier Kernscheid;;;;
+S;W2;216;2;;;;;170;Wohinz;Slovenia;LJUBLJANA;;;;
+S;W2;269;3;;;;;126;Zhang Freund;Sweden;;;;;
+S;W2;262;3;;;;;243;Kerntopf;Poland;;;;;
+S;W2;260;3;;;;;109;Gerhard;Germany;Münster;;;;
+S;W2;253;3;;;;;169;Brinar;Slovenia;CELJE;;;;
+S;W2;249;3;;;;;263;Müller;Germany;Sottrum;;;;
+S;W2;268;4;;;;;40;Herrmann;Germany;Zwickau;;;;
+S;W2;261;4;;;;;49;W�neskog;Sweden;;;;;
+S;W2;257;4;;;;;121;Strmsek;Slovenia;MARIBOR;;;;
+S;W2;252;4;;;;;21;Schultz;Germany;D�lmen;;;;
+S;W2;248;4;;;;;186;Wallmoden-Zaborowska;Poland;;;;;
+S;W3;247;1;;;;;98;Novak Zupancic;Slovenia;NOVO MESTO;;;;
+S;W3;242;1;;;;;110;Frey Arabi Katbi;Switzerland;;;;;
+S;W3;237;1;;;;;302;K�hnert;Germany;Düsseldorf;;;;
+S;W3;232;1;;;;;246;Krupa;Poland;;;;;
+S;W3;225;1;;;;;311;Lacey-Solymar;England;;;;;
+S;W3;217;1;;;;;44;van Leeuwen;Netherlands;;;;;
+S;W3;246;2;;;;;205;Anderle;Germany;Berlin Olympiapark;;;;
+S;W3;240;2;;;;;231;Otto;Germany;Winterscheid;;;;
+S;W3;236;2;;;;;180;Kloar;Slovenia;CELJE;;;;
+S;W3;231;2;;;;;18;Schmidt;Germany;Ettenheim/Altdorf;;;;
+S;W3;222;2;;;;;54;Finck;Germany;Kiel;;;;
+S;W3;215;2;;;;;266;Phillips;USA;;;;;
+S;W3;245;3;;;;;102;Alessandrini;Italy;;;;;
+S;W3;241;3;;;;;127;Keiper;Germany;Berlin Friedrichshain;;;;
+S;W3;234;3;;;;;67;Korbickova;Czech Republic;;;;;
+S;W3;230;3;;;;;191;Scheurig;Germany;Köln;;;;
+S;W3;226;3;;;;;206;Ilich;Slovenia;LJUBLJANA;;;;
+S;W3;244;4;;;;;136;Heyd;Germany;München-Ost;;;;
+S;W3;239;4;;;;;4;Freimuth;Germany;Kiel;;;;
+S;W3;235;4;;;;;299;Lamm;Germany;;;;;
+S;W3;228;4;;;;;168;Vaisbrot;Israel;;;;;
+S;W3;224;4;;;;;316;Cajlinger;Slovenia;MARIBOR;;;;
+S;W3;243;5;;;;;132;Pra�e;Germany;Zwickau;;;;
+S;W3;238;5;;;;;118;Solberg;Germany;Heidelberg;;;;
+S;W3;233;5;;;;;290;Lagac;Germany;Düsseldorf;;;;
+S;W3;227;5;;;;;281;S��;Germany;Sottrum;;;;
+S;W3;220;5;;;;;237;Blume;Germany;;;;;
+S;W3;218;5;;;;;164;Pecaric;Slovenia;MARIBOR;;;;
+D;M1;594;1;;;;;137;Schmechel;Germany;Düsseldorf;61;Teppe;Germany;Wuppertal
+D;M1;548;1;;;;;32;Astrand;Sweden;;307;Sj�stedt;Sweden;
+D;M1;514;1;;;;;8;Bach;Croatia/USA;;97;Kurent;Slovenia;MARIBOR
+D;M1;480;1;;;;;101;Gazdic;Croatia;;312;Simic;Croatia;
+D;M1;591;2;;;;;93;Ezzat-Ahmadi;USA;;77;Rozenblat;USA;
+D;M1;558;2;;;;;182;Gruve;Germany;Dresden;72;Schiefer;Germany;Steinheim
+D;M1;491;2;;;;;284;Caeiro;Portugal;;99;Kuhn;Germany;Eichstätt
+D;M1;476;2;;;;;30;Rattai;Germany;Köln;9;Schwarz;Germany;Köln
+D;M1;589;3;;;;;11;Boomhuis;Germany;Nordhorn;13;Flues;Germany;Gütersloh
+D;M1;534;3;;;;;48;Bachmann;Switzerland;;31;Schenker;Switzerland;
+D;M1;490;3;;;;;276;Cardadeiro;Portugal;;270;Krebs;Germany;Thurnau
+D;M1;475;3;;;;;183;Zavrtanik;Slovenia;NOVA GORICA;163;Zelenjak;Slovenia;MARIBOR
+D;M1;585;4;;;;;76;Hase;Germany;Varel;24;Probst;Germany;Fulda
+D;M1;523;4;;;;;265;Gourmon;France;;286;Ring;Israel;
+D;M1;488;4;;;;;37;Müller;Germany;Marburg;297;Sch�nhoff;Germany;Zwickau
+D;M1;468;4;;;;;235;Glaubach;Israel;;141;Naveh;Israel;
+D;M1;578;5;;;;;149;Jerslund;Denmark;;230;Rokitta;Germany;Eystrup
+D;M1;554;5;;;;;81;Hess;Germany;Homburg-Erbach;74;Pierrot;Germany;Homburg-Erbach
+D;M1;486;5;;;;;64;Cook;England;;133;Stainthorpe;England;
+D;M1;467;5;;;;;309;Schmidt;Germany;Bad Homburg;308;Wissler;Germany;Bad Homburg
+D;M1;570;6;;;;;1;Dawson;England;;89;Hughes;England;
+D;M1;530;6;;;;;28;Lutter;Germany;Großkarolinenfeld;59;Rehse;Germany;Bad Salzuflen
+D;M1;480;6;;;;;100;Peteri;Netherlands;;124;Schnittker;Germany;Spelle
+D;M1;462;6;;;;;208;Butolen;Slovenia;MARIBOR;197;Kure;Slovenia;NOVO MESTO
+D;M1;558;7;;;;;294;Berte;USA;;123;Kouril;Czech Republic;
+D;M1;520;7;;;;;65;Bezerra de Albuquerque;Brazil;;305;Ribeiro Morand;Brazil;
+D;M1;488;7;;;;;95;Dahm;Germany;Bad Homburg;80;D�rr;Germany;Steinheim
+D;M1;461;7;;;;;122;Marin;France;;194;Van Haute;France;
+D;M2;457;1;;;;;162;Markovic;Slovenia;NOVO MESTO;219;Stankovic;Sweden;
+D;M2;435;1;;;;;82;Schlup;Switzerland;;111;Walser;Switzerland;
+D;M2;417;1;;;;;234;Gühmann;Germany;Zeven;55;Zender;Germany;München-Ost
+D;M2;387;1;;;;;185;Droste;Germany;Mannheim;315;Neubeck;Germany;Hanau
+D;M2;457;2;;;;;280;Stangl;Austria;;301;Wadle;Germany;Hamburg Nord
+D;M2;434;2;;;;;142;Capuder;Slovenia;LJUBLJANA;271;Piletic;Slovenia;LJUBLJANA
+D;M2;388;2;;;;;88;Hain;Germany;Bonn;79;Nierzwicki;Germany;Harrislee Nord
+D;M2;384;2;;;;;94;Polke;Germany;Fulda;232;Wessolowski;Germany;
+D;M2;454;3;;;;;184;Holm;Denmark;;78;Lunde;Denmark;
+D;M2;425;3;;;;;7;Arends;Germany;Oldenburg;92;Schunk;Germany;Oberhausen
+D;M2;405;3;;;;;300;Jenal;Switzerland;;287;Philipp;Austria;
+D;M2;380;3;;;;;57;Krackow;Germany;Kiel;113;K�hl;Germany;Kiel
+D;M2;454;4;;;;;187;Meister;Germany;Wehr;63;Strobel;Germany;Schwabach
+D;M2;431;4;;;;;262;Casha;Malta;;114;Vitanc;Slovenia;CELJE
+D;M2;404;4;;;;;27;Berz;Switzerland;;62;G�dl;Switzerland;
+D;M2;374;4;;;;;172;Benkic;Slovenia;MARIBOR;190;Ocepek;Slovenia;MARIBOR
+D;M2;445;5;;;;;254;Bayer;Austria;;35;Capan;Croatia;
+D;M2;419;5;;;;;291;Leber;Germany;Reutlingen;58;Straeten;Germany;Düsseldorf
+D;M2;396;5;;;;;196;Fabjan;Slovenia;NOVO MESTO;279;Graindorge;France;
+D;M2;373;5;;;;;14;Augstein;Germany;L�bower SV;166;Thom;Germany;L�bow
+D;M2;441;6;;;;;47;Busch;Germany;Berlin Friedrichshain;29;Hoelscher-Obermaier;Germany;Stahnsdorf
+D;M2;421;6;;;;;248;Grzywacz;Poland;;33;Pietrzyk;Poland;
+D;M2;392;6;;;;;178;Dumont;France;;177;Planty;France;
+D;M2;371;6;;;;;104;Rauchmaul;Germany;Leipzig;34;Ro�kothen;Germany;Neumarkt Sankt-Veit
+D;M2;436;7;;;;;2;Schliwinski;Germany;Chemnitz;69;Volkemer;Germany;Weißwasser
+D;M2;419;7;;;;;144;Temr;Czech Republic;;119;Tetour;Czech Republic;
+D;M2;391;7;;;;;152;Danihelka;Czech Republic;;151;Jensen;Denmark;
+D;M2;368;7;;;;;134;Hopf;Germany;Zwickau;90;Klose;Germany;Berlin Lichterfelde
+D;M3;367;1;;;;;255;Henrich;Germany;Sottrum;56;Sch�ler;Germany;Sottrum
+D;M3;336;1;;;;;239;Dietrich;Germany;Kiel;258;Frishman;Israel;
+D;M3;309;1;;;;;46;Bednarz;Germany;H�fingen;146;Gremm-Roloff;Germany;Wehr
+D;M3;267;1;;;;;175;Zavrsan;Slovenia;CELJE;150;Vivod;Slovenia;CELJE
+D;M3;366;2;;;;;160;Eldis;Israel;;159;Chinitz;Israel;
+D;M3;348;2;;;;;42;Koch;Germany;Trier;39;Wottrich;Germany;Wenden
+D;M3;307;2;;;;;207;Lovincic;Slovenia;LJUBLJANA;154;Sprohar;Slovenia;LJUBLJANA
+D;M3;276;2;;;;;66;Dufek;Czech Republic;;195;Jasa;Czech Republic;
+D;M3;365;3;;;;;103;Di Lena;Germany;Karlsruhe;189;Herz;Germany;Karlsruhe
+D;M3;324;3;;;;;245;Achermann;Switzerland;;112;Stadelmann;Switzerland;
+D;M3;307;3;;;;;51;Hertlein;Germany;Nürnberg-West;85;König;Germany;D�lmen
+D;M3;267;3;;;;;293;Logar;Slovenia;NOVA GORICA;242;Marincelj;Slovenia;LJUBLJANA
+D;M3;363;4;;;;;304;Benedik;Slovenia;KRANJ;306;Fink;Slovenia;KRANJ
+D;M3;344;4;;;;;215;Anzlinger;Germany;Mannheim;273;Baro;Germany;Mannheim
+D;M3;290;4;;;;;86;Deters;Germany;Nordhorn;241;Raupach;Germany;Nordhorn
+D;M3;275;4;;;;;138;Bakos;Hungary;;36;Müller;Germany;Homburg-Erbach
+D;M3;354;5;;;;;107;Groves;England;;171;Lee;England;
+D;M3;335;5;;;;;223;Becker;Germany;Flensburg;268;Oetken;Germany;Langenfeld
+D;M3;287;5;;;;;277;Brandovardi;Italy;;275;Vullo;Italy;
+D;M3;245;5;;;;;213;Cufer;Slovenia;NOVA GORICA;209;Orel;Slovenia;NOVA GORICA
+D;M3;351;6;;;;;108;Daun;Germany;Münster;156;Zagar;Croatia;
+D;M3;321;6;;;;;233;Kaltenegger;Germany;Ingolstadt;16;Schragner;Germany;Ingolstadt
+D;M3;282;6;;;;;303;Bogataj;Slovenia;KRANJ;188;Kocjancic;Slovenia;NOVO MESTO
+D;M3;273;6;;;;;147;Halfon;Israel;;229;Shacham;Israel;
+D;M3;350;7;;;;;251;Prange;Germany;Düsseldorf;228;Sch�n;Germany;Karlsruhe
+D;M3;316;7;;;;;148;Chresta;Switzerland;;244;Lemos Monteiro Wanderley;Switzerland;
+D;M3;277;7;;;;;261;Accarino;Malta;;260;Barbara;Malta;
+D;M3;232;7;;;;;224;Likar;Slovenia;MARIBOR;283;Vesligaj;Slovenia;MARIBOR
+D;W1;594;1;;;;;203;Ando;Japan;;202;Koyama;Japan;
+D;W1;583;1;;;;;143;Mark;Israel;;140;Robinson;Israel;
+D;W1;575;1;;;;;153;Jonckheere;Belgium;;204;Kanie;Japan;
+D;W1;571;1;;;;;26;Busch-de Groot;Germany;Nordhorn;282;Nagy;Hungary;
+D;W1;594;2;;;;;70;Alley;USA;;130;Ildal;Denmark;
+D;W1;583;2;;;;;129;Klein;Germany;Düsseldorf;128;Leidenberger;Germany;Dietersheim
+D;W1;572;2;;;;;38;Jan;Austria;;238;Jeska;Germany;
+D;W1;548;2;;;;;41;Brandt;Germany;Gnoien;15;Wilke;Germany;Gnoien
+D;W1;587;3;;;;;12;Kind;Germany;Fulda;43;Siegel;Germany;Ötisheim
+D;W1;579;3;;;;;83;Kocbek;Slovenia;MARIBOR;211;Mursec;Slovenia;MARIBOR
+D;W1;571;3;;;;;117;Freund;Czech Republic;;214;Ishihara;Japan;
+D;W1;544;3;;;;;257;Czernicki;Germany;Berlin Olympiapark;116;Krippner;Germany;Berlin Lichterfelde
+D;W2;539;1;;;;;22;Beurer;Switzerland;;23;Fischer;Switzerland;
+D;W2;531;1;;;;;21;Schultz;Germany;D�lmen;259;Tabone;Malta;
+D;W2;522;1;;;;;174;Brauckmann;Germany;Gütersloh;136;Heyd;Germany;München-Ost
+D;W2;507;1;;;;;132;Pra�e;Germany;Zwickau;3;Stahlberg;Germany;Zwickau
+D;W2;535;2;;;;;109;Gerhard;Germany;Münster;87;Schulte-Sutrum;Germany;Münster
+D;W2;527;2;;;;;53;Pazyna;Germany;Hamburg St. Pauli;49;W�neskog;Sweden;
+D;W2;517;2;;;;;243;Kerntopf;Poland;;173;Salak;Poland;
+D;W2;507;2;;;;;200;Hofner;Austria;;67;Korbickova;Czech Republic;
+D;W2;534;3;;;;;73;Houghton;England;;96;Jones;England;
+D;W2;522;3;;;;;127;Keiper;Germany;Berlin Friedrichshain;198;Rehr;Germany;Dietersheim
+D;W2;516;3;;;;;169;Brinar;Slovenia;CELJE;161;Remec;Slovenia;NOVO MESTO
+D;W2;487;3;;;;;168;Vaisbrot;Israel;;115;Müller;Germany;Marburg
+D;W3;496;1;;;;;19;Müllner;Germany;Thurnau;231;Otto;Germany;Winterscheid
+D;W3;486;1;;;;;165;Slokan;Slovenia;MARIBOR;121;Strmsek;Slovenia;MARIBOR
+D;W3;481;1;;;;;205;Anderle;Germany;Berlin Olympiapark;299;Lamm;Germany;
+D;W3;462;1;;;;;302;K�hnert;Germany;Düsseldorf;311;Lacey-Solymar;England;
+D;W3;488;2;;;;;237;Blume;Germany;;40;Herrmann;Germany;Zwickau
+D;W3;483;2;;;;;98;Novak Zupancic;Slovenia;NOVO MESTO;180;Kloar;Slovenia;CELJE
+D;W3;480;2;;;;;246;Krupa;Poland;;186;Wallmoden-Zaborowska;Poland;
+D;W3;461;2;;;;;54;Finck;Germany;Kiel;4;Freimuth;Germany;Kiel
+D;W3;487;3;;;;;102;Alessandrini;Italy;;110;Frey Arabi Katbi;Switzerland;
+D;W3;484;3;;;;;290;Lagac;Germany;Düsseldorf;236;Scheel;Germany;Potsdam
+D;W3;476;3;;;;;263;Müller;Germany;Sottrum;281;S��;Germany;Sottrum
+D;W3;450;3;;;;;316;Cajlinger;Slovenia;MARIBOR;206;Ilich;Slovenia;LJUBLJANA
+D;W3;486;4;;;;;44;van Leeuwen;Netherlands;;126;Zhang Freund;Sweden;
+D;W3;481;4;;;;;20;Mischo;Germany;Trier Kernscheid;18;Schmidt;Germany;Ettenheim/Altdorf
+D;W3;468;4;;;;;191;Scheurig;Germany;Köln;118;Solberg;Germany;Heidelberg
+M;X1;596;1;;;;;70;Alley;USA;;77;Rozenblat;USA;
+M;X1;564;1;;;;;15;Wilke;Germany;Gnoien;93;Ezzat-Ahmadi;USA;
+M;X1;553;1;;;;;202;Koyama;Japan;;272;Kawai;Japan;
+M;X1;526;1;;;;;128;Leidenberger;Germany;Dietersheim;187;Meister;Germany;Wehr
+M;X1;590;2;;;;;12;Kind;Germany;Fulda;13;Flues;Germany;Gütersloh
+M;X1;559;2;;;;;140;Robinson;Israel;;141;Naveh;Israel;
+M;X1;553;2;;;;;174;Brauckmann;Germany;Gütersloh;74;Pierrot;Germany;Homburg-Erbach
+M;X1;524;2;;;;;203;Ando;Japan;;33;Pietrzyk;Poland;
+M;X1;586;3;;;;;43;Siegel;Germany;Ötisheim;11;Boomhuis;Germany;Nordhorn
+M;X1;559;3;;;;;161;Remec;Slovenia;NOVO MESTO;197;Kure;Slovenia;NOVO MESTO
+M;X1;548;3;;;;;87;Schulte-Sutrum;Germany;Münster;124;Schnittker;Germany;Spelle
+M;X1;518;3;;;;;18;Schmidt;Germany;Ettenheim/Altdorf;182;Gruve;Germany;Dresden
+M;X1;580;4;;;;;238;Jeska;Germany;;76;Hase;Germany;Varel
+M;X1;559;4;;;;;126;Zhang Freund;Sweden;;149;Jerslund;Denmark;
+M;X1;547;4;;;;;200;Hofner;Austria;;133;Stainthorpe;England;
+M;X1;514;4;;;;;165;Slokan;Slovenia;MARIBOR;97;Kurent;Slovenia;MARIBOR
+M;X1;579;5;;;;;130;Ildal;Denmark;;193;Kaspersen;Denmark;
+M;X1;563;5;;;;;26;Busch-de Groot;Germany;Nordhorn;291;Leber;Germany;Reutlingen
+M;X1;537;5;;;;;115;Müller;Germany;Marburg;1;Dawson;England;
+M;X1;505;5;;;;;204;Kanie;Japan;;64;Cook;England;
+M;X1;569;6;;;;;83;Kocbek;Slovenia;MARIBOR;114;Vitanc;Slovenia;CELJE
+M;X1;562;6;;;;;198;Rehr;Germany;Dietersheim;5;Friedrichs;Germany;Warsingsfehn
+M;X1;532;6;;;;;302;K�hnert;Germany;Düsseldorf;61;Teppe;Germany;Wuppertal
+M;X1;505;6;;;;;73;Houghton;England;;8;Bach;Croatia/USA;
+M;X1;567;7;;;;;214;Ishihara;Japan;;307;Sj�stedt;Sweden;
+M;X1;560;7;;;;;53;Pazyna;Germany;Hamburg St. Pauli;24;Probst;Germany;Fulda
+M;X1;533;7;;;;;211;Mursec;Slovenia;MARIBOR;163;Zelenjak;Slovenia;MARIBOR
+M;X1;502;7;;;;;129;Klein;Germany;Düsseldorf;100;Peteri;Netherlands;
+M;X2;498;1;;;;;117;Freund;Czech Republic;;144;Temr;Czech Republic;
+M;X2;479;1;;;;;38;Jan;Austria;;225;Sommerhuber;Austria;
+M;X2;460;1;;;;;311;Lacey-Solymar;England;;171;Lee;England;
+M;X2;449;1;;;;;132;Pra�e;Germany;Zwickau;270;Krebs;Germany;Thurnau
+M;X2;492;2;;;;;205;Anderle;Germany;Berlin Olympiapark;47;Busch;Germany;Berlin Friedrichshain
+M;X2;469;2;;;;;257;Czernicki;Germany;Berlin Olympiapark;29;Hoelscher-Obermaier;Germany;Stahnsdorf
+M;X2;459;2;;;;;168;Vaisbrot;Israel;;7;Arends;Germany;Oldenburg
+M;X2;449;2;;;;;281;S��;Germany;Sottrum;255;Henrich;Germany;Sottrum
+M;X2;491;3;;;;;290;Lagac;Germany;Düsseldorf;234;Gühmann;Germany;Zeven
+M;X2;469;3;;;;;3;Stahlberg;Germany;Zwickau;134;Hopf;Germany;Zwickau
+M;X2;458;3;;;;;109;Gerhard;Germany;Münster;108;Daun;Germany;Münster
+M;X2;448;3;;;;;23;Fischer;Switzerland;;62;G�dl;Switzerland;
+M;X2;491;4;;;;;121;Strmsek;Slovenia;MARIBOR;183;Zavrtanik;Slovenia;NOVA GORICA
+M;X2;479;4;;;;;40;Herrmann;Germany;Zwickau;2;Schliwinski;Germany;Chemnitz
+M;X2;457;4;;;;;110;Frey Arabi Katbi;Switzerland;;111;Walser;Switzerland;
+M;X2;448;4;;;;;54;Finck;Germany;Kiel;113;K�hl;Germany;Kiel
+M;X2;490;5;;;;;22;Beurer;Switzerland;;17;Zanatta;Switzerland;
+M;X2;471;5;;;;;41;Brandt;Germany;Gnoien;92;Schunk;Germany;Oberhausen
+M;X2;455;5;;;;;236;Scheel;Germany;Potsdam;88;Hain;Germany;Bonn
+M;X2;447;5;;;;;173;Salak;Poland;;166;Thom;Germany;L�bow
+M;X2;482;6;;;;;20;Mischo;Germany;Trier Kernscheid;80;D�rr;Germany;Steinheim
+M;X2;468;6;;;;;186;Wallmoden-Zaborowska;Poland;;82;Schlup;Switzerland;
+M;X2;453;6;;;;;243;Kerntopf;Poland;;248;Grzywacz;Poland;
+M;X2;443;6;;;;;153;Jonckheere;Belgium;;16;Schragner;Germany;Ingolstadt
+M;X3;433;1;;;;;116;Krippner;Germany;Berlin Lichterfelde;90;Klose;Germany;Berlin Lichterfelde
+M;X3;406;1;;;;;143;Mark;Israel;;160;Eldis;Israel;
+M;X3;398;1;;;;;118;Solberg;Germany;Heidelberg;233;Kaltenegger;Germany;Ingolstadt
+M;X3;371;1;;;;;191;Scheurig;Germany;Köln;146;Gremm-Roloff;Germany;Wehr
+M;X3;433;2;;;;;246;Krupa;Poland;;119;Tetour;Czech Republic;
+M;X3;425;2;;;;;127;Keiper;Germany;Berlin Friedrichshain;79;Nierzwicki;Germany;Harrislee Nord
+M;X3;394;2;;;;;263;Müller;Germany;Sottrum;56;Sch�ler;Germany;Sottrum
+M;X3;365;2;;;;;98;Novak Zupancic;Slovenia;NOVO MESTO;188;Kocjancic;Slovenia;NOVO MESTO
+M;X3;433;3;;;;;44;van Leeuwen;Netherlands;;63;Strobel;Germany;Schwabach
+M;X3;418;3;;;;;19;Müllner;Germany;Thurnau;42;Koch;Germany;Trier
+M;X3;390;3;;;;;4;Freimuth;Germany;Kiel;103;Di Lena;Germany;Karlsruhe
+M;X3;362;3;;;;;67;Korbickova;Czech Republic;;195;Jasa;Czech Republic;
+M;X3;430;4;;;;;49;W�neskog;Sweden;;279;Graindorge;France;
+M;X3;416;4;;;;;299;Lamm;Germany;;14;Augstein;Germany;L�bower SV
+M;X3;390;4;;;;;316;Cajlinger;Slovenia;MARIBOR;208;Butolen;Slovenia;MARIBOR
+M;X3;359;4;;;;;102;Alessandrini;Italy;;274;Latino;Italy;
+M;X3;429;5;;;;;282;Nagy;Hungary;;138;Bakos;Hungary;
+M;X3;410;5;;;;;237;Blume;Germany;;239;Dietrich;Germany;Kiel
+M;X3;387;5;;;;;170;Wohinz;Slovenia;LJUBLJANA;154;Sprohar;Slovenia;LJUBLJANA
+M;X3;343;5;;;;;164;Pecaric;Slovenia;MARIBOR;209;Orel;Slovenia;NOVA GORICA
+M;X3;428;6;;;;;259;Tabone;Malta;;262;Casha;Malta;
+M;X3;404;6;;;;;21;Schultz;Germany;D�lmen;85;König;Germany;D�lmen
+M;X3;377;6;;;;;96;Jones;England;;107;Groves;England;
+M;X3;362;6;;;;;206;Ilich;Slovenia;LJUBLJANA;207;Lovincic;Slovenia;LJUBLJANA
+M;X3;426;7;;;;;231;Otto;Germany;Winterscheid;39;Wottrich;Germany;Wenden
+M;X3;403;7;;;;;136;Heyd;Germany;München-Ost;55;Zender;Germany;München-Ost
+M;X3;377;7;;;;;169;Brinar;Slovenia;CELJE;175;Zavrsan;Slovenia;CELJE
