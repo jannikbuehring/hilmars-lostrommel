@@ -2,6 +2,12 @@ from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
 
+def show_bracket(first_round_matches):
+    if mode == 'interactive':
+        return
+    else: 
+        show_bracket_table(first_round_matches)
+
 def show_bracket_table(first_round_matches):
     """
     first_round_matches: list of Match objects (entry point into the bracket tree).

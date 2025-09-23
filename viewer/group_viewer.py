@@ -3,10 +3,17 @@ import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
+from hilmars_lostrommel import *
 
 def clear_screen():
     """Cross-platform clear screen"""
     os.system("cls" if os.name == "nt" else "clear")
+
+def show_groups(groups, snapshots):
+    if mode == 'interactive':
+        show_snapshot_viewer(groups, snapshots)
+    else: 
+        show_groups_table(groups)
 
 def show_groups_table(groups):
     for number, group in groups.items():
