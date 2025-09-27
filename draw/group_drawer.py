@@ -54,7 +54,9 @@ class GroupDrawer:
 
             participant = batch[index]
 
-            for group in range(1, amount_of_groups + 1):
+            shuffled_groups = list(range(1, amount_of_groups + 1))
+            random.shuffle(shuffled_groups)
+            for group in shuffled_groups:
                 if group not in assigned_groups:
                     if can_place_in_group(participant, group):
                         groups[group].append(participant)
@@ -80,6 +82,12 @@ class GroupDrawer:
         class_subset.sort(key=lambda d: d.seeding, reverse=True)
         max_group_size = max_group_size(len(class_subset), amount_of_groups)
         groups = {i + 1: [] for i in range(amount_of_groups)}
+    
+        # the first players in each group are assigned deterministically
+        for i in range(amount_of_groups):
+            groups[i+1].append(class_subset[i])
+            snapshot_delta("add", i+1, class_subset[i])
+        class_subset = class_subset[amount_of_groups:]
 
         for i in range(0, len(class_subset), amount_of_groups):
             batch = class_subset[i:i + amount_of_groups]
