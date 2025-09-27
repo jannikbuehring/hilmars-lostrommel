@@ -10,12 +10,10 @@ to_show = ""
 def show_main_menu():
     global to_show
     to_show = ""
-    action = inquirer.list_input("Choose what to do", choices=['View', 'Export all', 'Exit'])
+    action = inquirer.list_input("Choose what to do", choices=['View', 'Exit'])
     match (action):
         case 'View':
             view_choice()
-        case 'Export':
-            print("")
         case 'Exit':
             exit()
     show_main_menu()
