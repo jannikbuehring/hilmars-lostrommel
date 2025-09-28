@@ -4,10 +4,7 @@ A program for creating (table tennis) group draws and knock-out brackets
 
 # Roadmap
 
-- [x] Interactive mode for easy debugging
 - [ ] Bracket draws
-- [ ] Export 
-
 
 # Configuration
 
@@ -33,3 +30,7 @@ In the beginning, there are some validity checks to make sure the data is correc
 - Backtracking algorithm is used to try all possible combinations if necessary
 
 # Bracket draw
+
+# Known issues
+
+- Make seed work along all random functionalities
