@@ -1,5 +1,6 @@
 import math
 import random
+from typing import List, Optional
 from models.player import Player
 from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
@@ -7,34 +8,14 @@ from models.match import Match
 from viewer.bracket_viewer import show_bracket_table
 import logging
 
+from models.draw_data import seeding_by_start_numbers
+
 class BracketDrawer:
     def draw_bracket(self, class_subset: list["DrawDataRow"]):
         """
         Build a single-elimination bracket from seeded participants.
         class_subset: players advancing from groups
-        players_by_start_number: dict[start_number] -> player object with .country and .base
         """
-
-        # 1. Sort: prioritize group_pos (1st before 2nd), then seeding
-        class_subset.sort(key=lambda p: (p.group_pos, -p.seeding))
-
-        num_participants = len(class_subset)
-
-        # 2. Find nearest power of 2 for bracket size
-        bracket_size = 1 << (num_participants - 1).bit_length()
-        byes = bracket_size - num_participants
-        logging.debug(f"Bracket size: {bracket_size}, participants: {num_participants}, byes: {byes}")
-
-        # 3. Create slots
-        slots = [None] * bracket_size
-
-        # 4. Place strongest seeds (split top 2 into different halves)
-        slots[0] = class_subset[0]   # strongest seed at top-left
-        if num_participants > 1:
-            slots[bracket_size // 2] = class_subset[1]  # 2nd seed at bottom-left
-
-        # 5. Place remaining players
-        remaining = class_subset[2:]
 
         def can_place(participant, slot_index):
             """Check country/base conflict against the paired slot."""
@@ -62,9 +43,99 @@ class BracketDrawer:
                         return False
             return True
 
-        available_slots = [i for i in range(bracket_size) if slots[i] is None]
+        def bye_hierarchy(num_matches: int) -> List[List[int]]:
+            """Return hierarchical subdivisions for bye placement.
+            Example for num_matches=16:
+                [[1], [16], [8,9], [4,5,12,13], [2,3,6,7,10,11,14,15]]
+            """
+            if num_matches < 2 or (num_matches & (num_matches - 1)) != 0:
+                raise ValueError("num_matches must be a power of two >= 2")
 
-        for participant in remaining:
+            levels = int(math.log2(num_matches))
+            groups: List[List[int]] = [[1], [num_matches]]
+
+            # For each level L produce all seam pairs (boundary, boundary+1)
+            # using block = num_matches // (2**L) and taking i odd only.
+            for L in range(1, levels):
+                block = num_matches // (2 ** L)
+                group: List[int] = []
+                # i goes 1..(2**L - 1); pick odd i to avoid duplicating seams from higher levels
+                for i in range(1, 2 ** L):
+                    if i % 2 == 1:
+                        boundary = i * block
+                        group.append(boundary)
+                        group.append(boundary + 1)
+                groups.append(group)
+
+            return groups
+
+        def generate_bye_order(num_matches: int) -> List[int]:
+            """Flatten the hierarchy into the deterministic full order."""
+            groups = bye_hierarchy(num_matches)
+            order: List[int] = []
+            for g in groups:
+                order.extend(g)
+            return order
+
+        def pick_byes(num_matches: int, num_byes: int, seed: Optional[int] = None) -> List[int]:
+            """Pick num_byes match indices following the hierarchy:
+            - take entire groups while possible
+            - if a group is larger than remaining byes, select randomly only within that group
+            """
+            if num_byes < 0:
+                raise ValueError("num_byes must be >= 0")
+            if num_byes == 0:
+                return []
+
+            full_groups = bye_hierarchy(num_matches)
+            rng = random.Random(seed)
+            result: List[int] = []
+
+            for g in full_groups:
+                remaining = num_byes - len(result)
+                if remaining <= 0:
+                    break
+                if remaining >= len(g):
+                    # take whole group (preserve the group's left-to-right order)
+                    result.extend(g)
+                else:
+                    # choose exactly `remaining` items from this group at random,
+                    # then append them in the group's natural (ascending) order
+                    chosen = rng.sample(g, remaining)
+                    chosen_sorted = sorted(chosen)   # group elements are ascending already
+                    result.extend(chosen_sorted)
+                    break
+
+            return result
+
+        for entry in class_subset:
+            key = str(entry.start_number_a)
+            if entry.start_number_b is not None:
+                key += "/" + str(entry.start_number_b)
+            entry.seeding = seeding_by_start_numbers[key]
+
+        # 1. Sort: prioritize group_pos (1st before 2nd), then seeding
+        class_subset.sort(key=lambda p: (p.group_pos, -p.seeding))
+
+        num_participants = len(class_subset)
+
+        # 2. Find nearest power of 2 for bracket size
+        bracket_size = 1 << (num_participants - 1).bit_length()
+        number_of_matches = bracket_size // 2
+        byes = bracket_size - num_participants
+        logging.debug(f"Bracket size: {bracket_size}, participants: {num_participants}, byes: {byes}")
+
+        # 3. Create matches
+        matches = {index: [] for index in range(1, number_of_matches + 1) }
+        bye_slots = pick_byes(number_of_matches, byes)
+
+
+        # 4. Slot in Byes
+        for bye_slot in bye_slots:
+            matches[bye_slot].append("BYE")
+
+
+        for participant in class_subset:
             placed = False
             random.shuffle(available_slots)  # shuffle to add variety
             for idx in available_slots:

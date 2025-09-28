@@ -1,3 +1,4 @@
+# for validation
 players_list = []
 players_by_start_number = {}
 

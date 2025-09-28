@@ -226,7 +226,7 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    #main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
+                    main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
                     #consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
 
                 competition_classes_list = list(singles_competition_classes)
