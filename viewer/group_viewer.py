@@ -25,8 +25,8 @@ def show_groups_table(groups):
         if group[0].start_number_b == None:
             for index, member in enumerate(group):
                 player = players_by_start_number[member.start_number_a]
-                table_data.append([index + 1, member.seeding, player.first_name, player.last_name, player.start_number, player.country, player.base])
-            print(tabulate(table_data, headers=["#", "Seeding", "First Name", "Last Name", "Start Number", "Country", "Base"], tablefmt=table_format))
+                table_data.append([index + 1, member.seeding, player.last_name, player.first_name, player.start_number, player.country, player.base])
+            print(tabulate(table_data, headers=["#", "Seeding", "Last Name", "First Name", "Start Number", "Country", "Base"], tablefmt=table_format))
        # Team Group
         else:
             for index, participant in enumerate(group):
@@ -68,14 +68,14 @@ def show_snapshot_viewer(groups, snapshots):
                     table_data.append([
                         idx + 1,
                         member.seeding,
-                        player.first_name,
                         player.last_name,
+                        player.first_name,
                         player.start_number,
                         player.country,
-                        player.base,
+                        f"{player.base}",
                     ])
-                print(tabulate(table_data, headers=["#", "Seeding", "First Name", "Last Name",
-                                                    "Start Number", "Country", "Base"], tablefmt=table_format))
+                print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
+                                                    "Start Number", "Country           ", "Base              "], tablefmt=table_format))
             else:
                 # Team group
                 for idx, participant in enumerate(group):
@@ -89,8 +89,8 @@ def show_snapshot_viewer(groups, snapshots):
                         f"{player_a.country}/{player_b.country}",
                         f"{player_a.base}/{player_b.base}",
                     ])
-                print(tabulate(table_data, headers=["#", "Seeding", "Last Names", "Start Numbers",
-                                                    "Countries", "Bases"], tablefmt=table_format))
+                print(tabulate(table_data, headers=["#", "Seeding", "Last Names                                ", "Start Numbers",
+                                                    "Countries                      ", "Bases                                   "], tablefmt=table_format))
 
         print("")
         action = 'Added to' if snapshots[index]["action"] == 'add' else 'Removed from'
@@ -104,6 +104,21 @@ def show_snapshot_viewer(groups, snapshots):
 
     last_action = "Forward"  # start with "Forward" as default
 
+    def is_batch_end(index):
+        """Return True if at this snapshot all groups have even number of members, the last action was 'add', or it's the last snapshot and last action was 'add'."""
+        temp_groups = {g: [] for g in groups.keys()}
+        for snap in snapshots[:index + 1]:
+            g = snap["group"]
+            if snap["action"] == "add":
+                temp_groups[g].append(snap["participant"])
+            elif snap["action"] == "remove":
+                if snap["participant"] in temp_groups[g]:
+                    temp_groups[g].remove(snap["participant"])
+        group_sizes = [len(members) for members in temp_groups.values()]
+        all_same_size = len(set(group_sizes)) == 1
+        last_action_add = snapshots[index]["action"] == "add"
+        return (all_same_size and last_action_add) or (index == len(snapshots) - 1 and last_action_add)
+
     while True:
         display_snapshot(current_index)
 
@@ -112,7 +127,7 @@ def show_snapshot_viewer(groups, snapshots):
             inquirer.List(
                 "action",
                 message="Select action",
-                choices=["Forward", "Backward", "Go to snapshot", "Quit"],
+                choices=["Forward", "Forward to next batch", "Backward", "Backward to previous batch", "Go to snapshot", "Show final groups", "Quit"],
                 default=last_action
             )
         ]
@@ -129,6 +144,25 @@ def show_snapshot_viewer(groups, snapshots):
                 current_index -= 1
             else:
                 print("Already at first snapshot.")
+        elif action == "Forward to next batch":
+            next_index = current_index + 1
+            while next_index < len(snapshots):
+                if is_batch_end(next_index):
+                    current_index = next_index
+                    break
+                next_index += 1
+            else:
+                print("No further batch end found.")
+        elif action == "Backward to previous batch":
+            prev_index = current_index - 1
+            found = False
+            # Always allow jumping to the first batch end (lowest index)
+            batch_indices = [i for i in range(prev_index, -1, -1) if is_batch_end(i)]
+            if batch_indices:
+                current_index = batch_indices[0]
+                found = True
+            if not found:
+                print("No previous batch end found.")
         elif action == "Go to snapshot":
             snapshot_number = inquirer.text(message=f"Enter snapshot number (1–{len(snapshots)}):")
             try:
@@ -139,6 +173,8 @@ def show_snapshot_viewer(groups, snapshots):
                     print("Invalid snapshot number.")
             except ValueError:
                 print("Please enter a valid integer.")
+        elif action == "Show final groups":
+            current_index = len(snapshots) - 1
         elif action == "Quit":
             break
 
