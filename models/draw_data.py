@@ -1,3 +1,5 @@
+seeding_by_start_numbers = {}
+
 class DrawDataRow:
     def __init__(self, competition, competition_class, seeding: int, amount_of_groups: int, group_no: int, group_pos: int, main_round: bool, consolation_round: bool, start_number_a: int, start_number_b: int):
         self.competition = competition
@@ -10,6 +12,12 @@ class DrawDataRow:
         self.consolation_round = consolation_round
         self.start_number_a = int(start_number_a)
         self.start_number_b = int(start_number_b) if start_number_b != '' else None
+        
+        if self.seeding != None:
+            key = str(start_number_a)
+            if self.start_number_b is not None:
+                key += "/" + str(start_number_b)
+            seeding_by_start_numbers[key] = self.seeding
 
     def __repr__(self):
         return f"{self.competition} {self.competition_class} (Seeding: {self.seeding}, Start number a: {self.start_number_a}, Start number b: {self.start_number_b})"
