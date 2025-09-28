@@ -1,3 +1,4 @@
+
 import os
 import inquirer
 from tabulate import tabulate
@@ -5,134 +6,74 @@ from viewer.view_config import table_format
 from models.player import players_by_start_number
 from hilmars_lostrommel import *
 
+
 def clear_screen():
-    """Cross-platform clear screen"""
+    """Clear the terminal screen in a cross-platform way."""
     os.system("cls" if os.name == "nt" else "clear")
 
+
 def show_groups(groups, snapshots):
+    """Display groups in either interactive or table mode."""
     if mode == 'interactive':
         show_snapshot_viewer(groups, snapshots)
-    else: 
+    else:
         show_groups_table(groups)
 
+
 def show_groups_table(groups):
+    """Print all groups in a tabular format."""
     for number, group in groups.items():
-        table_data = []
-
         print(f"Group {number}")
-
-        # Single Group
-        if group[0].start_number_b == None:
-            for index, member in enumerate(group):
-                player = players_by_start_number[member.start_number_a]
-                table_data.append([index + 1, member.seeding, player.last_name, player.first_name, player.start_number, player.country, player.base])
-            print(tabulate(table_data, headers=["#", "Seeding", "Last Name", "First Name", "Start Number", "Country", "Base"], tablefmt=table_format))
-       # Team Group
-        else:
-            for index, participant in enumerate(group):
-                player_a = players_by_start_number[participant.start_number_a]
-                player_b = players_by_start_number[participant.start_number_b]
-                table_data.append([index + 1, participant.seeding, player_a.last_name + "/" + player_b.last_name, str(player_a.start_number) + "/" + str(player_b.start_number), player_a.country + "/" + player_b.country, str(player_a.base) + "/" + str(player_b.base)])
-            print(tabulate(table_data, headers=["#", "Seeding", "Last Names", "Start Numbers", "Countries", "Bases"], tablefmt=table_format))
-
+        print_group_table(group)
     print("")
+
+def print_group_table(group):
+    table_data = []
+    if group[0].start_number_b is None:
+        # Single player group
+        for idx, member in enumerate(group):
+            player = players_by_start_number[member.start_number_a]
+            table_data.append([
+                idx + 1,
+                member.seeding,
+                player.last_name,
+                player.first_name,
+                player.start_number,
+                player.country,
+                f"{player.base}",
+            ])
+        print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
+                                            "Start Number", "Country           ", "Base              "], tablefmt=table_format))
+    else:
+        # Team group
+        for idx, participant in enumerate(group):
+            player_a = players_by_start_number[participant.start_number_a]
+            player_b = players_by_start_number[participant.start_number_b]
+            table_data.append([
+                idx + 1,
+                participant.seeding,
+                f"{player_a.last_name}/{player_b.last_name}",
+                f"{player_a.start_number}/{player_b.start_number}",
+                f"{player_a.country}/{player_b.country}",
+                f"{player_a.base}/{player_b.base}",
+            ])
+        print(tabulate(table_data, headers=["#", "Seeding", "Last Names                                ", "Start Numbers",
+                                            "Countries                      ", "Bases                                   "], tablefmt=table_format))
+
 
 
 def show_snapshot_viewer(groups, snapshots):
+    """Interactive viewer for group assignment snapshots."""
     current_index = 0
-
-    def display_snapshot(index):
-        temp_groups = {g: [] for g in groups.keys()}
-        for snap in snapshots[:index + 1]:
-            g = snap["group"]
-            if snap["action"] == "add":
-                temp_groups[g].append(snap["participant"])
-            elif snap["action"] == "remove":
-                if snap["participant"] in temp_groups[g]:
-                    temp_groups[g].remove(snap["participant"])
-
-        # Clear the terminal before displaying
-        clear_screen()
-
-        for number, group in temp_groups.items():
-            table_data = []
-            print(f"\nGroup {number}")
-            if not group:
-                print("[Empty]")
-                continue
-
-            if group[0].start_number_b is None:
-                # Single player group
-                for idx, member in enumerate(group):
-                    player = players_by_start_number[member.start_number_a]
-                    table_data.append([
-                        idx + 1,
-                        member.seeding,
-                        player.last_name,
-                        player.first_name,
-                        player.start_number,
-                        player.country,
-                        f"{player.base}",
-                    ])
-                print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
-                                                    "Start Number", "Country           ", "Base              "], tablefmt=table_format))
-            else:
-                # Team group
-                for idx, participant in enumerate(group):
-                    player_a = players_by_start_number[participant.start_number_a]
-                    player_b = players_by_start_number[participant.start_number_b]
-                    table_data.append([
-                        idx + 1,
-                        participant.seeding,
-                        f"{player_a.last_name}/{player_b.last_name}",
-                        f"{player_a.start_number}/{player_b.start_number}",
-                        f"{player_a.country}/{player_b.country}",
-                        f"{player_a.base}/{player_b.base}",
-                    ])
-                print(tabulate(table_data, headers=["#", "Seeding", "Last Names                                ", "Start Numbers",
-                                                    "Countries                      ", "Bases                                   "], tablefmt=table_format))
-
-        print("")
-        action = 'Added to' if snapshots[index]["action"] == 'add' else 'Removed from'
-        player_a = players_by_start_number[snapshots[index]['participant'].start_number_a]
-        player_b = players_by_start_number[snapshots[index]['participant'].start_number_b] if snapshots[index]['participant'].start_number_b != None else None
-        if player_b == None:
-            print(f"{action} group {snapshots[index]['group']}: {player_a}")
-        else:
-            print(f"{action} group {snapshots[index]['group']}: {player_a} / {player_b}")
-        print(f"\nSnapshot {index + 1}/{len(snapshots)}")
-
-    last_action = "Forward"  # start with "Forward" as default
+    last_action = "Forward"
 
     def is_batch_end(index):
-        """Return True if at this snapshot all groups have even number of members, the last action was 'add', or it's the last snapshot and last action was 'add'."""
-        temp_groups = {g: [] for g in groups.keys()}
-        for snap in snapshots[:index + 1]:
-            g = snap["group"]
-            if snap["action"] == "add":
-                temp_groups[g].append(snap["participant"])
-            elif snap["action"] == "remove":
-                if snap["participant"] in temp_groups[g]:
-                    temp_groups[g].remove(snap["participant"])
-        group_sizes = [len(members) for members in temp_groups.values()]
-        all_same_size = len(set(group_sizes)) == 1
-        last_action_add = snapshots[index]["action"] == "add"
-        return (all_same_size and last_action_add) or (index == len(snapshots) - 1 and last_action_add)
+        return bool(snapshots[index].get("batch_end", False))
 
     while True:
-        display_snapshot(current_index)
-
-        # Prompt user with menu, defaulting to last action
-        questions = [
-            inquirer.List(
-                "action",
-                message="Select action",
-                choices=["Forward", "Forward to next batch", "Backward", "Backward to previous batch", "Go to snapshot", "Show final groups", "Quit"],
-                default=last_action
-            )
-        ]
-        answer = inquirer.prompt(questions)
-        action = answer["action"]
+        clear_screen()
+        display_snapshot(groups, snapshots, current_index)
+        action = prompt_snapshot_action(last_action)
 
         if action == "Forward":
             if current_index + 1 < len(snapshots):
@@ -156,7 +97,6 @@ def show_snapshot_viewer(groups, snapshots):
         elif action == "Backward to previous batch":
             prev_index = current_index - 1
             found = False
-            # Always allow jumping to the first batch end (lowest index)
             batch_indices = [i for i in range(prev_index, -1, -1) if is_batch_end(i)]
             if batch_indices:
                 current_index = batch_indices[0]
@@ -177,6 +117,56 @@ def show_snapshot_viewer(groups, snapshots):
             current_index = len(snapshots) - 1
         elif action == "Quit":
             break
-
-        # remember this action for next loop
         last_action = action
+
+def display_snapshot(groups, snapshots, index):
+    """Display the current snapshot of group assignments."""
+    temp_groups = {g: [] for g in groups.keys()}
+    for snap in snapshots[:index + 1]:
+        g = snap["group"]
+        if snap["action"] == "add":
+            temp_groups[g].append(snap["participant"])
+        elif snap["action"] == "remove":
+            if snap["participant"] in temp_groups[g]:
+                temp_groups[g].remove(snap["participant"])
+
+    for number, group in temp_groups.items():
+        print(f"\nGroup {number}")
+        if not group:
+            print("[Empty]")
+            continue
+        print_group_table(group)
+
+    print("")
+    snap = snapshots[index]
+    action = 'Added to' if snap["action"] == 'add' else 'Removed from'
+    player_a = players_by_start_number[snap['participant'].start_number_a]
+    player_b = players_by_start_number[snap['participant'].start_number_b] if snap['participant'].start_number_b is not None else None
+    placement = snap.get("placement_method", "?")
+    placement_msg = f" (method: {placement})" if placement else ""
+    if player_b is None:
+        print(f"{action} group {snap['group']}: {player_a}{placement_msg}")
+    else:
+        print(f"{action} group {snap['group']}: {player_a} / {player_b}{placement_msg}")
+    print(f"\nSnapshot {index + 1}/{len(snapshots)}")
+
+def prompt_snapshot_action(last_action):
+    """Prompt the user for the next snapshot navigation action."""
+    questions = [
+        inquirer.List(
+            "action",
+            message="Select action",
+            choices=[
+                "Forward",
+                "Backward",
+                "Forward to next batch",
+                "Backward to previous batch",
+                "Go to snapshot",
+                "Show final groups",
+                "Quit",
+            ],
+            default=last_action,
+        )
+    ]
+    answer = inquirer.prompt(questions)
+    return answer["action"]

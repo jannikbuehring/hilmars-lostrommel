@@ -9,11 +9,13 @@ class GroupDrawer:
         snapshots = []  # store deltas: add/remove of DrawDataRow objects
 
         # Helper to record delta snapshots
-        def snapshot_delta(action: str, group: int, participant: DrawDataRow):
+        def snapshot_delta(action: str, group: int, participant: DrawDataRow, placement_method=None, batch_end=False):
             snapshots.append({
                 "action": action,        # "add" or "remove"
                 "group": group,
-                "participant": participant
+                "participant": participant,
+                "placement_method": placement_method,
+                "batch_end": batch_end
             })
 
         def can_place_in_group(participant, group):
@@ -61,7 +63,9 @@ class GroupDrawer:
                     if can_place_in_group(participant, group):
                         groups[group].append(participant)
                         assigned_groups.add(group)
-                        snapshot_delta("add", group, participant)
+                        # Mark batch_end True if this is the last participant in the batch
+                        is_last_in_batch = (index == len(batch) - 1)
+                        snapshot_delta("add", group, participant, placement_method="backtrack", batch_end=is_last_in_batch)
 
                         if backtrack(batch, index + 1, assigned_groups):
                             logging.debug(f"Added {participant} to group {group}")
@@ -70,7 +74,7 @@ class GroupDrawer:
                         # Undo placement (backtrack)
                         groups[group].remove(participant)
                         assigned_groups.remove(group)
-                        snapshot_delta("remove", group, participant)
+                        snapshot_delta("remove", group, participant, placement_method="backtrack", batch_end=False)
 
             return False
 
@@ -85,8 +89,10 @@ class GroupDrawer:
     
         # the first players in each group are assigned deterministically
         for i in range(amount_of_groups):
+            # The first batch is always deterministic, so placement_method is 'deterministic'
+            is_last_in_batch = (i == amount_of_groups - 1)
+            snapshot_delta("add", i+1, class_subset[i], placement_method="deterministic", batch_end=is_last_in_batch)
             groups[i+1].append(class_subset[i])
-            snapshot_delta("add", i+1, class_subset[i])
         class_subset = class_subset[amount_of_groups:]
 
         for i in range(0, len(class_subset), amount_of_groups):
@@ -98,13 +104,14 @@ class GroupDrawer:
                 logging.debug("Backtracking failed for batch, using fallback assignment")
                 participants_to_assign_randomly = []
 
-                for participant in batch:
+                for idx, participant in enumerate(batch):
                     placed = False
                     for group in range(1, amount_of_groups + 1):
                         if group not in assigned_groups and can_place_in_group(participant, group):
                             groups[group].append(participant)
                             assigned_groups.add(group)
-                            snapshot_delta("add", group, participant)
+                            is_last_in_batch = (idx == len(batch) - 1)
+                            snapshot_delta("add", group, participant, placement_method="fallback", batch_end=is_last_in_batch)
                             logging.debug(f"Added {participant} to group {group}")
                             placed = True
                             break
@@ -114,20 +121,22 @@ class GroupDrawer:
                             if group not in assigned_groups and can_place_in_group_no_base_conflict(participant, group):
                                 groups[group].append(participant)
                                 assigned_groups.add(group)
-                                snapshot_delta("add", group, participant)
+                                is_last_in_batch = (idx == len(batch) - 1)
+                                snapshot_delta("add", group, participant, placement_method="fallback", batch_end=is_last_in_batch)
                                 logging.debug(f"Added {participant} to group {group}")
                                 placed = True
                                 break
 
                     if not placed:
-                        participants_to_assign_randomly.append(participant)
+                        participants_to_assign_randomly.append((idx, participant))
 
-                for participant in participants_to_assign_randomly:
+                for idx, participant in participants_to_assign_randomly:
                     available_groups = list(all_groups - assigned_groups)
                     random_group = random.choice(available_groups)
                     groups[random_group].append(participant)
                     assigned_groups.add(random_group)
-                    snapshot_delta("add", random_group, participant)
+                    is_last_in_batch = (idx == len(batch) - 1)
+                    snapshot_delta("add", random_group, participant, placement_method="random", batch_end=is_last_in_batch)
                     logging.debug(f"Randomly assigned {participant} to group {random_group}")
 
         # Return both groups and the delta snapshots
