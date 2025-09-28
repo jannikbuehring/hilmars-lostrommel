@@ -18,7 +18,7 @@ from checks.validity_checker import *
 from models.player import players_by_start_number
 
 config = configparser.ConfigParser()
-config.read("config.ini")
+config.read("config/config.ini")
 
 log_level = config["settings"]["log_level"]
 mode = config["settings"]["mode"]
