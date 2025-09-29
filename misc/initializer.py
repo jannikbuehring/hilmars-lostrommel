@@ -15,19 +15,9 @@ from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import *
 
-from models.player import players_by_start_number
-
 config = configparser.ConfigParser()
-config.read("config/config.ini")
-
-log_level = config["settings"]["log_level"]
-mode = config["settings"]["mode"]
-random_seed = config["settings"]["random_seed"]
 
 export_data = []
-
-if random_seed != '':
-    random.seed(random_seed)
 
 singles_groups = {}
 doubles_groups = {}
@@ -36,7 +26,21 @@ mixed_groups = {}
 group_drawer = GroupDrawer()
 bracket_drawer = BracketDrawer()
 
-def initialize_config():
+def initialize_config(base_dir):
+    global mode
+
+    config_dir = os.path.join(base_dir, "config")
+    config_path = os.path.join(config_dir, "config.ini")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    config.read(config_path)
+
+    log_level = config["settings"]["log_level"]
+    random_seed = config["settings"]["random_seed"]
+
+    if random_seed != '':
+        random.seed(random_seed)
+
     
     # Basic configuration
     logging.basicConfig(
