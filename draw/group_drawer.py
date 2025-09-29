@@ -89,69 +89,136 @@ class GroupDrawer:
                 logging.debug("Backtracking failed for batch, using fallback assignment")
                 participants_to_assign_randomly = []
 
-                for idx, participant in enumerate(batch):
-                    placed = False
-                    # Fallback: distribute countries as evenly as possible, but never allow same base in group
-                    country = players_by_start_number[participant.start_number_a].country
-                    base = players_by_start_number[participant.start_number_a].base
-                    country_counts = {}
-                    valid_groups = []
-                    for group in range(1, amount_of_groups + 1):
-                        if group not in assigned_groups:
-                            # Check base conflict
-                            base_conflict = False
+                # --- Improved Greedy Heuristic Fallback ---
+                from collections import Counter
+                available_groups = [g for g in all_groups if g not in assigned_groups]
+                # Count country frequencies in batch
+                country_freq = Counter()
+                for participant in batch:
+                    a = players_by_start_number[participant.start_number_a]
+                    country_freq[a.country] += 1
+                    if participant.start_number_b is not None:
+                        b = players_by_start_number[participant.start_number_b]
+                        country_freq[b.country] += 1
+                # Sort batch: most common countries first
+                def participant_country_key(participant):
+                    a = players_by_start_number[participant.start_number_a]
+                    freq = country_freq[a.country]
+                    if participant.start_number_b is not None:
+                        b = players_by_start_number[participant.start_number_b]
+                        freq += country_freq[b.country]
+                    return -freq
+                batch_sorted = sorted(batch, key=participant_country_key)
+                idx = 0
+                while idx < len(batch_sorted):
+                    participant = batch_sorted[idx]
+                    # For each group, count how many from participant's country (and teammate's country)
+                    group_country_counts = {}
+                    for group in available_groups:
+                        # Check base conflict
+                        base_conflict = False
+                        a = players_by_start_number[participant.start_number_a]
+                        base = a.base
+                        for p in groups[group]:
+                            pa = players_by_start_number[p.start_number_a]
+                            if pa.base == base and base not in (None, "None"):
+                                base_conflict = True
+                                break
+                            if p.start_number_b is not None:
+                                pb = players_by_start_number[p.start_number_b]
+                                if pb.base == base and base not in (None, "None"):
+                                    base_conflict = True
+                                    break
+                        if participant.start_number_b is not None:
+                            b = players_by_start_number[participant.start_number_b]
+                            base_b = b.base
                             for p in groups[group]:
-                                if p.start_number_b is None:
-                                    b = players_by_start_number[p.start_number_a].base
-                                    if b == base:
+                                pa = players_by_start_number[p.start_number_a]
+                                if pa.base == base_b and base_b not in (None, "None"):
+                                    base_conflict = True
+                                    break
+                                if p.start_number_b is not None:
+                                    pb = players_by_start_number[p.start_number_b]
+                                    if pb.base == base_b and base_b not in (None, "None"):
                                         base_conflict = True
                                         break
-                                else:
-                                    b1 = players_by_start_number[p.start_number_a].base
-                                    b2 = players_by_start_number[p.start_number_b].base
-                                    if b1 == base or b2 == base:
-                                        base_conflict = True
-                                        break
-                            if base_conflict:
-                                continue
-                            # Count country occurrences
-                            count = 0
-                            for p in groups[group]:
-                                if p.start_number_b is None:
-                                    c = players_by_start_number[p.start_number_a].country
-                                    if c == country:
+                        if base_conflict:
+                            continue
+                        # Count country occurrences
+                        count = 0
+                        for p in groups[group]:
+                            pa = players_by_start_number[p.start_number_a]
+                            if pa.country == a.country:
+                                count += 1
+                            if participant.start_number_b is not None:
+                                if p.start_number_b is not None:
+                                    pb = players_by_start_number[p.start_number_b]
+                                    if pb.country == b.country:
                                         count += 1
-                                else:
-                                    c1 = players_by_start_number[p.start_number_a].country
-                                    c2 = players_by_start_number[p.start_number_b].country
-                                    if c1 == country:
-                                        count += 1
-                                    if participant.start_number_b is not None and c2 == country:
-                                        count += 1
-                            country_counts[group] = count
-                            valid_groups.append(group)
-                    if country_counts:
-                        min_count = min(country_counts.values())
-                        candidate_groups = [g for g, cnt in country_counts.items() if cnt == min_count]
+                                if pa.country == b.country:
+                                    count += 1
+                        group_country_counts[group] = count
+                    if group_country_counts:
+                        min_count = min(group_country_counts.values())
+                        candidate_groups = [g for g, cnt in group_country_counts.items() if cnt == min_count]
                         chosen_group = random.choice(candidate_groups)
-                        groups[chosen_group].append(participant)
-                        assigned_groups.add(chosen_group)
-                        is_last_in_batch = (idx == len(batch) - 1 and len(participants_to_assign_randomly) == 0)
-                        snapshot_delta("add", chosen_group, participant, placement_method="fallback", batch_end=is_last_in_batch)
-                        logging.debug(f"Added {participant} to group {chosen_group} (country+base fallback)")
-                        placed = True
+                    else:
+                        # All groups have base conflict, assign randomly
+                        chosen_group = random.choice(available_groups)
+                    groups[chosen_group].append(participant)
+                    assigned_groups.add(chosen_group)
+                    available_groups = [g for g in available_groups if g != chosen_group]
+                    is_last_in_batch = (idx == len(batch_sorted) - 1)
+                    snapshot_delta("add", chosen_group, participant, placement_method="greedy-fallback", batch_end=is_last_in_batch)
+                    logging.debug(f"Greedy-fallback assigned {participant} to group {chosen_group}")
 
-                    if not placed:
-                        participants_to_assign_randomly.append((idx, participant))
+                    # After assignment, check if this participant's country is now evenly distributed
+                    # If so, move all remaining participants of this country to the end of batch_sorted
+                    # and continue with the next country
+                    # Compute country counts for all groups
+                    country = players_by_start_number[participant.start_number_a].country
+                    # For teams, also check teammate's country
+                    countries = [country]
+                    if participant.start_number_b is not None:
+                        b_country = players_by_start_number[participant.start_number_b].country
+                        if b_country != country:
+                            countries.append(b_country)
+                    
+                    group_country_counts_new = {}
+                    for group in available_groups:
+                        a = players_by_start_number[participant.start_number_a]
+                        # Count country occurrences
+                        count = 0
+                        for p in groups[group]:
+                            pa = players_by_start_number[p.start_number_a]
+                            if pa.country == a.country:
+                                count += 1
+                            if participant.start_number_b is not None:
+                                if p.start_number_b is not None:
+                                    pb = players_by_start_number[p.start_number_b]
+                                    if pb.country == b.country:
+                                        count += 1
+                                if pa.country == b.country:
+                                    count += 1
+                        group_country_counts_new[group] = count
 
-                for i, (idx, participant) in enumerate(participants_to_assign_randomly):
-                    available_groups = list(all_groups - assigned_groups)
-                    random_group = random.choice(available_groups)
-                    groups[random_group].append(participant)
-                    assigned_groups.add(random_group)
-                    is_last_in_batch = (i == len(participants_to_assign_randomly) - 1)
-                    snapshot_delta("add", random_group, participant, placement_method="random", batch_end=is_last_in_batch)
-                    logging.debug(f"Randomly assigned {participant} to group {random_group}")
+                    all_countries_distributed_evenly = len(set(group_country_counts_new.values())) == 1
+                    if (all_countries_distributed_evenly):
+                        # Move all remaining participants of this country to the end
+                        remaining = []
+                        for p in batch_sorted[idx+1:]:
+                            country_a = players_by_start_number[p.start_number_a].country
+                            country_b = (
+                                players_by_start_number[p.start_number_b].country
+                                if p.start_number_b is not None
+                                else None
+                            )
+
+                            if country_a in countries or (country_b and country_b in countries):
+                                remaining.append(p)
+
+                        batch_sorted = batch_sorted[:idx+1] + [p for p in batch_sorted[idx+1:] if p not in remaining] + remaining
+                    idx += 1
 
         # Return both groups and the delta snapshots
         return groups, snapshots
