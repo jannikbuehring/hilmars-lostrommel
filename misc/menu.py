@@ -1,4 +1,5 @@
 import inquirer
+import sys
 from viewer.group_viewer import *
 from viewer.player_viewer import show_players_table
 from viewer.bracket_viewer import show_bracket_table
@@ -15,7 +16,7 @@ def show_main_menu():
         case 'View':
             view_choice()
         case 'Exit':
-            exit()
+            sys.exit()
     show_main_menu()
 
 def view_choice():
