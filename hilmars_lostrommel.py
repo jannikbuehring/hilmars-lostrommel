@@ -1,13 +1,24 @@
 import logging
+import os
+import sys
 
 from misc.menu import *
 from misc.initializer import *
 from misc.startup_info import *
 
+def get_base_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
+
+
+BASE_DIR = get_base_dir()
+
 def main():
     try:
         print_startup_info()
-        initialize_config()
+        initialize_config(BASE_DIR)
         initialize_data()
 
         print("")
