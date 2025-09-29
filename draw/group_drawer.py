@@ -1,7 +1,6 @@
-import math
 import random
 import logging
-from models.player import Player, players_by_start_number
+from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
 
 class GroupDrawer:
@@ -32,20 +31,6 @@ class GroupDrawer:
                     if (players_by_start_number[t.start_number_a].country == players_by_start_number[participant.start_number_a].country
                         and players_by_start_number[t.start_number_b].country == players_by_start_number[participant.start_number_b].country):
                         logging.debug(f"Team {participant.start_number_a}/{participant.start_number_b} conflicts with group {group}.")
-                        return False
-            return True
-
-        def can_place_in_group_no_base_conflict(participant, group):
-            if participant.start_number_b is None:  # Single player
-                for p in groups[group]:
-                    if players_by_start_number[p.start_number_a].base == players_by_start_number[participant.start_number_a].base:
-                        logging.debug(f"Player {participant.start_number_a} has same base as someone in group {group}.")
-                        return False
-            else:  # Team
-                for t in groups[group]:
-                    if (players_by_start_number[t.start_number_a].base == players_by_start_number[participant.start_number_a].base
-                        and players_by_start_number[t.start_number_b].base == players_by_start_number[participant.start_number_b].base):
-                        logging.debug(f"Team {participant.start_number_a}/{participant.start_number_b} base conflict with group {group}.")
                         return False
             return True
 
@@ -151,7 +136,7 @@ class GroupDrawer:
                         chosen_group = random.choice(candidate_groups)
                         groups[chosen_group].append(participant)
                         assigned_groups.add(chosen_group)
-                        is_last_in_batch = (idx == len(batch) - 1)
+                        is_last_in_batch = (idx == len(batch) - 1 and len(participants_to_assign_randomly) == 0)
                         snapshot_delta("add", chosen_group, participant, placement_method="fallback", batch_end=is_last_in_batch)
                         logging.debug(f"Added {participant} to group {chosen_group} (country+base fallback)")
                         placed = True
@@ -159,12 +144,12 @@ class GroupDrawer:
                     if not placed:
                         participants_to_assign_randomly.append((idx, participant))
 
-                for idx, participant in participants_to_assign_randomly:
+                for i, (idx, participant) in enumerate(participants_to_assign_randomly):
                     available_groups = list(all_groups - assigned_groups)
                     random_group = random.choice(available_groups)
                     groups[random_group].append(participant)
                     assigned_groups.add(random_group)
-                    is_last_in_batch = (idx == len(batch) - 1)
+                    is_last_in_batch = (i == len(participants_to_assign_randomly) - 1)
                     snapshot_delta("add", random_group, participant, placement_method="random", batch_end=is_last_in_batch)
                     logging.debug(f"Randomly assigned {participant} to group {random_group}")
 
