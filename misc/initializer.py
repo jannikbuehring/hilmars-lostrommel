@@ -143,6 +143,7 @@ def initialize_data():
             logging.error("Exception occurred:\n%s", traceback.format_exc())
             return
 
+
     ########################################################################################
     with yaspin(text="Drawing singles groups...", color="cyan") as spinner:
         try:
@@ -189,6 +190,7 @@ def initialize_data():
             print("An error occurred:", e)
             return
 
+
     ########################################################################################
     with yaspin(text="Drawing mixed groups...", color="cyan") as spinner:
         try:
@@ -210,6 +212,34 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
+            return
+
+    ########################################################################################
+    with yaspin(text="Validating group draws...", color="cyan") as spinner:
+        try:
+            from checks.group_checker import check_country_distribution, check_base_uniqueness
+            all_passed = True
+            for group_type, group_dict in [("singles", singles_groups), ("doubles", doubles_groups), ("mixed", mixed_groups)]:
+                country_violations = check_country_distribution(group_type, group_dict)
+                base_violations = check_base_uniqueness(group_dict)
+                if country_violations:
+                    all_passed = False
+                    spinner.text = f"Country distribution violations detected in {group_type}!"
+                    spinner.fail("WARN")
+                    for v in country_violations:
+                        print(f"Country distribution violation in {group_type}: class={v[0]}, country={v[1]}, max={v[2]}, min={v[3]}, group_counts={v[4]}")
+                if base_violations:
+                    all_passed = False
+                    spinner.text = f"Base uniqueness violations detected in {group_type}!"
+                    spinner.fail("WARN")
+                    for v in base_violations:
+                        print(f"Base uniqueness violation in {group_type}: class={v[0]}, group={v[1]}, base={v[2]}, count={v[3]}")
+            if all_passed:
+                spinner.text = "All group draws passed validation checks."
+                spinner.ok()
+        except Exception as e:
+            spinner.fail()
+            print("An error occurred during group validation:", e)
             return
 
     ########################################################################################
