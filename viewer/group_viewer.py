@@ -5,7 +5,7 @@ from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
 from hilmars_lostrommel import *
-
+from misc.initializer import config
 
 def clear_screen():
     """Clear the terminal screen in a cross-platform way."""
@@ -14,6 +14,7 @@ def clear_screen():
 
 def show_groups(groups, snapshots):
     """Display groups in either interactive or table mode."""
+    mode = config["settings"]["mode"]
     if mode == 'interactive':
         show_snapshot_viewer(groups, snapshots)
     else:
