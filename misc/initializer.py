@@ -40,7 +40,6 @@ def initialize_config(base_dir):
 
     if random_seed != '':
         random.seed(random_seed)
-
     
     # Basic configuration
     logging.basicConfig(
@@ -152,14 +151,13 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                singles_competition_classes = set(data.competition_class for data in singles_group_draw_data)
+                singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
                     group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     singles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(singles_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
@@ -176,14 +174,13 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                doubles_competition_classes = set(data.competition_class for data in doubles_group_draw_data)
+                doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
                     group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     doubles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(doubles_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created doubles groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
@@ -200,14 +197,13 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                mixed_competition_classes = set(data.competition_class for data in mixed_group_draw_data)
+                mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
                     group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     mixed_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(mixed_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created mixed groups for competition classes {competition_classes_list}"
                 spinner.ok()
 
@@ -224,7 +220,7 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                singles_competition_classes = set(data.competition_class for data in singles_bracket_draw_data)
+                singles_competition_classes = sorted(set(data.competition_class for data in singles_bracket_draw_data))
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_bracket_draw_data if data.competition_class == competition_class]
                     main_round_participants = [data for data in class_subset if data.main_round == True]
@@ -234,7 +230,6 @@ def initialize_data():
                     #consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
 
                 competition_classes_list = list(singles_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
                 spinner.ok()
 
@@ -251,13 +246,12 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                doubles_competition_classes = set(data.competition_class for data in doubles_bracket_draw_data)
+                doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
                     # draw bracket
 
                 competition_classes_list = list(doubles_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created doubles bracket for competition classes {competition_classes_list}"
                 spinner.ok()
 
@@ -274,13 +268,12 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
-                mixed_competition_classes = set(data.competition_class for data in mixed_bracket_draw_data)
+                mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
                     # draw bracket
 
                 competition_classes_list = list(mixed_competition_classes)
-                competition_classes_list.sort()
                 spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
                 spinner.ok()
 
