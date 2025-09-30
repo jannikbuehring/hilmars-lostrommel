@@ -1,8 +1,11 @@
 from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
+from misc.initializer import config
 
 def show_bracket(first_round_matches):
+    """Display bracket in either interactive or table mode."""
+    mode = config["settings"]["mode"]
     if mode == 'interactive':
         return
     else: 

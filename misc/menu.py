@@ -1,16 +1,16 @@
-import inquirer
 import sys
-from viewer.group_viewer import *
+import inquirer
+from viewer.group_viewer import show_groups
 from viewer.player_viewer import show_players_table
-from viewer.bracket_viewer import show_bracket_table
-from misc.initializer import *
-from hilmars_lostrommel import *
+from viewer.bracket_viewer import show_bracket
+from misc.initializer import singles_groups, doubles_groups, mixed_groups
 
-to_show = ""
+TO_SHOW = ""
 
 def show_main_menu():
-    global to_show
-    to_show = ""
+    """Display the main menu and handle user choices."""
+    global TO_SHOW
+    TO_SHOW = ""
     action = inquirer.list_input("Choose what to do", choices=['View', 'Exit'])
     match (action):
         case 'View':
@@ -20,21 +20,23 @@ def show_main_menu():
     show_main_menu()
 
 def view_choice():
-    global to_show
+    """Choose what to view: Players, Groups, Bracket, Back to main menu"""
+    global TO_SHOW
     what_to_view = inquirer.list_input("Choose what to view", choices=['Players', 'Groups', 'Bracket', 'Back'])
     match (what_to_view):
         case 'Players':
             show_players_table()
         case 'Groups':
-            to_show = "Groups"
+            TO_SHOW = "Groups"
             singles_doubles_mixed_choice()
         case 'Bracket':
-            to_show = "Bracket"
+            TO_SHOW = "Bracket"
             singles_doubles_mixed_choice()
         case 'Back':
             show_main_menu()
 
 def singles_doubles_mixed_choice():
+    """Choose between Singles, Doubles, Mixed, Back to previous menu"""
     s_d_m = inquirer.list_input("Choose what to view", choices=['Singles', 'Doubles', 'Mixed'])
     match (s_d_m):
         case 'Singles':
@@ -50,7 +52,8 @@ def singles_doubles_mixed_choice():
             view_choice()
 
 def groups_choice(s_d_m, choices):
-    global to_show
+    """Choose competition class to view groups or bracket, or go back"""
+    global TO_SHOW
     choices.sort()
     choices.append('Back')
     competition_class = inquirer.list_input("Choose a competition class", choices=choices)
@@ -58,7 +61,7 @@ def groups_choice(s_d_m, choices):
         case 'Back':
             view_choice()
         case _:
-            match(s_d_m, to_show):
+            match(s_d_m, TO_SHOW):
                 case ('S', "Groups"):
                     show_groups(competition=s_d_m, competition_class=competition_class, groups=singles_groups[competition_class]["group"], snapshots= singles_groups[competition_class]["snapshots"])
                 case ('S', "Bracket"):
