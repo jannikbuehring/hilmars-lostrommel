@@ -12,17 +12,18 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def show_groups(groups, snapshots):
+def show_groups(competition, competition_class, groups, snapshots):
     """Display groups in either interactive or table mode."""
     mode = config["settings"]["mode"]
     if mode == 'interactive':
-        show_snapshot_viewer(groups, snapshots)
+        show_snapshot_viewer(competition, competition_class, groups, snapshots)
     else:
-        show_groups_table(groups)
+        show_groups_table(competition, competition_class, groups)
 
 
-def show_groups_table(groups):
+def show_groups_table(competition, competition_class, groups):
     """Print all groups in a tabular format."""
+    print(f"Competition: {competition} | Class: {competition_class}")
     for number, group in groups.items():
         print(f"Group {number}")
         print_group_table(group)
@@ -63,7 +64,7 @@ def print_group_table(group):
 
 
 
-def show_snapshot_viewer(groups, snapshots):
+def show_snapshot_viewer(competition, competition_class, groups, snapshots):
     """Interactive viewer for group assignment snapshots."""
     current_index = 0
     last_action = "Forward"
@@ -73,6 +74,7 @@ def show_snapshot_viewer(groups, snapshots):
 
     while True:
         clear_screen()
+        print(f"Competition: {competition} | Class: {competition_class}")
         display_snapshot(groups, snapshots, current_index)
         action = prompt_snapshot_action(last_action)
 
