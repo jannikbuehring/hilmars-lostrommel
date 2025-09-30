@@ -4,7 +4,9 @@ from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
 
 class GroupDrawer:
+    """Class to handle drawing of groups with country conflict avoidance."""
     def draw_groups(self, class_subset: list[DrawDataRow], amount_of_groups):
+        """Draw groups for a competition class using backtracking to avoid country conflicts."""
         snapshots = []  # store deltas: add/remove of DrawDataRow objects
 
         # Helper to record delta snapshots

@@ -4,7 +4,6 @@ import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
-from hilmars_lostrommel import *
 from misc.initializer import config
 
 def clear_screen():
@@ -30,6 +29,7 @@ def show_groups_table(competition, competition_class, groups):
     print("")
 
 def print_group_table(group):
+    """Print a single group in a tabular format."""
     table_data = []
     if group[0].start_number_b is None:
         # Single player group
