@@ -1,7 +1,9 @@
 import random
 import logging
+from collections import Counter
 from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
+
 
 class GroupDrawer:
     """Class to handle drawing of groups with country conflict avoidance."""
@@ -89,10 +91,8 @@ class GroupDrawer:
 
             if not backtrack(batch, 0, assigned_groups):
                 logging.debug("Backtracking failed for batch, using fallback assignment")
-                participants_to_assign_randomly = []
 
                 # --- Improved Greedy Heuristic Fallback ---
-                from collections import Counter
                 available_groups = [g for g in all_groups if g not in assigned_groups]
                 # Count country frequencies in batch
                 country_freq = Counter()
