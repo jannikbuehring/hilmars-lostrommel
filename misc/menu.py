@@ -53,22 +53,22 @@ def groups_choice(s_d_m, choices):
     global to_show
     choices.sort()
     choices.append('Back')
-    competition = inquirer.list_input("Choose a competition", choices=choices)
-    match (competition):
+    competition_class = inquirer.list_input("Choose a competition class", choices=choices)
+    match (competition_class):
         case 'Back':
             view_choice()
         case _:
             match(s_d_m, to_show):
                 case ('S', "Groups"):
-                    show_groups(singles_groups[competition]["group"], singles_groups[competition]["snapshots"])
+                    show_groups(competition=s_d_m, competition_class=competition_class, groups=singles_groups[competition_class]["group"], snapshots= singles_groups[competition_class]["snapshots"])
                 case ('S', "Bracket"):
                     show_bracket("TODO")
                 case ('D', "Groups"):
-                    show_groups(doubles_groups[competition]["group"], doubles_groups[competition]["snapshots"])
+                    show_groups(competition=s_d_m, competition_class=competition_class, groups=doubles_groups[competition_class]["group"], snapshots=doubles_groups[competition_class]["snapshots"])
                 case ('D', "Bracket"):
                     show_bracket("TODO")
                 case ('M', "Groups"):
-                    show_groups(mixed_groups[competition]["group"], mixed_groups[competition]["snapshots"])
+                    show_groups(competition=s_d_m, competition_class=competition_class, groups=mixed_groups[competition_class]["group"], snapshots=mixed_groups[competition_class]["snapshots"])
                 case ('M', "Bracket"):
                     show_bracket("TODO")
                 case _:
