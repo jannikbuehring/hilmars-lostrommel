@@ -1,4 +1,5 @@
-from collections import Counter, defaultdict
+"""Checks related to group assignments in competitions."""
+from collections import defaultdict
 from models.player import players_by_start_number
 
 def check_country_distribution(competition, groups):
@@ -64,3 +65,33 @@ def check_base_uniqueness(groups):
 				if len(team_list) > 1:
 					violations.append((competition_class, group_no, base, len(team_list)))
 	return violations
+
+def get_qttr_distributions(groups):
+	"""Check that the distribution of players without a QTTR rating is balanced across groups. Only for singles.
+	Returns a map of group_no -> count of players without QTTR"""
+	
+	qttr_distribution = []
+	for competition_class, group_data in groups.items():
+		group_dict = group_data["group"]
+		# Count players without QTTR per group
+		no_qttr_counts = {}
+		for group_no, members in group_dict.items():
+			count_no_qttr = 0
+			for member in members:
+				a = players_by_start_number[member.start_number_a]
+				if a.qttr is None or a.qttr == "" or a.qttr == "None":
+					count_no_qttr += 1
+				if member.start_number_b is not None:
+					b = players_by_start_number[member.start_number_b]
+					if b.qttr is None or b.qttr == "" or b.qttr == "None":
+						count_no_qttr += 1
+			no_qttr_counts[group_no] = count_no_qttr
+		# Only append if there is a violation
+		if no_qttr_counts:
+			min_count = min(no_qttr_counts.values())
+			max_count = max(no_qttr_counts.values())
+			if max_count > 0:
+				min_groups = [g for g, v in no_qttr_counts.items() if v == min_count]
+				max_groups = [g for g, v in no_qttr_counts.items() if v == max_count]
+				qttr_distribution.append((competition_class, min_count, min_groups, max_count, max_groups))
+	return qttr_distribution
