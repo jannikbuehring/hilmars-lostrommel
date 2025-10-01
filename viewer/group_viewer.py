@@ -1,10 +1,10 @@
-
+"""Module for viewing groups and snapshots in either interactive or table mode."""
 import os
 import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
-from misc.initializer import config
+from misc.config import config
 
 def clear_screen():
     """Clear the terminal screen in a cross-platform way."""

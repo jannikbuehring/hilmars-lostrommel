@@ -3,7 +3,8 @@ import os
 import sys
 
 from misc.menu import show_main_menu
-from misc.initializer import initialize_config, initialize_data
+from misc.initializer import initialize_data
+from misc.config import initialize_config
 from misc.startup_info import print_startup_info
 
 def get_base_dir():
