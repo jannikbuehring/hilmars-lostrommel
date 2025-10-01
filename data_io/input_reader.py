@@ -18,6 +18,6 @@ def read_players():
         lines = file.readlines()
         players = []
         for line in lines[1:]:
-            start_number, last_name, first_name, country, base, gender = line.strip().split(";")
-            players.append(Player(start_number=start_number, first_name=first_name, last_name=last_name, country=country, base=base, gender=gender))
+            start_number, last_name, first_name, country, base, gender, qttr = line.strip().split(";")
+            players.append(Player(start_number=start_number, first_name=first_name, last_name=last_name, country=country, base=base, gender=gender, qttr=qttr))
         return players
