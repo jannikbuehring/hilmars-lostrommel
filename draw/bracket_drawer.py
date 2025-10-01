@@ -1,14 +1,14 @@
+"""Module to handle drawing of single-elimination brackets with country conflict avoidance."""
 import math
 import random
+import logging
 from typing import List, Optional
-from models.player import Player
 from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
+from models.draw_data import seeding_by_start_numbers
 from models.match import Match
 from viewer.bracket_viewer import show_bracket_table
-import logging
 
-from models.draw_data import seeding_by_start_numbers
 
 class BracketDrawer:
     def draw_bracket(self, class_subset: list["DrawDataRow"]):

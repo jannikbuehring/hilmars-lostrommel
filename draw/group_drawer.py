@@ -1,9 +1,9 @@
+"""Module to handle drawing of groups with country conflict avoidance."""
 import random
 import logging
 from collections import Counter
 from models.player import players_by_start_number
 from models.draw_data import DrawDataRow
-
 
 class GroupDrawer:
     """Class to handle drawing of groups with country conflict avoidance."""
