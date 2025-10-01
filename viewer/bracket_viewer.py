@@ -1,7 +1,8 @@
+"""Module for viewing brackets in either interactive or table mode."""
 from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
-from misc.initializer import config
+from misc.config import config
 
 def show_bracket(first_round_matches):
     """Display bracket in either interactive or table mode."""

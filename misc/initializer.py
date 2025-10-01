@@ -1,11 +1,11 @@
+"""
+Initializer module for setting up configuration, reading data, 
+performing draws, and exporting results.
+"""
 import logging
 import traceback
-import random
 
-from viewer.group_viewer import *
 from yaspin import yaspin
-
-import configparser
 
 from data_io.input_reader import read_players, read_draw_data
 from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
@@ -13,9 +13,8 @@ from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
 from draw.group_drawer import GroupDrawer
 from draw.bracket_drawer import BracketDrawer
 
-from checks.validity_checker import *
+from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
 
-config = configparser.ConfigParser()
 
 export_data = []
 
@@ -26,29 +25,8 @@ mixed_groups = {}
 group_drawer = GroupDrawer()
 bracket_drawer = BracketDrawer()
 
-def initialize_config(base_dir):
-    global mode
-
-    config_dir = os.path.join(base_dir, "config")
-    config_path = os.path.join(config_dir, "config.ini")
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    config.read(config_path)
-
-    log_level = config["settings"]["log_level"]
-    random_seed = config["settings"]["random_seed"]
-
-    if random_seed != '':
-        random.seed(random_seed)
-    
-    # Basic configuration
-    logging.basicConfig(
-        level=int(log_level),                                   # minimum level to log
-        format="%(asctime)s [%(levelname)s] %(message)s",       # log format
-        datefmt="%Y-%m-%d %H:%M:%S"                             # timestamp format
-    )
-
 def initialize_data():
+    """Initialize data by reading players and draw data, performing draws, and preparing export."""
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
@@ -59,7 +37,7 @@ def initialize_data():
             spinner.ok()
 
         except FileNotFoundError:
-            spinner.text = f"File 'players.csv' in directory 'input' not found"
+            spinner.text = "File 'players.csv' in directory 'input' not found"
             spinner.fail()
             return
 
@@ -76,25 +54,25 @@ def initialize_data():
             
             # Filter out single draw data
             singles_draw_data = [data for data in draw_data if data.competition == 'S']
-            singles_group_draw_data = [data for data in singles_draw_data if data.group_pos == None]
-            singles_bracket_draw_data = [data for data in singles_draw_data if data.group_pos != None]
+            singles_group_draw_data = [data for data in singles_draw_data if data.group_pos is None]
+            singles_bracket_draw_data = [data for data in singles_draw_data if data.group_pos is not None]
 
             # Filter out doubles draw data
             doubles_draw_data = [data for data in draw_data if data.competition == 'D']
-            doubles_group_draw_data = [data for data in doubles_draw_data if data.group_pos == None]
-            doubles_bracket_draw_data = [data for data in doubles_draw_data if data.group_pos != None]
+            doubles_group_draw_data = [data for data in doubles_draw_data if data.group_pos is None]
+            doubles_bracket_draw_data = [data for data in doubles_draw_data if data.group_pos is not None]
 
             # Filter out mixed draw data
             mixed_draw_data = [data for data in draw_data if data.competition == 'M']
-            mixed_group_draw_data = [data for data in mixed_draw_data if data.group_pos == None]
-            mixed_bracket_draw_data = [data for data in mixed_draw_data if data.group_pos != None]
+            mixed_group_draw_data = [data for data in mixed_draw_data if data.group_pos is None]
+            mixed_bracket_draw_data = [data for data in mixed_draw_data if data.group_pos is not None]
 
 
             spinner.text = f"Successfully imported {len(draw_data)} ({len(singles_draw_data)} single, {len(doubles_draw_data)} double, {len(mixed_draw_data)} mixed) draw data objects"
             spinner.ok()
 
         except FileNotFoundError:
-            spinner.text = f"File 'draw_input.csv' in directory 'input' not found"
+            spinner.text = "File 'draw_input.csv' in directory 'input' not found"
             spinner.fail()
             return
 
@@ -108,14 +86,14 @@ def initialize_data():
         try:
             wrongful_player_data = check_all_players_only_exist_once()
             if wrongful_player_data:
-                spinner.text = f"There were multiple player entries found"
+                spinner.text = "There were multiple player entries found"
                 spinner.fail()
                 print(f">>>> Multiple player entries for start number(s): {wrongful_player_data}")
                 return
 
             missing_players = find_missing_players(draw_data)
             if missing_players:
-                spinner.text = f"The draw data contains references to players that are missing from the import"
+                spinner.text = "The draw data contains references to players that are missing from the import"
                 spinner.fail()
                 print(f">>>> Missing player(s): {missing_players}")
                 return
@@ -127,7 +105,7 @@ def initialize_data():
 
             errors = find_players_in_wrong_competition(draw_data)
             if errors:
-                spinner.text = f"Competition integrity problems detected"
+                spinner.text = "Competition integrity problems detected"
                 spinner.fail()
                 print("")
                 for e in errors:
@@ -246,7 +224,7 @@ def initialize_data():
     with yaspin(text="Drawing singles bracket...", color="cyan") as spinner:
         try:
             if not singles_bracket_draw_data:
-                spinner.text = f"No singles bracket draw data found - no bracket created"
+                spinner.text = "No singles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -272,7 +250,7 @@ def initialize_data():
     with yaspin(text="Drawing doubles bracket...", color="cyan") as spinner:
         try:
             if not doubles_bracket_draw_data:
-                spinner.text = f"No doubles bracket draw data found - no bracket created"
+                spinner.text = "No doubles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -294,7 +272,7 @@ def initialize_data():
     with yaspin(text="Drawing mixed bracket...", color="cyan") as spinner:
         try:
             if not mixed_bracket_draw_data:
-                spinner.text = f"No mixed bracket draw data found - no bracket created"
+                spinner.text = "No mixed bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -321,7 +299,7 @@ def initialize_data():
             #export_data.append(prepare_export_from_bracket_draw(brackets))
 
 
-            spinner.text = f"Export successfully prepared"
+            spinner.text = "Export successfully prepared"
             spinner.ok()
 
         except Exception as e:
@@ -334,7 +312,7 @@ def initialize_data():
         try:
             write_to_csv(export_data)
 
-            spinner.text = f"Successfully created output file"
+            spinner.text = "Successfully created output file"
             spinner.ok()
 
         except Exception as e:
