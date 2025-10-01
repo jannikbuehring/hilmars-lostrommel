@@ -43,9 +43,10 @@ def print_group_table(group):
                 player.start_number,
                 player.country,
                 f"{player.base}",
+                player.qttr
             ])
         print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
-                                            "Start Number", "Country           ", "Base              "], tablefmt=table_format))
+                                            "Start Number", "Country           ", "Base                   ", "QTTR"], tablefmt=table_format))
     else:
         # Team group
         for idx, participant in enumerate(group):
@@ -58,9 +59,10 @@ def print_group_table(group):
                 f"{player_a.start_number}/{player_b.start_number}",
                 f"{player_a.country}/{player_b.country}",
                 f"{player_a.base}/{player_b.base}",
+                f"{player_a.qttr}/{player_b.qttr}",
             ])
         print(tabulate(table_data, headers=["#", "Seeding", "Last Names                                ", "Start Numbers",
-                                            "Countries                      ", "Bases                                   "], tablefmt=table_format))
+                                            "Countries                      ", "Bases                                     ", "QTTR values    "], tablefmt=table_format))
 
 
 

@@ -14,7 +14,7 @@ from draw.group_drawer import GroupDrawer
 from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
-
+from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_distributions
 
 export_data = []
 
@@ -195,7 +195,6 @@ def initialize_data():
     ########################################################################################
     with yaspin(text="Validating group draws...", color="cyan") as spinner:
         try:
-            from checks.group_checker import check_country_distribution, check_base_uniqueness
             all_passed = True
             for group_type, group_dict in [("singles", singles_groups), ("doubles", doubles_groups), ("mixed", mixed_groups)]:
                 country_violations = check_country_distribution(group_type, group_dict)
@@ -212,6 +211,11 @@ def initialize_data():
                     spinner.fail("WARN")
                     for v in base_violations:
                         print(f"Base uniqueness violation in {group_type}: class={v[0]}, group={v[1]}, base={v[2]}, count={v[3]}")
+            
+            qttr_distributions = get_qttr_distributions(singles_groups)
+            for distribution in qttr_distributions:
+                print(f"Distribution of players without QTTR rating in singles {distribution[0]}: Minimum amount {distribution[1]} in groups {distribution[2]}. Maximum amount {distribution[3]} in groups {distribution[4]}.")
+    
             if all_passed:
                 spinner.text = "All group draws passed validation checks."
                 spinner.ok()
