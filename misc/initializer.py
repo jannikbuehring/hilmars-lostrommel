@@ -10,7 +10,7 @@ from yaspin import yaspin
 from data_io.input_reader import read_players, read_draw_data
 from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
 
-from draw.group_drawer import draw_groups, draw_groups_monte_carlo
+from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
@@ -139,7 +139,7 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            print("An error occurred:", e)
             return
 
     ########################################################################################
@@ -211,7 +211,7 @@ def initialize_data():
             
             qttr_distributions = get_qttr_distributions(singles_groups)
             for distribution in qttr_distributions:
-                print(f"Distribution of players without QTTR rating in singles {distribution[0]}: Minimum amount {distribution[1]} in groups {distribution[2]}. Maximum amount {distribution[3]} in groups {distribution[4]}.")
+                print(f"Distribution of players without QTTR rating in singles {distribution[0]}: Group {distribution[1]} - {distribution[2]} players without QTTR. Distribution: {distribution[3]}")
     
             if all_passed:
                 spinner.text = "All group draws passed validation checks."

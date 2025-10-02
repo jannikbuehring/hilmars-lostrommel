@@ -37,23 +37,26 @@ def print_group_table(group):
         for idx, member in enumerate(group):
             if isinstance(member, EmptySlot):
                 continue
-            else:
-                player = players_by_start_number[member.start_number_a]
-                table_data.append([
-                    idx + 1,
-                    member.seeding,
-                    player.last_name,
-                    player.first_name,
-                    player.start_number,
-                    player.country,
-                    f"{player.base}",
-                    player.qttr
-                ])
+            
+            player = players_by_start_number[member.start_number_a]
+            table_data.append([
+                idx + 1,
+                member.seeding,
+                player.last_name,
+                player.first_name,
+                player.start_number,
+                player.country,
+                f"{player.base}",
+                player.qttr
+            ])
         print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
                                             "Start Number", "Country           ", "Base                   ", "QTTR"], tablefmt=table_format))
     else:
         # Team group
         for idx, participant in enumerate(group):
+            if isinstance(participant, EmptySlot):
+                continue
+
             player_a = players_by_start_number[participant.start_number_a]
             player_b = players_by_start_number[participant.start_number_b]
             table_data.append([
@@ -97,7 +100,7 @@ def show_snapshot_viewer(competition, competition_class, snapshots):
         elif action == "Forward to next improvement":
             next_index = current_index + 1
             while next_index < len(snapshots):
-                if snapshots[next_index].violation_count < snapshots[current_index].violation_count:
+                if snapshots[next_index].violation_score < snapshots[current_index].violation_score:
                     current_index = next_index
                     break
                 next_index += 1
@@ -144,15 +147,15 @@ def display_snapshot(snapshots, index):
         print_group_table(group)
     print("")
     snap = snapshots[index]
+    print(f"Snapshot {index + 1}/{len(snapshots)}")
     if index > 0:
-        print(f"Snapshot {index + 1}/{len(snapshots)}")
         print(f"Action: {snap.action}")
         print(f"{snap.participants[0]} has been swapped to group {snap.groups[1] if snap.action == 'swap' else snap.groups[0]}")
         print(f"{snap.participants[1]} has been swapped to group {snap.groups[0] if snap.action == 'swap' else snap.groups[1]}")
-        print(f"New violation count: {snap.violation_count}")
     else:
         print("Initial group assignment (no snapshots applied)")
-        print(f"Violation count: {snap.violation_count}")
+    print(f"Violation score: {snap.violation_score}")
+    print(f"Violations: {snap.violations}")
 
 def prompt_snapshot_action(last_action):
     """Prompt the user for the next snapshot navigation action."""
