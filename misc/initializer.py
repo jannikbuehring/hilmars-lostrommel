@@ -131,7 +131,7 @@ def initialize_data():
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
                     group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots}
+                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "original_data": class_subset}
 
                 competition_classes_list = list(singles_competition_classes)
                 spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"

@@ -5,6 +5,7 @@ from tabulate import tabulate
 from viewer.view_config import table_format
 from models.player import players_by_start_number
 from misc.config import config
+from draw.group_drawer import EmptySlot
 
 def clear_screen():
     """Clear the terminal screen in a cross-platform way."""
@@ -15,7 +16,7 @@ def show_groups(competition, competition_class, groups, snapshots):
     """Display groups in either interactive or table mode."""
     mode = config["settings"]["mode"]
     if mode == 'interactive':
-        show_snapshot_viewer(competition, competition_class, groups, snapshots)
+        show_snapshot_viewer(competition, competition_class, snapshots)
     else:
         show_groups_table(competition, competition_class, groups)
 
@@ -34,17 +35,20 @@ def print_group_table(group):
     if group[0].start_number_b is None:
         # Single player group
         for idx, member in enumerate(group):
-            player = players_by_start_number[member.start_number_a]
-            table_data.append([
-                idx + 1,
-                member.seeding,
-                player.last_name,
-                player.first_name,
-                player.start_number,
-                player.country,
-                f"{player.base}",
-                player.qttr
-            ])
+            if isinstance(member, EmptySlot):
+                continue
+            else:
+                player = players_by_start_number[member.start_number_a]
+                table_data.append([
+                    idx + 1,
+                    member.seeding,
+                    player.last_name,
+                    player.first_name,
+                    player.start_number,
+                    player.country,
+                    f"{player.base}",
+                    player.qttr
+                ])
         print(tabulate(table_data, headers=["#", "Seeding", "Last Name                  ", "First Name               ",
                                             "Start Number", "Country           ", "Base                   ", "QTTR"], tablefmt=table_format))
     else:
@@ -54,7 +58,7 @@ def print_group_table(group):
             player_b = players_by_start_number[participant.start_number_b]
             table_data.append([
                 idx + 1,
-                participant.seeding,
+                f"{participant.seeding}",
                 f"{player_a.last_name}/{player_b.last_name}",
                 f"{player_a.start_number}/{player_b.start_number}",
                 f"{player_a.country}/{player_b.country}",
@@ -66,7 +70,7 @@ def print_group_table(group):
 
 
 
-def show_snapshot_viewer(competition, competition_class, groups, snapshots):
+def show_snapshot_viewer(competition, competition_class, snapshots):
     """Interactive viewer for group assignment snapshots."""
     current_index = 0
     last_action = "Forward"
@@ -77,7 +81,7 @@ def show_snapshot_viewer(competition, competition_class, groups, snapshots):
     while True:
         clear_screen()
         print(f"Competition: {competition} | Class: {competition_class}")
-        display_snapshot(groups, snapshots, current_index)
+        display_snapshot(snapshots, current_index)
         action = prompt_snapshot_action(last_action)
 
         if action == "Forward":
@@ -90,24 +94,15 @@ def show_snapshot_viewer(competition, competition_class, groups, snapshots):
                 current_index -= 1
             else:
                 print("Already at first snapshot.")
-        elif action == "Forward to next batch":
+        elif action == "Forward to next improvement":
             next_index = current_index + 1
             while next_index < len(snapshots):
-                if is_batch_end(next_index):
+                if snapshots[next_index].violation_count < snapshots[current_index].violation_count:
                     current_index = next_index
                     break
                 next_index += 1
             else:
-                print("No further batch end found.")
-        elif action == "Backward to previous batch":
-            prev_index = current_index - 1
-            found = False
-            batch_indices = [i for i in range(prev_index, -1, -1) if is_batch_end(i)]
-            if batch_indices:
-                current_index = batch_indices[0]
-                found = True
-            if not found:
-                print("No previous batch end found.")
+                print("No next improvement found.")
         elif action == "Go to snapshot":
             snapshot_number = inquirer.text(message=f"Enter snapshot number (1–{len(snapshots)}):")
             try:
@@ -124,36 +119,40 @@ def show_snapshot_viewer(competition, competition_class, groups, snapshots):
             break
         last_action = action
 
-def display_snapshot(groups, snapshots, index):
+def display_snapshot(snapshots, index):
     """Display the current snapshot of group assignments."""
-    temp_groups = {g: [] for g in groups.keys()}
-    for snap in snapshots[:index + 1]:
-        g = snap["group"]
-        if snap["action"] == "add":
-            temp_groups[g].append(snap["participant"])
-        elif snap["action"] == "remove":
-            if snap["participant"] in temp_groups[g]:
-                temp_groups[g].remove(snap["participant"])
+    # Start from initial_groups in snapshots[0]
+    if not hasattr(snapshots[0], 'initial_groups') and not isinstance(snapshots[0].initial_groups, dict):
+        print("Invalid snapshot format: missing initial_groups.")
 
+    temp_groups = {g: list(members) for g, members in snapshots[0].initial_groups.items()}
+    # Apply all actions up to the current index
+    for i in range(1, index + 1):
+        snap = snapshots[i]
+        if hasattr(snap, 'action') and hasattr(snap, 'groups') and hasattr(snap, 'participants'):
+            if snap.action == "swap":
+                g1, g2 = snap.groups
+                p1, p2 = snap.participants
+                temp_groups[g1][snap.index], temp_groups[g2][snap.index] = p2, p1
+            elif snap.action == "revert":
+                g1, g2 = snap.groups
+                p1, p2 = snap.participants
+                temp_groups[g1][snap.index], temp_groups[g2][snap.index] = p1, p2
+    # Display reconstructed groups
     for number, group in temp_groups.items():
         print(f"\nGroup {number}")
-        if not group:
-            print("[Empty]")
-            continue
         print_group_table(group)
-
     print("")
     snap = snapshots[index]
-    action = 'Added to' if snap["action"] == 'add' else 'Removed from'
-    player_a = players_by_start_number[snap['participant'].start_number_a]
-    player_b = players_by_start_number[snap['participant'].start_number_b] if snap['participant'].start_number_b is not None else None
-    placement = snap.get("placement_method", "?")
-    placement_msg = f" (method: {placement})" if placement else ""
-    if player_b is None:
-        print(f"{action} group {snap['group']}: {player_a}{placement_msg}")
+    if index > 0:
+        print(f"Snapshot {index + 1}/{len(snapshots)}")
+        print(f"Action: {snap.action}")
+        print(f"{snap.participants[0]} has been swapped to group {snap.groups[1] if snap.action == 'swap' else snap.groups[0]}")
+        print(f"{snap.participants[1]} has been swapped to group {snap.groups[0] if snap.action == 'swap' else snap.groups[1]}")
+        print(f"New violation count: {snap.violation_count}")
     else:
-        print(f"{action} group {snap['group']}: {player_a} / {player_b}{placement_msg}")
-    print(f"\nSnapshot {index + 1}/{len(snapshots)}")
+        print("Initial group assignment (no snapshots applied)")
+        print(f"Violation count: {snap.violation_count}")
 
 def prompt_snapshot_action(last_action):
     """Prompt the user for the next snapshot navigation action."""
@@ -164,8 +163,7 @@ def prompt_snapshot_action(last_action):
             choices=[
                 "Forward",
                 "Backward",
-                "Forward to next batch",
-                "Backward to previous batch",
+                "Forward to next improvement",
                 "Go to snapshot",
                 "Show final groups",
                 "Quit",
