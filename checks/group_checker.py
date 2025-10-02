@@ -15,6 +15,9 @@ def check_country_distribution(competition, groups):
 		country_group_counts = defaultdict(lambda: defaultdict(int))  # country -> group_no -> count
 		for group_no, members in group_dict.items():
 			for member in members:
+				# Ignore empty slots
+				if member.start_number_a is None or member.start_number_a == "EMPTY":
+					continue
 				# Single or team
 				a = players_by_start_number[member.start_number_a]
 				country_group_counts[a.country][group_no] += 1
@@ -22,7 +25,7 @@ def check_country_distribution(competition, groups):
 					b = players_by_start_number[member.start_number_b]
 					country_group_counts[b.country][group_no] += 1
 		# Determine allowed difference
-		if competition == "doubles" or competition == "mixed":
+		if competition == "D" or competition == "M":
 			allowed_diff = 2
 		else:
 			allowed_diff = 1
@@ -48,6 +51,9 @@ def check_base_uniqueness(groups):
 			# Track which bases are represented by which teams/players in this group
 			base_to_teams = {}
 			for member in members:
+				# Ignore empty slots
+				if member.start_number_a is None or member.start_number_a == "EMPTY":
+					continue
 				# For a team, collect all unique bases in the team
 				bases = set()
 				a = players_by_start_number[member.start_number_a]
@@ -78,6 +84,9 @@ def get_qttr_distributions(groups):
 		for group_no, members in group_dict.items():
 			count_no_qttr = 0
 			for member in members:
+				# Ignore empty slots
+				if member.start_number_a is None or member.start_number_a == "EMPTY":
+					continue
 				a = players_by_start_number[member.start_number_a]
 				if a.qttr is None or a.qttr == "" or a.qttr == "None":
 					count_no_qttr += 1

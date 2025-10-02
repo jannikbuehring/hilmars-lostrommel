@@ -1,3 +1,5 @@
+from models.player import players_by_start_number
+
 seeding_by_start_numbers = {}
 
 class DrawDataRow:
@@ -20,4 +22,4 @@ class DrawDataRow:
             seeding_by_start_numbers[key] = self.seeding
 
     def __repr__(self):
-        return f"{self.competition} {self.competition_class} (Seeding: {self.seeding}, Start number a: {self.start_number_a}, Start number b: {self.start_number_b})"
+        return f"{self.competition} {self.competition_class} (Seeding: {self.seeding}, Player A: {self.start_number_a}, {players_by_start_number[self.start_number_a].country}. Player B: {self.start_number_b}, {players_by_start_number[self.start_number_b].country if self.start_number_b is not None else ''})"

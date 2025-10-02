@@ -10,7 +10,7 @@ from yaspin import yaspin
 from data_io.input_reader import read_players, read_draw_data
 from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
 
-from draw.group_drawer import GroupDrawer
+from draw.group_drawer import draw_groups, draw_groups_monte_carlo
 from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
@@ -21,9 +21,6 @@ export_data = []
 singles_groups = {}
 doubles_groups = {}
 mixed_groups = {}
-
-group_drawer = GroupDrawer()
-bracket_drawer = BracketDrawer()
 
 def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export."""
@@ -133,7 +130,7 @@ def initialize_data():
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
-                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     singles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(singles_competition_classes)
@@ -156,7 +153,7 @@ def initialize_data():
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
-                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     doubles_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(doubles_competition_classes)
@@ -180,7 +177,7 @@ def initialize_data():
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
-                    group, snapshots = group_drawer.draw_groups(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
                     mixed_groups[competition_class] = {"group": group, "snapshots": snapshots}
 
                 competition_classes_list = list(mixed_competition_classes)
@@ -196,7 +193,7 @@ def initialize_data():
     with yaspin(text="Validating group draws...", color="cyan") as spinner:
         try:
             all_passed = True
-            for group_type, group_dict in [("singles", singles_groups), ("doubles", doubles_groups), ("mixed", mixed_groups)]:
+            for group_type, group_dict in [('S', singles_groups), ('D', doubles_groups), ('M', mixed_groups)]:
                 country_violations = check_country_distribution(group_type, group_dict)
                 base_violations = check_base_uniqueness(group_dict)
                 if country_violations:
