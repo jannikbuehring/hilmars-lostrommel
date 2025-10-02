@@ -63,15 +63,30 @@ def groups_choice(s_d_m, choices):
         case _:
             match(s_d_m, TO_SHOW):
                 case ('S', "Groups"):
-                    show_groups(competition=s_d_m, competition_class=competition_class, groups=singles_groups[competition_class]["group"], snapshots= singles_groups[competition_class]["snapshots"])
+                    show_groups(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        groups=singles_groups[competition_class]["group"],
+                        snapshots= singles_groups[competition_class]["snapshots"]
+                        )
                 case ('S', "Bracket"):
                     show_bracket("TODO")
                 case ('D', "Groups"):
-                    show_groups(competition=s_d_m, competition_class=competition_class, groups=doubles_groups[competition_class]["group"], snapshots=doubles_groups[competition_class]["snapshots"])
+                    show_groups(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        groups=doubles_groups[competition_class]["group"],
+                        snapshots=doubles_groups[competition_class]["snapshots"]
+                        )
                 case ('D', "Bracket"):
                     show_bracket("TODO")
                 case ('M', "Groups"):
-                    show_groups(competition=s_d_m, competition_class=competition_class, groups=mixed_groups[competition_class]["group"], snapshots=mixed_groups[competition_class]["snapshots"])
+                    show_groups(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        groups=mixed_groups[competition_class]["group"],
+                        snapshots=mixed_groups[competition_class]["snapshots"]
+                        )
                 case ('M', "Bracket"):
                     show_bracket("TODO")
                 case _:
