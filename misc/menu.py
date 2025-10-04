@@ -22,7 +22,7 @@ def show_main_menu():
 def view_choice():
     """Choose what to view: Players, Groups, Bracket, Back to main menu"""
     global TO_SHOW
-    what_to_view = inquirer.list_input("Choose what to view", choices=['Players', 'Groups', 'Bracket', 'Back'])
+    what_to_view = inquirer.list_input("Choose what to view", choices=['Groups', 'Bracket', 'Players', 'Back'])
     match (what_to_view):
         case 'Players':
             show_players_table()
