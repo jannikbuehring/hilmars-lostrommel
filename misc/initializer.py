@@ -14,7 +14,7 @@ from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
-from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_distributions
+from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_distributions, check_team_country_distribution
 
 export_data = []
 
@@ -209,10 +209,21 @@ def initialize_data():
                     for v in base_violations:
                         print(f"Base uniqueness violation in {group_type}: class={v[0]}, group={v[1]}, base={v[2]}, count={v[3]}")
             
+            for group_type, group_dict in [('D', doubles_groups), ('M', mixed_groups)]:
+                team_country_violations = check_team_country_distribution(group_dict)
+                if team_country_violations:
+                    all_passed = False
+                    spinner.text = f"Team country distribution violations detected in {group_type}!"
+                    spinner.fail("WARN")
+                    for v in team_country_violations:
+                        print(f"Team country distribution violation in {group_type}: class={v[0]}, team_type={v[1]}, country={v[2]}, max={v[4]}, min={v[3]}, group_counts={v[5]}")
+
             qttr_distributions = get_qttr_distributions(singles_groups)
             for distribution in qttr_distributions:
                 print(f"Distribution of players without QTTR rating in singles {distribution[0]}: Group {distribution[1]} - {distribution[2]} players without QTTR. Distribution: {distribution[3]}")
     
+
+
             if all_passed:
                 spinner.text = "All group draws passed validation checks."
                 spinner.ok()
