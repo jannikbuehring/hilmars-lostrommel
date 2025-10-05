@@ -78,9 +78,6 @@ def show_snapshot_viewer(competition, competition_class, snapshots):
     current_index = 0
     last_action = "Forward"
 
-    def is_batch_end(index):
-        return bool(snapshots[index].get("batch_end", False))
-
     while True:
         clear_screen()
         print(f"Competition: {competition} | Class: {competition_class}")
@@ -155,8 +152,8 @@ def display_snapshot(snapshots, index):
     else:
         print("Initial group assignment (no snapshots applied)")
     print(f"Violation score: {snap.violation_score}")
-    print(f"Violations: {snap.violations}")
-
+    for violation_name, violations in snap.violations.items():
+        print(f"{violation_name} violations: {violations}")
 def prompt_snapshot_action(last_action):
     """Prompt the user for the next snapshot navigation action."""
     questions = [

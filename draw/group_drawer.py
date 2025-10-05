@@ -3,7 +3,7 @@ import random
 import copy
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
-from checks.group_checker import check_base_uniqueness, check_country_distribution, get_qttr_distributions, check_team_country_distribution
+from checks.group_checker import check_base_uniqueness, check_country_distribution, get_qttr_violations, check_team_country_distribution
 from misc.config import config
 
 # Define a safe EmptySlot class
@@ -22,8 +22,12 @@ class EmptySlot:
         # EmptySlot is stateless, so just return a new instance
         return type(self)()
 
-def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, max_attempts=10000):
+def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
     """Draw groups for a competition class using Monte Carlo optimization to minimize country conflicts."""
+    max_iterations = int(config["group_draw"]["max_iterations"])
+    max_no_improvement_iterations = int(config["group_draw"]["max_no_improvement_iterations"])
+    max_escape_attempts = int(config["group_draw"]["max_escape_attempts"])
+
     # Helper to record delta snapshots
     snapshots = []
     def snapshot_delta(action: str, groups: list[int], index_in_group: int, participants: list[DrawDataRow], violations, violation_score):
@@ -32,10 +36,10 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, m
     def get_violations(groups):
         competition = groups[1][0].competition
         violations = {}
-        violations["country"] = check_country_distribution(competition, {"dummy": {"group": groups}})
-        violations["base"] = check_base_uniqueness({"dummy": {"group": groups}})
-        violations["qttr"] = get_qttr_distributions({"dummy": {"group": groups}}) if (competition == 'S') else []      
-        violations["team_country"] = check_team_country_distribution({"dummy": {"group": groups}}) if (competition in ('D', 'M')) else []
+        violations["country"] = check_country_distribution(competition, groups)
+        violations["base"] = check_base_uniqueness(groups)
+        violations["qttr"] = get_qttr_violations(groups) if (competition == 'S') else []     
+        violations["team_country"] = check_team_country_distribution(groups) if (competition in ('D', 'M')) else []
 
         return violations
 
@@ -48,13 +52,13 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, m
 
     def calculate_violation_score(violations):
         country_violations = violations["country"]
-        country_violation_weight = int(config["group_draw_weights"]["country_violation_weight"])
+        country_violation_weight = int(config["group_draw"]["country_violation_weight"])
         team_country_violations = violations["team_country"]
-        team_country_violation_weight = int(config["group_draw_weights"]["team_country_violation_weight"])
+        team_country_violation_weight = int(config["group_draw"]["team_country_violation_weight"])
         base_violations = violations["base"]
-        base_violation_weight = int(config["group_draw_weights"]["base_violation_weight"])
+        base_violation_weight = int(config["group_draw"]["base_violation_weight"])
         qttr_violations = violations["qttr"]
-        qttr_violation_weight = int(config["group_draw_weights"]["qttr_violation_weight"])
+        qttr_violation_weight = int(config["group_draw"]["qttr_violation_weight"])
         return (
             len(country_violations) * country_violation_weight
             + len(team_country_violations) * team_country_violation_weight
@@ -84,23 +88,23 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, m
         while len(groups[group_no]) < max_group_size:
             groups[group_no].append(EmptySlot())
 
-    # Monte Carlo optimization
+    # Monte Carlo optimization with escape from local minima
     current_violations = get_violations(groups)
     current_violation_score = calculate_violation_score(current_violations)
     snapshots.append(Snapshot(None, None, None, None, current_violations, current_violation_score, initial_groups=copy.deepcopy(groups)))
 
-    for _ in range(max_attempts):
-        # Choose a batch randomly
-        batch_idx = random.randint(0, len(batches) - 1)
+    no_improvement_count = 0
+    escape_attempts = 0
+
+    for _ in range(max_iterations):
+        # Choose a batch randomly, never swap first batch
+        batch_idx = random.randint(1, len(batches) - 1)
         batch = batches[batch_idx]
         # Find group slots for this batch, but never swap the first batch (index 0)
         batch_slots = []
         for group_no in groups:
-            slot_idx = batch_idx
-            if slot_idx == 0:
-                continue  # Never swap first batch
-            if slot_idx < len(groups[group_no]):
-                batch_slots.append((group_no, slot_idx))
+            if batch_idx < len(groups[group_no]):
+                batch_slots.append((group_no, batch_idx))
         # Only swap if there are at least two eligible slots
         if len(batch_slots) < 2:
             continue
@@ -113,18 +117,34 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, m
         p2 = groups[g2][idx2]
         # Swap
         groups[g1][idx1], groups[g2][idx2] = p2, p1
-        # Only keep swap if violation count is not worse
         new_violations = get_violations(groups)
         new_violation_score = calculate_violation_score(new_violations)
         snapshot_delta("swap", [g1, g2], idx1, [p1, p2], new_violations, new_violation_score)
-        if new_violation_score <= current_violation_score:
+
+        if new_violation_score < current_violation_score:
             current_violation_score = new_violation_score
+            current_violations = new_violations
+            no_improvement_count = 0
+            escape_attempts = 0  # Only reset on improvement!
             if current_violation_score == 0:
                 break
+        elif new_violation_score == current_violation_score:
+            no_improvement_count += 1
+            current_violations = new_violations
+            current_violation_score = new_violation_score
+            # escape_attempts unchanged
         else:
-            # Revert swap
-            groups[g1][idx1], groups[g2][idx2] = p1, p2
-            snapshot_delta("revert", [g1, g2], idx1, [p1, p2], current_violations, current_violation_score)
+            # Bad swap: only allow if stuck in local minimum
+            if no_improvement_count >= max_no_improvement_iterations and escape_attempts < max_escape_attempts:
+                escape_attempts += 1
+                # Accept the bad swap, but don't reset no_improvement_count
+                current_violation_score = new_violation_score
+            else:
+                # Revert swap
+                groups[g1][idx1], groups[g2][idx2] = p1, p2
+                snapshot_delta("revert", [g1, g2], idx1, [p1, p2], current_violations, current_violation_score)
+                no_improvement_count += 1
+
     # Remove EmptySlot placeholders from groups
     for group_no in groups:
         groups[group_no] = [p for p in groups[group_no] if not isinstance(p, EmptySlot)]
