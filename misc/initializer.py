@@ -14,7 +14,7 @@ from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import BracketDrawer
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
-from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_distributions, check_team_country_distribution
+from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
 
 export_data = []
 
@@ -107,7 +107,7 @@ def initialize_data():
                     print("   ", e)
                 #return
             else:
-                spinner.text = f"The imported data seems valid"
+                spinner.text = "The imported data seems valid"
                 spinner.ok()
                 
 
@@ -121,7 +121,7 @@ def initialize_data():
     with yaspin(text="Drawing singles groups...", color="cyan") as spinner:
         try:
             if not singles_group_draw_data:
-                spinner.text = f"No singles group draw data found - no groups created"
+                spinner.text = "No singles group draw data found - no groups created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -144,7 +144,7 @@ def initialize_data():
     with yaspin(text="Drawing doubles groups...", color="cyan") as spinner:
         try:
             if not doubles_group_draw_data:
-                spinner.text = f"No doubles group draw data found - no groups created"
+                spinner.text = "No doubles group draw data found - no groups created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -168,7 +168,7 @@ def initialize_data():
     with yaspin(text="Drawing mixed groups...", color="cyan") as spinner:
         try:
             if not mixed_group_draw_data:
-                spinner.text = f"No mixed draw group data found - no groups created"
+                spinner.text = "No mixed draw group data found - no groups created"
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
@@ -190,39 +190,39 @@ def initialize_data():
     ########################################################################################
     with yaspin(text="Validating group draws...", color="cyan") as spinner:
         try:
-            all_passed = True
+            invalid_groups = []
             for group_type, group_dict in [('S', singles_groups), ('D', doubles_groups), ('M', mixed_groups)]:
-                country_violations = check_country_distribution(group_type, group_dict)
-                base_violations = check_base_uniqueness(group_dict)
-                if country_violations:
-                    all_passed = False
-                    spinner.text = f"Country distribution violations detected in {group_type}!"
-                    spinner.fail("WARN")
-                    for v in country_violations:
-                        print(f"Country distribution violation in {group_type}: class={v[0]}, country={v[1]}, max={v[2]}, min={v[3]}, group_counts={v[4]}")
-                if base_violations:
-                    all_passed = False
-                    spinner.text = f"Base uniqueness violations detected in {group_type}!"
-                    spinner.fail("WARN")
-                    for v in base_violations:
-                        print(f"Base uniqueness violation in {group_type}: class={v[0]}, group={v[1]}, base={v[2]}, count={v[3]}")
-            
-            for group_type, group_dict in [('D', doubles_groups), ('M', mixed_groups)]:
-                team_country_violations = check_team_country_distribution(group_dict)
-                if team_country_violations:
-                    all_passed = False
-                    spinner.text = f"Team country distribution violations detected in {group_type}!"
-                    spinner.fail("WARN")
-                    for v in team_country_violations:
-                        print(f"Team country distribution violation in {group_type}: class={v[0]}, team_type={v[1]}, country={v[2]}, max={v[4]}, min={v[3]}, group_counts={v[5]}")
+                for competition_class, group_data in group_dict.items():
+                    country_violations = check_country_distribution(group_type, group_data["group"])
+                    base_violations = check_base_uniqueness(group_data["group"])
+                    team_country_violations = check_team_country_distribution(group_data["group"]) if group_type in ('D', 'M') else []
+                    qttr_violations = get_qttr_violations(group_data["group"]) if group_type == 'S' else []
 
-            qttr_distributions = get_qttr_distributions(singles_groups)
-            for distribution in qttr_distributions:
-                print(f"Distribution of players without QTTR rating in singles {distribution[0]}: Group {distribution[1]} - {distribution[2]} players without QTTR. Distribution: {distribution[3]}")
-    
+                    if country_violations or base_violations or team_country_violations or qttr_violations:
+                        invalid_groups.append((group_type, competition_class, group_data["group"]))
 
+                    if country_violations:
+                        spinner.text = f"Country distribution violations detected in {group_type}!"
+                        spinner.fail("WARN")
+                        for v in country_violations:
+                            print(f"Country distribution violation in {group_type}: class={competition_class}, country={v[0]}, max={v[1]}, min={v[2]}, group_counts={v[3]}")
+                    if base_violations:
+                        spinner.text = f"Base uniqueness violations detected in {group_type}!"
+                        spinner.fail("WARN")
+                        for v in base_violations:
+                            print(f"Base uniqueness violation in {group_type}: class={competition_class}, group={v[0]}, base={v[1]}, count={v[2]}")
+                    if team_country_violations:
+                        spinner.text = f"Team country distribution violations detected in {group_type}!"
+                        spinner.fail("WARN")
+                        for v in team_country_violations:
+                            print(f"Team country distribution violation in {group_type}: class={competition_class}, team_type={v[0]}, country={v[1]}, max={v[3]}, min={v[2]}, group_counts={v[4]}")
+                    if qttr_violations:
+                        spinner.text = f"QTTR distribution violations detected in {group_type}!"
+                        spinner.fail("WARN")
+                        for v in qttr_violations:
+                            print(f"Distribution of players without QTTR rating in {group_type}: class={competition_class}, group={v[0]} - {v[1]} players without QTTR. Distribution: {v[2]}")
 
-            if all_passed:
+            if not invalid_groups:
                 spinner.text = "All group draws passed validation checks."
                 spinner.ok()
         except Exception as e:
@@ -253,7 +253,7 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            logging.error("An error occurred: %s", e)
             return
 
     ########################################################################################
@@ -275,7 +275,7 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            logging.error("An error occurred: %s", e)
             return
 
     ########################################################################################
@@ -297,7 +297,7 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            logging.error("An error occurred: %s", e)
             return
 
     ########################################################################################
@@ -314,7 +314,7 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            logging.error("An error occurred: %s", e)
             return
 
     ########################################################################################
@@ -327,5 +327,5 @@ def initialize_data():
 
         except Exception as e:
             spinner.fail()
-            logging.error("An error occurred:", e)
+            logging.error("An error occurred: %s", e)
             return
