@@ -27,14 +27,12 @@ def initialize_data():
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
-            # Read players from CSV file
-            # players = mock_players(32)
             players = read_players()
             spinner.text = f"Successfully imported {len(players)} players"
             spinner.ok()
 
         except FileNotFoundError:
-            spinner.text = "File 'players.csv' in directory 'input' not found"
+            spinner.text = "Players file not found"
             spinner.fail()
             return
 
@@ -69,7 +67,7 @@ def initialize_data():
             spinner.ok()
 
         except FileNotFoundError:
-            spinner.text = "File 'draw_input.csv' in directory 'input' not found"
+            spinner.text = "Draw input file not found"
             spinner.fail()
             return
 

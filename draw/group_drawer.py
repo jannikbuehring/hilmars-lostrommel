@@ -4,7 +4,8 @@ import copy
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
 from checks.group_checker import check_base_uniqueness, check_country_distribution, get_qttr_distributions, check_team_country_distribution
-    
+from misc.config import config
+
 # Define a safe EmptySlot class
 class EmptySlot:
     """A placeholder for empty group slots."""
@@ -42,15 +43,24 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, m
         country_violations = violations["country"] 
         base_violations = violations["base"]
         qttr_violations = violations["qttr"]
-        violations_team = violations["team_country"]
-        return len(country_violations) + len(base_violations) + len(qttr_violations) + len(violations_team)
+        team_country_violations = violations["team_country"]
+        return len(country_violations) + len(base_violations) + len(qttr_violations) + len(team_country_violations)
 
     def calculate_violation_score(violations):
         country_violations = violations["country"]
+        country_violation_weight = int(config["group_draw_weights"]["country_violation_weight"])
+        team_country_violations = violations["team_country"]
+        team_country_violation_weight = int(config["group_draw_weights"]["team_country_violation_weight"])
         base_violations = violations["base"]
+        base_violation_weight = int(config["group_draw_weights"]["base_violation_weight"])
         qttr_violations = violations["qttr"]
-        violations_team = violations["team_country"]
-        return len(base_violations) * 10 + len(country_violations) + len(qttr_violations) + len(violations_team)
+        qttr_violation_weight = int(config["group_draw_weights"]["qttr_violation_weight"])
+        return (
+            len(country_violations) * country_violation_weight
+            + len(team_country_violations) * team_country_violation_weight
+            + len(base_violations) * base_violation_weight
+            + len(qttr_violations) * qttr_violation_weight
+            )
 
 
     def calc_max_group_size(num_participants: int, num_groups: int) -> int:
