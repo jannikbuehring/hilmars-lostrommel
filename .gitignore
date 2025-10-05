@@ -164,6 +164,8 @@ cython_debug/
 #.idea/
 
 input/players.csv
+input/players_2025.csv
 output/output.csv
 open_questions.md
 input/draw_input copy.csv
+input/draw_input_2025.csv
