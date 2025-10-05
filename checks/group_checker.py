@@ -23,7 +23,7 @@ def check_country_distribution(competition, groups):
 				b = players_by_start_number[member.start_number_b]
 				country_group_counts[b.country][group_no] += 1
 	# Determine allowed difference
-	if competition == "D" or competition == "M":
+	if competition in ('D', 'M'):
 		allowed_diff = 2
 	else:
 		allowed_diff = 1
