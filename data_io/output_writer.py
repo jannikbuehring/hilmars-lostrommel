@@ -17,7 +17,7 @@ def prepare_export_from_group_draw(groups):
 
                     export_line_to_add = SimpleNamespace()
                     export_line_to_add.S_D_M = member.competition
-                    setattr(export_line_to_add, "class", member.competition_class)                    
+                    setattr(export_line_to_add, "class", member.competition_class)
                     export_line_to_add.seeding = member.seeding
                     export_line_to_add.group_no = group_number
                     export_line_to_add.group_pos = None
