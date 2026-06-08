@@ -18,35 +18,39 @@ def show_bracket_table(first_round_matches):
     Walks round by round until final.
     """
 
-    round_number = 1
-    current_round = first_round_matches
-
     table_data = []
 
-    for idx, match in enumerate(current_round, start=1):
-        def format_participant(p):
-            if p is None:
-                return "-"
-            if p == "BYE":
-                return "BYE"
-
-            # Single player
-            if getattr(p, "start_number_b", None) is None:
-                player = players_by_start_number[p.start_number_a]
-                return f"[{p.seeding}] {player.first_name} {player.last_name} ({player.country}, {player.base})"
-            # Team
+    for idx, match in first_round_matches.items():
+        for i, participant in enumerate(match):
+            if participant != "BYE" and participant.start_number_b is None:
+                player = players_by_start_number.get(participant.start_number_a)
+                table_data.append([
+                    idx*2 + i - 1,
+                    player.last_name,
+                    player.start_number,
+                    player.country,
+                    player.base
+                ])
+            elif participant != "BYE" and participant.start_number_b is not None:
+                player_a = players_by_start_number.get(participant.start_number_a)
+                player_b = players_by_start_number.get(participant.start_number_b)
+                table_data.append([
+                    idx*2 + i - 1,
+                    f"{player_a.last_name} / {player_b.last_name}",
+                    f"{player_a.start_number} / {player_b.start_number}",
+                    f"{player_a.country} / {player_b.country}",
+                    f"{player_a.base} / {player_b.base}"
+                ])
             else:
-                player_a = players_by_start_number[p.start_number_a]
-                player_b = players_by_start_number[p.start_number_b]
-                return f"[{p.seeding}] {player_a.last_name}/{player_b.last_name} ({player_a.country}/{player_b.country}, {player_a.base}/{player_b.base})"
+                table_data.append([
+                    idx*2 + i -1,
+                    "-",
+                    "-",
+                    "-",
+                    "-"
+                ])
 
-        table_data.append([
-            idx,
-            format_participant(match.slot_a),
-            "vs",
-            format_participant(match.slot_b)
-        ])
 
-    print(tabulate(table_data, headers=["Match", "Player A", "", "Player B"], tablefmt=table_format))
+    print(tabulate(table_data, headers=["#", "Last Name", "Start Number", "Country", "Base"], tablefmt=table_format))
 
     print("")

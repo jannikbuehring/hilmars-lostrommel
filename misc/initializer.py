@@ -11,7 +11,7 @@ from data_io.input_reader import read_players, read_draw_data
 from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
 
 from draw.group_drawer import draw_groups_monte_carlo
-from draw.bracket_drawer import BracketDrawer
+from draw.bracket_drawer import draw_bracket
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
@@ -244,8 +244,8 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    #main_bracket = bracket_drawer.draw_bracket(class_subset=main_round_participants)
-                    #consolation_bracket = bracket_drawer.draw_bracket(class_subset=consolation_round_participants)
+                    main_bracket = draw_bracket(class_subset=main_round_participants)
+                    consolation_bracket = draw_bracket(class_subset=consolation_round_participants)
 
                 competition_classes_list = list(singles_competition_classes)
                 spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
