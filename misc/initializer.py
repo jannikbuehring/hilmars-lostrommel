@@ -8,7 +8,7 @@ import traceback
 from yaspin import yaspin
 
 from data_io.input_reader import read_players, read_draw_data
-from data_io.output_writer import write_to_csv, prepare_export_from_group_draw
+from data_io.output_writer import write_to_csv, prepare_export_from_group_draw, prepare_export_from_bracket_draw
 
 from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import draw_bracket
@@ -21,6 +21,10 @@ export_data = []
 singles_groups = {}
 doubles_groups = {}
 mixed_groups = {}
+
+singles_brackets = {}
+doubles_brackets = {}
+mixed_brackets = {}
 
 def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export."""
@@ -244,8 +248,12 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket = draw_bracket(class_subset=main_round_participants)
-                    consolation_bracket = draw_bracket(class_subset=consolation_round_participants)
+                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
+                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
+                    singles_brackets[competition_class] = {
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
+                    }
 
                 competition_classes_list = list(singles_competition_classes)
                 spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
@@ -263,11 +271,14 @@ def initialize_data():
                 spinner.text = "No doubles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
-                # Create data subsets for each distinct competition class
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
-                    # draw bracket
+                    main_bracket, main_snapshots = draw_bracket(class_subset=class_subset)
+                    doubles_brackets[competition_class] = {
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
+                        'consolation': {'matches': {}, 'snapshots': []}
+                    }
 
                 competition_classes_list = list(doubles_competition_classes)
                 spinner.text = f"Successfully created doubles bracket for competition classes {competition_classes_list}"
@@ -285,11 +296,14 @@ def initialize_data():
                 spinner.text = "No mixed bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
-                # Create data subsets for each distinct competition class
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
-                    # draw bracket
+                    main_bracket, main_snapshots = draw_bracket(class_subset=class_subset)
+                    mixed_brackets[competition_class] = {
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
+                        'consolation': {'matches': {}, 'snapshots': []}
+                    }
 
                 competition_classes_list = list(mixed_competition_classes)
                 spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
@@ -304,10 +318,13 @@ def initialize_data():
     with yaspin(text="Preparing data for export...", color="cyan") as spinner:
         try:
             groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
-            brackets = {}
+            bracket_payload = {
+                'S': singles_brackets,
+                'D': doubles_brackets,
+                'M': mixed_brackets,
+            }
             export_data.extend(prepare_export_from_group_draw(groups))
-            #export_data.append(prepare_export_from_bracket_draw(brackets))
-
+            export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
 
             spinner.text = "Export successfully prepared"
             spinner.ok()

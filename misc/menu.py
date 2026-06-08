@@ -3,7 +3,7 @@ import inquirer
 from viewer.group_viewer import show_groups
 from viewer.player_viewer import show_players_table
 from viewer.bracket_viewer import show_bracket
-from misc.initializer import singles_groups, doubles_groups, mixed_groups
+from misc.initializer import singles_groups, doubles_groups, mixed_groups, singles_brackets, doubles_brackets, mixed_brackets
 
 TO_SHOW = ""
 
@@ -70,24 +70,36 @@ def groups_choice(s_d_m, choices):
                         snapshots= singles_groups[competition_class]["snapshots"]
                         )
                 case ('S', "Bracket"):
-                    show_bracket("TODO")
+                    show_bracket(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        bracket=singles_brackets.get(competition_class, {}),
+                    )
                 case ('D', "Groups"):
                     show_groups(
                         competition=s_d_m,
                         competition_class=competition_class,
                         groups=doubles_groups[competition_class]["group"],
                         snapshots=doubles_groups[competition_class]["snapshots"]
-                        )
+                    )
                 case ('D', "Bracket"):
-                    show_bracket("TODO")
+                    show_bracket(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        bracket=doubles_brackets.get(competition_class, {}),
+                    )
                 case ('M', "Groups"):
                     show_groups(
                         competition=s_d_m,
                         competition_class=competition_class,
                         groups=mixed_groups[competition_class]["group"],
                         snapshots=mixed_groups[competition_class]["snapshots"]
-                        )
+                    )
                 case ('M', "Bracket"):
-                    show_bracket("TODO")
+                    show_bracket(
+                        competition=s_d_m,
+                        competition_class=competition_class,
+                        bracket=mixed_brackets.get(competition_class, {}),
+                    )
                 case _:
                     return
