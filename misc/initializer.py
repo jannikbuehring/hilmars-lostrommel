@@ -274,10 +274,14 @@ def initialize_data():
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
-                    main_bracket, main_snapshots = draw_bracket(class_subset=class_subset)
+                    main_round_participants = [data for data in class_subset if data.main_round == True]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+                    
+                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
+                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
                     doubles_brackets[competition_class] = {
                         'main': {'matches': main_bracket, 'snapshots': main_snapshots},
-                        'consolation': {'matches': {}, 'snapshots': []}
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
                     }
 
                 competition_classes_list = list(doubles_competition_classes)
@@ -299,10 +303,14 @@ def initialize_data():
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
-                    main_bracket, main_snapshots = draw_bracket(class_subset=class_subset)
+                    main_round_participants = [data for data in class_subset if data.main_round == True]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+
+                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
+                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
                     mixed_brackets[competition_class] = {
                         'main': {'matches': main_bracket, 'snapshots': main_snapshots},
-                        'consolation': {'matches': {}, 'snapshots': []}
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
                     }
 
                 competition_classes_list = list(mixed_competition_classes)

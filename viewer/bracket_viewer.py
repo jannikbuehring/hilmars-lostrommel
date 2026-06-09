@@ -109,51 +109,81 @@ def show_bracket_table(first_round_matches, title=None):
         print(title)
     table_data = []
 
-    def fmt_participant(p):
+    def participant_lines(p):
+        """Return a list of display lines for a participant (single or team).
+        For teams, returns two lines (partner A then partner B). For BYE, returns ['BYE'].
+        """
         if p is None:
-            return "-"
+            return ["-"]
         if p == "BYE":
-            return "BYE"
+            return ["BYE"]
         try:
+            group_info = f" G:{getattr(p, 'group_no', getattr(p, 'group_no', None))}" if getattr(p, 'group_no', None) is not None else ""
             if getattr(p, 'start_number_b', None) is None:
                 pl = players_by_start_number.get(p.start_number_a)
                 if pl is None:
-                    return f"Unknown({p.start_number_a})"
+                    return [f"Unknown({p.start_number_a}){group_info}"]
                 meta = []
                 if getattr(p, 'seeding', None) is not None:
                     meta.append(f"seed:{p.seeding}")
                 if getattr(p, 'group_pos', None) is not None:
                     meta.append(f"gp:{p.group_pos}")
                 meta_s = " (" + ",".join(meta) + ")" if meta else ""
-                return f"{pl.last_name} ({pl.start_number}) [{pl.country}/{pl.base if pl.base else '-'}]{meta_s}"
+                return [f"{pl.last_name} ({pl.start_number}) [{pl.country}/{pl.base if pl.base else '-'}]{meta_s}{group_info}"]
             else:
                 pa = players_by_start_number.get(p.start_number_a)
                 pb = players_by_start_number.get(p.start_number_b)
-                name = f"{pa.last_name}/{pb.last_name}" if pa and pb else f"{p.start_number_a}/{p.start_number_b}"
-                sn = f"{p.start_number_a}/{p.start_number_b}"
+                if pa and pb:
+                    line_a = f"{pa.last_name} ({pa.start_number}) [{pa.country}/{pa.base if pa.base else '-'}]"
+                    line_b = f"{pb.last_name} ({pb.start_number}) [{pb.country}/{pb.base if pb.base else '-'}]"
+                else:
+                    line_a = f"{p.start_number_a}"
+                    line_b = f"{p.start_number_b}"
                 meta = []
                 if getattr(p, 'seeding', None) is not None:
                     meta.append(f"seed:{p.seeding}")
                 if getattr(p, 'group_pos', None) is not None:
                     meta.append(f"gp:{p.group_pos}")
                 meta_s = " (" + ",".join(meta) + ")" if meta else ""
-                countries = f"{pa.country if pa else '-'} / {pb.country if pb else '-'}"
-                bases = f"{pa.base if pa else '-'} / {pb.base if pb else '-'}"
-                return f"{name} ({sn}) [{countries}/{bases}]{meta_s}"
+                # append group info to first line
+                return [f"{line_a}{meta_s} G:{p.group_no if getattr(p, 'group_no', None) is not None else ''}", f"{line_b}"]
         except Exception:
-            return "ERR"
+            return ["ERR"]
 
-    for match_idx, participants in first_round_matches.items():
+    items = list(first_round_matches.items())
+    for i, (match_idx, participants) in enumerate(items):
         a = participants[0] if len(participants) > 0 else None
         b = participants[1] if len(participants) > 1 else None
-        row = [
-            match_idx,
-            fmt_participant(a),
-            "vs",
-            fmt_participant(b),
-            "YES" if (a == 'BYE' or b == 'BYE') else ""
-        ]
-        table_data.append(row)
+
+        # Ensure BYE is listed second (on the B side) for easier reading
+        if a == 'BYE' and b != 'BYE':
+            a, b = b, a
+
+        lines_a = participant_lines(a)
+        lines_b = participant_lines(b)
+
+        # If one side is BYE and the other is multi-line, put BYE on the bottom line
+        if lines_a and lines_a[0] == 'BYE' and len(lines_b) > 1:
+            # represent BYE as ['','BYE'] to push it to second line
+            lines_a = [''] * (len(lines_b) - 1) + ['BYE']
+        if lines_b and lines_b[0] == 'BYE' and len(lines_a) > 1:
+            lines_b = [''] * (len(lines_a) - 1) + ['BYE']
+
+        nrows = max(len(lines_a), len(lines_b))
+        for r in range(nrows):
+            row = [
+                match_idx if r == 0 else "",
+                lines_a[r] if r < len(lines_a) else "",
+                "vs" if r == 0 else "",
+                lines_b[r] if r < len(lines_b) else "",
+                "YES" if ((a == 'BYE' or b == 'BYE') and r == 0) else ""
+            ]
+            table_data.append(row)
+
+        # insert a dotted separator row between matches for visual clarity
+        if i < len(items) - 1:
+            sep = ['', '.' * 12, '', '.' * 12, '']
+            table_data.append(sep)
 
     try:
         print(tabulate(table_data, headers=["Match", "A", "", "B", "BYE"], tablefmt=table_format))
