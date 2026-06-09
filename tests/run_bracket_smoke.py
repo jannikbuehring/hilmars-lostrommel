@@ -37,12 +37,30 @@ for i, sn in enumerate([1,2,3,4,5,6,7,8], start=1):
 # Run the bracket draw
 from viewer import bracket_viewer
 
-# Prevent verbose table printing which can cause encoding issues in some terminals
-bracket_viewer.show_bracket_table = lambda x: None
-import draw.bracket_drawer as _bracket_mod
-# override the local symbol used inside draw.bracket_drawer
-_bracket_mod.show_bracket_table = lambda x: None
-matches = draw_bracket(rows)
+# Run draw_bracket and display the first-round matches using the viewer
+matches, snapshots = draw_bracket(rows)
 print('Generated matches:')
 for k, v in matches.items():
-    print(k, v)
+    print(k, [type(x).__name__ if x is not None else None for x in v])
+
+print('\nBracket display:')
+bracket_viewer.show_bracket_table(matches, title='Smoke Test Bracket')
+
+
+# --- Additional custom test: teams and BYE ordering ---
+from models.draw_data import DrawDataRow
+
+team1 = DrawDataRow('S', 'D', 100, 1, 1, 1, True, False, 1, 2)
+team2 = DrawDataRow('S', 'D', 90, 1, 1, 2, True, False, 3, 4)
+team3 = DrawDataRow('S', 'D', 80, 1, 1, 3, True, False, 5, 6)
+single1 = DrawDataRow('S', 'D', 70, 1, 1, 1, True, False, 7, '')
+
+custom_matches = {
+    1: [team1, 'BYE'],      # team vs BYE -> BYE should appear second
+    2: ['BYE', team2],      # BYE vs team -> viewer should place team left, BYE right and on second line
+    3: [team3, team2],      # team vs team
+    4: [single1, team1],    # single vs team
+}
+
+print('\nCustom team bracket display:')
+bracket_viewer.show_bracket_table(custom_matches, title='Team Test Bracket')

@@ -251,7 +251,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # If no remaining participants, simply return current matches and snapshots
     if not remaining:
         snapshots.append(Snapshot("final", None, None, None, first_full_violations, first_full_score, initial_groups=copy.deepcopy(first_full_matches)))
-        show_bracket_table(first_full_matches)
         return first_full_matches, snapshots
 
     snapshot_interval = max(1, max_attempts // 10)
@@ -286,5 +285,4 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     final_score = score_bracket(best_matches, number_of_matches)
     snapshots.append(Snapshot("final", None, None, None, final_violations, final_score, initial_groups=copy.deepcopy(best_matches)))
 
-    show_bracket_table(best_matches)
     return best_matches, snapshots
