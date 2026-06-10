@@ -51,8 +51,23 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
 
 
 def check_no_first_vs_first(matches: Dict[int, List]):
-    """Check that no first-place from groups meet each other in round one."""
+    """Check that no bracket-highest placements meet each other in round one."""
     violations = []
+
+    # Determine the top placement present in this bracket.
+    # In the main bracket this will normally be 1, but in consolation it may be 2 or higher.
+    group_positions = []
+    for participants in matches.values():
+        for p in participants:
+            if p == "BYE" or p is None:
+                continue
+            if getattr(p, "group_pos", None) is not None:
+                group_positions.append(p.group_pos)
+    if not group_positions:
+        return violations
+
+    bracket_top_position = min(group_positions)
+
     for match_idx, participants in matches.items():
         if len(participants) < 2:
             continue
@@ -60,7 +75,7 @@ def check_no_first_vs_first(matches: Dict[int, List]):
         if a == "BYE" or b == "BYE":
             continue
         try:
-            if a.group_pos == 1 and b.group_pos == 1:
+            if a.group_pos == bracket_top_position and b.group_pos == bracket_top_position:
                 violations.append((match_idx, a, b))
         except Exception:
             continue
@@ -68,10 +83,20 @@ def check_no_first_vs_first(matches: Dict[int, List]):
 
 
 def check_country_balance_halves(matches: Dict[int, List], number_of_matches: int):
-    """Compute country counts per half and flag large imbalances.
-    Returns list of (country, count_half0, count_half1)
+    """Compute country counts per half and flag imbalances.
+
+    Returns list of violations as tuples:
+      (country, count_half0, count_half1, violation_amount)
+
+    For doubles/mixed (detected by presence of paired participants), allow a difference
+    of up to 2. If the excess in one half can be (partially) explained by full-country
+    teams concentrated in that half (each full team contributes 2 players), the
+    violation amount is reduced accordingly. Purely explained excesses are ignored.
     """
     counts = defaultdict(lambda: [0, 0])
+    # track full-country teams per country per half (counts of teams)
+    full_team_counts = defaultdict(lambda: [0, 0])
+    is_doubles = False
     for match_idx, participants in matches.items():
         half = _match_half(match_idx, number_of_matches)
         for p in participants:
@@ -82,14 +107,32 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
             except Exception:
                 continue
             counts[a.country][half] += 1
-            if p.start_number_b is not None:
+            if getattr(p, "start_number_b", None) is not None:
                 b = players_by_start_number[p.start_number_b]
                 counts[b.country][half] += 1
+                is_doubles = True
+                try:
+                    if a.country == b.country:
+                        full_team_counts[a.country][half] += 1
+                except Exception:
+                    pass
+
+    allowed_diff = 2 if is_doubles else 1
 
     violations = []
     for country, (c0, c1) in counts.items():
-        if abs(c0 - c1) > 1:
-            violations.append((country, c0, c1))
+        diff = abs(c0 - c1)
+        if diff <= allowed_diff:
+            continue
+        violation_amount = diff - allowed_diff
+        # determine which half has the excess
+        half_with_max = 0 if c0 > c1 else 1
+        # number of players from full teams in that half
+        full_team_players = full_team_counts.get(country, [0, 0])[half_with_max] * 2
+        # reduce violation by players that can be explained by full teams
+        remaining_violation = violation_amount - full_team_players
+        if remaining_violation > 0:
+            violations.append((country, c0, c1, remaining_violation))
     return violations
 
 
@@ -115,11 +158,14 @@ def check_base_conflicts_first_round(matches: Dict[int, List]):
 def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
     """Return a weighted score for the bracket; lower is better."""
     if weights is None:
-        weights = {"half_split": 50, "first_vs_first": 100, "country_half": 10, "base_first": 20}
+        weights = {"half_split": 150, "first_vs_first": 100, "country_half": 10, "base_first": 20}
 
     score = 0
     score += len(check_half_group_separation(matches, number_of_matches)) * weights.get("half_split", 50)
     score += len(check_no_first_vs_first(matches)) * weights.get("first_vs_first", 100)
-    score += len(check_country_balance_halves(matches, number_of_matches)) * weights.get("country_half", 10)
+    country_violations = check_country_balance_halves(matches, number_of_matches)
+    # country_violations entries are (country, c0, c1, violation_amount)
+    country_violation_magnitude = sum(v[3] for v in country_violations) if country_violations else 0
+    score += country_violation_magnitude * weights.get("country_half", 10)
     score += len(check_base_conflicts_first_round(matches)) * weights.get("base_first", 20)
     return score
