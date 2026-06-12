@@ -59,36 +59,71 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             order.extend(g)
         return order
 
-    def pick_byes(num_matches: int, num_byes: int, seed: Optional[int] = None) -> List[int]:
-        """Pick num_byes match indices following the hierarchy:
-        - take entire groups while possible
-        - if a group is larger than remaining byes, select randomly only within that group
-        """
+    def pick_byes(num_matches: int, num_byes: int, bye_recipients: list[DrawDataRow], seed: Optional[int] = None) -> List[int]:
+        """Pick num_byes match indices while balancing halves and group-by-half constraints."""
         if num_byes < 0:
             raise ValueError("num_byes must be >= 0")
         if num_byes == 0:
             return []
 
         full_groups = bye_hierarchy(num_matches)
-        rng = random.Random(seed)
-        result: List[int] = []
+        slot_order = [slot for group in full_groups for slot in group]
+        slot_half = {slot: 0 if slot <= (num_matches // 2) else 1 for slot in slot_order}
+        available_slots = list(slot_order)
+        chosen: List[int] = []
+        half_counts = [0, 0]
 
-        for g in full_groups:
-            remaining = num_byes - len(result)
-            if remaining <= 0:
-                break
-            if remaining >= len(g):
-                # take whole group (preserve the group's left-to-right order)
-                result.extend(g)
-            else:
-                # choose exactly `remaining` items from this group at random,
-                # then append them in the group's natural (ascending) order
-                chosen = rng.sample(g, remaining)
-                chosen_sorted = sorted(chosen)   # group elements are ascending already
-                result.extend(chosen_sorted)
-                break
+        # Group-level constraints: if a bye recipient from a group appears in both
+        # the 1/4 and 2/3 sets, those participants must be placed in opposite halves.
+        group_half_assignments = {}
 
-        return result
+        def _preferred_half_for_pos(pos: int) -> int:
+            return 0 if pos in (1, 4) else 1
+
+        for recipient in bye_recipients:
+            group_no = recipient.group_no
+            pos_set = "14" if recipient.group_pos in (1, 4) else "23"
+            assigned_half = None
+
+            if group_no in group_half_assignments and pos_set in group_half_assignments[group_no]:
+                assigned_half = group_half_assignments[group_no][pos_set]
+            elif group_no in group_half_assignments:
+                # If the opposite position set is already anchored, use the opposite half.
+                other_set = "23" if pos_set == "14" else "14"
+                if other_set in group_half_assignments[group_no]:
+                    assigned_half = 1 - group_half_assignments[group_no][other_set]
+
+            if assigned_half is None:
+                preferred_half = _preferred_half_for_pos(recipient.group_pos)
+                # Keep halves balanced: choose the half with fewer assigned byes when possible.
+                if half_counts[0] < half_counts[1]:
+                    candidate_halves = [0, 1]
+                elif half_counts[1] < half_counts[0]:
+                    candidate_halves = [1, 0]
+                else:
+                    candidate_halves = [preferred_half, 1 - preferred_half]
+
+                for half in candidate_halves:
+                    if any(slot_half[slot] == half for slot in available_slots):
+                        assigned_half = half
+                        break
+                if assigned_half is None:
+                    assigned_half = slot_half[available_slots[0]]
+
+            if group_no not in group_half_assignments:
+                group_half_assignments[group_no] = {}
+            group_half_assignments[group_no][pos_set] = assigned_half
+
+            # Select the earliest available slot in the assigned half.
+            slot_candidates = [slot for slot in available_slots if slot_half[slot] == assigned_half]
+            if not slot_candidates:
+                slot_candidates = available_slots
+            selected = slot_candidates[0]
+            available_slots.remove(selected)
+            chosen.append(selected)
+            half_counts[assigned_half] += 1
+
+        return chosen
 
     for entry in class_subset:
         key = str(entry.start_number_a)
@@ -117,7 +152,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     # 3. Create matches
     matches = {index: [] for index in range(1, number_of_matches + 1) }
-    bye_slots = pick_byes(number_of_matches, byes)
+    bye_slots = pick_byes(number_of_matches, byes, class_subset[:byes])
 
     def get_bracket_violations(current_matches):
         return {
