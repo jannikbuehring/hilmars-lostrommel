@@ -46,6 +46,48 @@ for k, v in matches.items():
 print('\nBracket display:')
 bracket_viewer.show_bracket_table(matches, title='Smoke Test Bracket')
 
+# Bye distribution regression: verify byes are balanced across halves and that group 1st/2nd bye recipients are separated.
+small_rows = [
+    DrawDataRow('S', 'M1', 100, 2, 1, 1, True, False, 1, ''),
+    DrawDataRow('S', 'M1', 95, 2, 2, 1, True, False, 2, ''),
+    DrawDataRow('S', 'M1', 90, 2, 1, 2, True, False, 3, ''),
+    DrawDataRow('S', 'M1', 85, 2, 2, 2, True, False, 4, ''),
+    DrawDataRow('S', 'M1', 80, 2, 1, 3, True, False, 5, ''),
+]
+
+# Use the same players_by_start_number mapping already prepared above.
+seeding_by_start_numbers.clear()
+for row in small_rows:
+    key = str(row.start_number_a)
+    seeding_by_start_numbers[key] = row.seeding
+
+bye_matches, bye_snapshots = draw_bracket(small_rows)
+bye_half_counts = {0: 0, 1: 0}
+byes_in_half = {}
+for match_idx, participants in bye_matches.items():
+    if 'BYE' in participants:
+        half = 0 if match_idx <= (len(bye_matches) // 2) else 1
+        bye_half_counts[half] += 1
+        byes_in_half[match_idx] = half
+
+print('\nBye distribution check:')
+print('Half counts:', bye_half_counts)
+print('Bye slots:', sorted(byes_in_half.items()))
+if abs(bye_half_counts[0] - bye_half_counts[1]) > 1:
+    raise AssertionError(f'Byes are not evenly distributed across halves: {bye_half_counts}')
+
+# Confirm group 1st and 2nd bye recipients from group 1 are in opposite halves.
+bye_positions = {}
+for match_idx, participants in bye_matches.items():
+    for p in participants:
+        if p != 'BYE' and getattr(p, 'group_no', None) == 1 and p.group_pos in (1, 2):
+            bye_positions[p.group_pos] = 0 if match_idx <= (len(bye_matches) // 2) else 1
+
+if bye_positions.get(1) == bye_positions.get(2):
+    raise AssertionError('Group 1 first and second bye recipients ended up in the same half.')
+
+print('Bye distribution test passed.')
+
 
 # --- Additional custom test: teams and BYE ordering ---
 from models.draw_data import DrawDataRow
