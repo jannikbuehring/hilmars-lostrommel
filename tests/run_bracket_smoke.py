@@ -5,6 +5,17 @@ from models.player import Player, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
 
+
+def participant_slots(match_map):
+    slot_by_start_number = {}
+    for bracket_match_idx, bracket_participants in match_map.items():
+        for side_idx, participant in enumerate(bracket_participants):
+            if participant in (None, 'BYE'):
+                continue
+            slot = ((bracket_match_idx - 1) * 2) + side_idx + 1
+            slot_by_start_number[participant.start_number_a] = slot
+    return slot_by_start_number
+
 # Create minimal players
 players_by_start_number.clear()
 Player(1, 'Alice', 'Alpha', 'GER', 'Base1', 'F', 1200)
@@ -42,6 +53,28 @@ matches, snapshots = draw_bracket(rows)
 print('Generated matches:')
 for k, v in matches.items():
     print(k, [type(x).__name__ if x is not None else None for x in v])
+
+top_rows = sorted([row for row in rows if row.group_pos == min(r.group_pos for r in rows)], key=lambda row: -row.seeding)
+final_slots = participant_slots(matches)
+expected_top_slots = {top_rows[0].start_number_a: 1, top_rows[1].start_number_a: 8}
+for start_number, expected_slot in expected_top_slots.items():
+    actual_slot = final_slots.get(start_number)
+    if actual_slot != expected_slot:
+        raise AssertionError(f'Top seeded participant {start_number} expected in slot {expected_slot}, got {actual_slot}.')
+
+locked_top_ids = {row.start_number_a for row in top_rows}
+seeded_snapshot_slots = None
+for snapshot in snapshots:
+    state = snapshot.initial_groups
+    if not state:
+        continue
+    current_slots = participant_slots(state)
+    current_top_slots = {start_number: current_slots.get(start_number) for start_number in locked_top_ids}
+    if seeded_snapshot_slots is None and snapshot.action == 'top_seed_complete':
+        seeded_snapshot_slots = current_top_slots
+    elif seeded_snapshot_slots is not None and snapshot.action in ('initial_fill', 'improvement', 'progress', 'final'):
+        if current_top_slots != seeded_snapshot_slots:
+            raise AssertionError(f'Top seeded participants moved after anchoring: {seeded_snapshot_slots} -> {current_top_slots}')
 
 print('\nBracket display:')
 bracket_viewer.show_bracket_table(matches, title='Smoke Test Bracket')
@@ -90,7 +123,6 @@ print('Bye distribution test passed.')
 
 
 # --- Additional custom test: teams and BYE ordering ---
-from models.draw_data import DrawDataRow
 
 team1 = DrawDataRow('S', 'D', 100, 1, 1, 1, True, False, 1, 2)
 team2 = DrawDataRow('S', 'D', 90, 1, 1, 2, True, False, 3, 4)
