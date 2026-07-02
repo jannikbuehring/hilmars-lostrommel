@@ -28,6 +28,33 @@ mixed_brackets = {}
 
 def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export."""
+    bracket_failures = []
+
+    def draw_bracket_with_snapshot_fallback(class_subset, competition, competition_class, bracket_kind):
+        try:
+            return draw_bracket(class_subset=class_subset)
+        except Exception as exc:
+            snapshots = getattr(exc, "snapshots", [])
+            failure_snapshot = getattr(exc, "failure_snapshot", snapshots[-1] if snapshots else None)
+            failure_message = str(exc)
+            if failure_snapshot is not None:
+                failure_info = getattr(failure_snapshot, "violations", {}).get("failure", {})
+                if isinstance(failure_info, dict):
+                    failure_message = failure_info.get("message", failure_message)
+
+            bracket_failures.append(
+                f"{competition} {competition_class} {bracket_kind}: {failure_message}"
+            )
+            logging.error(
+                "Bracket draw failed for %s %s %s: %s",
+                competition,
+                competition_class,
+                bracket_kind,
+                failure_message,
+            )
+            # Keep matches empty so failed brackets are not exported as real draws.
+            # Snapshots are preserved for interactive debugging.
+            return {}, snapshots
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
@@ -241,6 +268,7 @@ def initialize_data():
                 spinner.text = "No singles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
+                section_failures_start = len(bracket_failures)
                 # Create data subsets for each distinct competition class
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_bracket_draw_data))
                 for competition_class in singles_competition_classes:
@@ -248,16 +276,34 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
-                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
+                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=main_round_participants,
+                        competition='S',
+                        competition_class=competition_class,
+                        bracket_kind='main',
+                    )
+                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=consolation_round_participants,
+                        competition='S',
+                        competition_class=competition_class,
+                        bracket_kind='consolation',
+                    )
                     singles_brackets[competition_class] = {
                         'main': {'matches': main_bracket, 'snapshots': main_snapshots},
                         'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
                     }
 
                 competition_classes_list = list(singles_competition_classes)
-                spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
-                spinner.ok()
+                section_failures = len(bracket_failures) - section_failures_start
+                if section_failures:
+                    spinner.text = (
+                        f"Singles bracket draw completed with {section_failures} failure(s). "
+                        f"Use interactive bracket viewer snapshots for details."
+                    )
+                    spinner.ok("WARN")
+                else:
+                    spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
+                    spinner.ok()
 
         except Exception as e:
             spinner.fail()
@@ -271,22 +317,41 @@ def initialize_data():
                 spinner.text = "No doubles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
+                section_failures_start = len(bracket_failures)
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
                     
-                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
-                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
+                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=main_round_participants,
+                        competition='D',
+                        competition_class=competition_class,
+                        bracket_kind='main',
+                    )
+                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=consolation_round_participants,
+                        competition='D',
+                        competition_class=competition_class,
+                        bracket_kind='consolation',
+                    )
                     doubles_brackets[competition_class] = {
                         'main': {'matches': main_bracket, 'snapshots': main_snapshots},
                         'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
                     }
 
                 competition_classes_list = list(doubles_competition_classes)
-                spinner.text = f"Successfully created doubles bracket for competition classes {competition_classes_list}"
-                spinner.ok()
+                section_failures = len(bracket_failures) - section_failures_start
+                if section_failures:
+                    spinner.text = (
+                        f"Doubles bracket draw completed with {section_failures} failure(s). "
+                        f"Use interactive bracket viewer snapshots for details."
+                    )
+                    spinner.ok("WARN")
+                else:
+                    spinner.text = f"Successfully created doubles bracket for competition classes {competition_classes_list}"
+                    spinner.ok()
 
         except Exception as e:
             spinner.fail()
@@ -300,22 +365,41 @@ def initialize_data():
                 spinner.text = "No mixed bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
+                section_failures_start = len(bracket_failures)
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots = draw_bracket(class_subset=main_round_participants)
-                    consolation_bracket, consolation_snapshots = draw_bracket(class_subset=consolation_round_participants)
+                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=main_round_participants,
+                        competition='M',
+                        competition_class=competition_class,
+                        bracket_kind='main',
+                    )
+                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                        class_subset=consolation_round_participants,
+                        competition='M',
+                        competition_class=competition_class,
+                        bracket_kind='consolation',
+                    )
                     mixed_brackets[competition_class] = {
                         'main': {'matches': main_bracket, 'snapshots': main_snapshots},
                         'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
                     }
 
                 competition_classes_list = list(mixed_competition_classes)
-                spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
-                spinner.ok()
+                section_failures = len(bracket_failures) - section_failures_start
+                if section_failures:
+                    spinner.text = (
+                        f"Mixed bracket draw completed with {section_failures} failure(s). "
+                        f"Use interactive bracket viewer snapshots for details."
+                    )
+                    spinner.ok("WARN")
+                else:
+                    spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
+                    spinner.ok()
 
         except Exception as e:
             spinner.fail()
