@@ -6,6 +6,9 @@ from viewer.view_config import table_format
 from models.player import players_by_start_number
 from misc.config import config
 
+_GREEN = "\033[92m"
+_RESET = "\033[0m"
+
 
 def clear_screen():
     """Clear the terminal screen in a cross-platform way."""
@@ -27,7 +30,11 @@ def show_bracket(competition, competition_class, bracket):
 
 def show_bracket_menu(competition, competition_class, bracket):
     """Interactive bracket viewer: choose main or consolation bracket and step through snapshots."""
-    bracket_types = [k for k in ('main', 'consolation') if bracket.get(k) and bracket[k].get('matches')]
+    bracket_types = [
+        k
+        for k in ('main', 'consolation')
+        if bracket.get(k) and (bracket[k].get('matches') or bracket[k].get('snapshots'))
+    ]
     if not bracket_types:
         print("No bracket matches available to display.")
         return
@@ -148,14 +155,43 @@ def format_participant_display(p):
         return "ERR"
 
 
+def _get_top_quarter_ids(first_round_matches):
+    """Return set of id()s for participants in the top quarter of the bracket.
+
+    Ranking: group_pos ascending (1 = group winner is best), seeding descending (higher = better).
+    Top quarter = total bracket slots // 4 best participants.
+    """
+    all_participants = []
+    for participants in first_round_matches.values():
+        for p in participants:
+            if p is not None and p != "BYE":
+                all_participants.append(p)
+
+    total_slots = len(first_round_matches) * 2
+    top_count = total_slots // 4
+
+    def sort_key(p):
+        gp = getattr(p, 'group_pos', None)
+        seed = getattr(p, 'seeding', None)
+        return (gp if gp is not None else 999, -(seed if seed is not None else 0))
+
+    sorted_participants = sorted(all_participants, key=sort_key)
+    return set(id(p) for p in sorted_participants[:top_count])
+
+
 def show_bracket_table(first_round_matches, title=None):
     """
     Display bracket table with participants stacked vertically and separators between matches.
     first_round_matches: dict mapping round match index to participant list.
+    The best quarter of players (by group placement then seed) is highlighted in green.
     """
     if title:
         print(title)
     table_data = []
+
+    top_quarter_ids = _get_top_quarter_ids(first_round_matches)
+    # Map plain display string -> needs green highlight (collect before building table)
+    highlighted_strings = set()
 
     items = list(first_round_matches.items())
     for i, (match_idx, participants) in enumerate(items):
@@ -166,24 +202,37 @@ def show_bracket_table(first_round_matches, title=None):
         if a == 'BYE' and b != 'BYE':
             a, b = b, a
 
-        # Format both participants
+        # Format both participants (plain strings for correct tabulate alignment)
         formatted_a = format_participant_display(a)
         formatted_b = format_participant_display(b)
 
-        # Add first participant row with match index
-        table_data.append([match_idx, formatted_a])
-        
+        if a is not None and a != "BYE" and id(a) in top_quarter_ids:
+            highlighted_strings.add(formatted_a)
+        if b is not None and b != "BYE" and id(b) in top_quarter_ids:
+            highlighted_strings.add(formatted_b)
+
+        # Add first participant row with position number
+        pos_a = i * 2 + 1
+        pos_b = i * 2 + 2
+        table_data.append([pos_a, formatted_a])
+
         # Add second participant row
-        table_data.append(["", formatted_b])
+        table_data.append([pos_b, formatted_b])
 
         # Add filled separator line between matches (unless it's the last match)
         if i < len(items) - 1:
             table_data.append(["", "─" * 80])
 
     try:
-        print(tabulate(table_data, headers=["Match", "Participant"], tablefmt=table_format))
+        output = tabulate(table_data, headers=["Pos.", "Participant"], tablefmt=table_format, colalign=("right", "left"))
     except UnicodeEncodeError:
-        print(tabulate(table_data, headers=["Match", "Participant"], tablefmt='simple'))
+        output = tabulate(table_data, headers=["Pos.", "Participant"], tablefmt='simple', colalign=("right", "left"))
+
+    # Post-process: wrap highlighted participant strings in green ANSI codes
+    for s in highlighted_strings:
+        output = output.replace(s, _GREEN + s + _RESET)
+
+    print(output)
     print()
 
 
