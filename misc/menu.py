@@ -37,7 +37,7 @@ def view_choice():
 
 def singles_doubles_mixed_choice():
     """Choose between Singles, Doubles, Mixed, Back to previous menu"""
-    s_d_m = inquirer.list_input("Choose what to view", choices=['Singles', 'Doubles', 'Mixed'])
+    s_d_m = inquirer.list_input("Choose what to view", choices=['Singles', 'Doubles', 'Mixed', 'Back'])
     match (s_d_m):
         case 'Singles':
             if TO_SHOW == "Bracket":
