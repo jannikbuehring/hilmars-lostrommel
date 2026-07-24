@@ -140,7 +140,6 @@ for snapshot in snapshots:
         seeded_snapshot_slots = current_top_slots
     elif seeded_snapshot_slots is not None and snapshot.action in (
         'initial_fill',
-        'half0_mc_start', 'half1_mc_start',
         'quarter0_mc_start', 'quarter1_mc_start', 'quarter2_mc_start', 'quarter3_mc_start',
         'improvement', 'progress', 'final',
     ):
