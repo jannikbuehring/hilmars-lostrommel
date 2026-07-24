@@ -40,13 +40,22 @@ def singles_doubles_mixed_choice():
     s_d_m = inquirer.list_input("Choose what to view", choices=['Singles', 'Doubles', 'Mixed'])
     match (s_d_m):
         case 'Singles':
-            choices = list(singles_groups.keys())
+            if TO_SHOW == "Bracket":
+                choices = list(singles_brackets.keys())
+            else:
+                choices = list(singles_groups.keys())
             groups_choice('S', choices)
         case 'Doubles':
-            choices = list(doubles_groups.keys())
+            if TO_SHOW == "Bracket":
+                choices = list(doubles_brackets.keys())
+            else:
+                choices = list(doubles_groups.keys())
             groups_choice('D', choices)
         case 'Mixed':
-            choices = list(mixed_groups.keys())
+            if TO_SHOW == "Bracket":
+                choices = list(mixed_brackets.keys())
+            else:
+                choices = list(mixed_groups.keys())
             groups_choice('M', choices)
         case 'Back':
             view_choice()

@@ -10,6 +10,16 @@ def _match_half(match_index: int, number_of_matches: int) -> int:
     return half
 
 
+def _match_quarter(match_index: int, number_of_matches: int) -> int:
+    """Return 0-3 for the quarter of the bracket.
+
+    For small brackets with fewer than 4 matches the highest valid quarter
+    index is returned (e.g. 2-match bracket yields quarters 0 and 1 only).
+    """
+    matches_per_quarter = max(1, number_of_matches // 4)
+    return min(3, (match_index - 1) // matches_per_quarter)
+
+
 def check_half_group_separation(matches: Dict[int, List], number_of_matches: int):
     """
     Ensure that for each group the 1st/4th positions are placed in one half
@@ -46,6 +56,56 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
         # They must be in different halves
         if h14 & h23:
             violations.append((group_no, "positions 1/4 and 2/3 share a half"))
+
+    return violations
+
+
+def check_quarter_group_separation(matches: Dict[int, List], number_of_matches: int):
+    """Check that within each group:
+      - 2nd and 3rd-highest placements are in *different* quarters.
+      - The 4th-highest placement is in the same half but a *different* quarter
+        from the 1st-highest placement.
+
+    Returns a list of violation tuples (group_no, description).
+    """
+    violations = []
+
+    group_pos_quarters: dict = defaultdict(lambda: defaultdict(set))
+    for match_idx, participants in matches.items():
+        for p in participants:
+            if p is None or p == "BYE":
+                continue
+            try:
+                group_no = p.group_no
+                pos = p.group_pos
+            except Exception:
+                continue
+            q = _match_quarter(match_idx, number_of_matches)
+            group_pos_quarters[group_no][pos].add(q)
+
+    all_positions = [pos for pd in group_pos_quarters.values() for pos in pd]
+    if not all_positions:
+        return violations
+    top_pos = min(all_positions)
+
+    for group_no, pos_map in group_pos_quarters.items():
+        top_qs = pos_map.get(top_pos, set())
+        second_qs = pos_map.get(top_pos + 1, set())
+        third_qs = pos_map.get(top_pos + 2, set())
+        fourth_qs = pos_map.get(top_pos + 3, set())
+
+        # 2nd and 3rd must be in different quarters
+        if second_qs and third_qs and (second_qs & third_qs):
+            violations.append((group_no, "positions 2nd/3rd in same quarter"))
+
+        # 4th must be in the same half as 1st but a different quarter
+        if top_qs and fourth_qs:
+            top_halves = {q // 2 for q in top_qs}
+            fourth_halves = {q // 2 for q in fourth_qs}
+            if top_halves != fourth_halves:
+                violations.append((group_no, "position 4th not in same half as 1st"))
+            elif top_qs & fourth_qs:
+                violations.append((group_no, "position 4th in same quarter as 1st"))
 
     return violations
 
@@ -158,10 +218,17 @@ def check_base_conflicts_first_round(matches: Dict[int, List]):
 def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
     """Return a weighted score for the bracket; lower is better."""
     if weights is None:
-        weights = {"half_split": 150, "first_vs_first": 100, "country_half": 10, "base_first": 20}
+        weights = {
+            "quarter_split": 200,
+            "half_split": 150,
+            "first_vs_first": 100,
+            "country_half": 10,
+            "base_first": 20,
+        }
 
     score = 0
-    score += len(check_half_group_separation(matches, number_of_matches)) * weights.get("half_split", 50)
+    score += len(check_quarter_group_separation(matches, number_of_matches)) * weights.get("quarter_split", 200)
+    score += len(check_half_group_separation(matches, number_of_matches)) * weights.get("half_split", 150)
     score += len(check_no_first_vs_first(matches)) * weights.get("first_vs_first", 100)
     country_violations = check_country_balance_halves(matches, number_of_matches)
     # country_violations entries are (country, c0, c1, violation_amount)
