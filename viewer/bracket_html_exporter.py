@@ -36,7 +36,11 @@ def _top25_keys(first_round_matches):
     """Return the set of stable participant keys for the strongest 25% of players.
 
     Ranking: group_pos ascending (1 = group winner is best), then seeding
-    descending. Sized to 25% of actual players (not bracket slots). Keyed by
+    descending. Sized to 25% of bracket slots (including BYE slots), so a
+    16-slot bracket always highlights its 4 strongest players regardless of how
+    many byes it contains. BYEs are never in the candidate list, so when byes
+    are numerous enough that the 25% count exceeds the real-player total, only
+    the real players get highlighted (byes are never colored). Keyed by
     start_number instead of id(), so it stays correct across snapshots (each
     snapshot's matches is a separate copy.deepcopy, which invalidates
     id()-based identity).
@@ -47,7 +51,7 @@ def _top25_keys(first_round_matches):
             if p is not None and p != "BYE":
                 all_participants.append(p)
 
-    top_count = len(all_participants) // 4
+    top_count = (len(first_round_matches) * 2) // 4
 
     def sort_key(p):
         gp = getattr(p, 'group_pos', None)
