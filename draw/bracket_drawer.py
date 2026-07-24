@@ -129,13 +129,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
         pass
 
-    rng = random.Random()
-    try:
-        seed = int(config["settings"].get("random_seed", "0"))
-        if seed:
-            rng.seed(seed)
-    except (TypeError, ValueError, KeyError, configparser.Error):
-        pass
+    # Uses the shared global `random` module (seeded once from
+    # config[settings].random_seed by misc.config.initialize_config), the same
+    # RNG stream draw/group_drawer.py uses, so a single config seed
+    # deterministically drives the whole pipeline instead of each bracket_draw
+    # call restarting its own Random() from the same seed.
 
     # weights for bracket_checker.score_bracket (lower score = better bracket)
     bracket_weights = {
@@ -304,7 +302,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
             best_score = scored_candidates[0][0]
             best_candidates = [item for item in scored_candidates if item[0] == best_score]
-            rng.shuffle(best_candidates)
+            random.shuffle(best_candidates)
 
             for _, chosen_slot, chosen_matches in best_candidates:
                 slot_state[chosen_slot] = participant
@@ -655,7 +653,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 scored.sort(key=lambda x: x[0])
                 best_s = scored[0][0]
                 best_cands = [x for x in scored if x[0] == best_s]
-                rng.shuffle(best_cands)
+                random.shuffle(best_cands)
                 _, chosen_slot, chosen_matches = best_cands[0]
 
                 slot_state[chosen_slot] = participant
@@ -829,7 +827,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # Initial shuffle: each quarter pool shuffled independently.
     current_pools = {q: list(final_pool_quarter[q]) for q in range(4)}
     for q in range(4):
-        rng.shuffle(current_pools[q])
+        random.shuffle(current_pools[q])
 
     first_full_matches = build_matches_from_quarter_pools(current_pools)
     first_full_violations = get_bracket_violations(first_full_matches)
@@ -875,7 +873,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
         for attempt in range(max_attempts):
             trial_pool = list(final_pool_quarter[active_q])
-            rng.shuffle(trial_pool)
+            random.shuffle(trial_pool)
             trial_pools = dict(best_pools)
             trial_pools[active_q] = trial_pool
             m_try = build_matches_from_quarter_pools(trial_pools)
