@@ -49,19 +49,14 @@ Error-handling summary: **stages 1-4 abort the whole pipeline on failure; stage 
 - Groups = `dict[group_no, list[DrawDataRow | EmptySlot]]` (`EmptySlot` is a local placeholder class in `draw/group_drawer.py`, stripped before returning).
 - Brackets = `dict[draw_number, [DrawDataRow_or_"BYE", DrawDataRow_or_"BYE"]]`.
 
-### Dead code
-
-`models/bracket.py` (`Bracket`), `models/match.py` (`Match`), `models/team.py` (`Team`), and `models/group.py` (`Group`) are **never instantiated anywhere** in `draw/`, `checks/`, `data_io/`, `misc/`, or `viewer/`. See [§9](#9-known-issues) for details, including a genuine crash-on-use bug in `Group`.
-
 ## 4. Input/output formats (`data_io/`)
 
 Both readers in `data_io/input_reader.py` expect **semicolon-delimited** UTF-8 CSV, header line skipped, fields split positionally (no `csv` module / DictReader used for input).
 
 - **`players.csv`** — positional fields: `start_number, last_name, first_name, country, base, gender, qttr`. Sample header (`input/players_2026_test.csv`, UTF-8 BOM): `Startnumber;Last_name;First_name;Country;PPP_chapter;Gender;QTTR`, e.g. `1001;Wang;Chuqin;CHN;China;M;2796`.
-- **`draw_input.csv`** — positional fields: `competition, competition_class, amount_of_groups, seeding, group_no, group_pos, main_round, consolation_round, start_number_a, start_number_b`. Sample header (`input/draw_input_2026_20260626_test.csv`): `S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B`. `main_round`/`consolation_round` are coerced with plain `bool(...)` on the raw string — any non-empty string (including `"0"`) is truthy.
+- **`draw_input.csv`** — positional fields: `competition, competition_class, amount_of_groups, seeding, group_no, group_pos, main_round, consolation_round, start_number_a, start_number_b`. Sample header (`input/draw_input_2026_20260626_test.csv`): `S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B`. `main_round`/`consolation_round` are parsed via a `_parse_bool` helper (`value.strip() == "1"`); any other value (including `"0"` or blank) is `False`.
 - **`output.csv`** — written by `write_to_csv` with the fixed header `S_D_M, class, seeding, group_no, group_pos, for_main_round, for_consolation, draw_number, startnumber_A, last_name_A, country_A, PPP_chapter_A, startnumber_B, last_name_B, country_B, PPP_chapter_B, is_bye`. Column semantics are documented authoritatively (in German) in `output/output_explainer.md`.
 - The per-class files under `output/` (`S_M1_groups.csv`, `S_M1_main.csv`, `S_M1_consolation.csv`, `example_output.csv`) are **reference/example outputs**, not something the current `output_writer.py` produces — it only ever writes one combined `output.csv`.
-- ⚠️ `prepare_export_from_group_draw` only exports the **last member of each group**, not all members — see [§9](#9-known-issues).
 
 ## 5. Algorithms (`draw/`)
 
@@ -149,7 +144,9 @@ Loaded once at startup by `misc.config.initialize_config(base_dir)`, which reads
 
 ## 9. Known Issues
 
-Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase. None currently tracked.
+Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase.
+
+- **Module-level global state** (architectural limitation, not scheduled for rework): `players_list`, `players_by_start_number` (`models/player.py`), and `seeding_by_start_numbers` (`models/draw_data.py`) are singleton registries mutated as a side effect of object construction or specific function calls — see [§3](#3-core-data-model-models) for the call-order trap this creates (`players_by_start_number` stays empty until `check_all_players_only_exist_once()` runs). Similarly, `misc/initializer.py`'s per-competition result dicts (`singles_groups`, `doubles_brackets`, etc.) are populated by `initialize_data()` and then imported and read directly by `misc/menu.py`, rather than being passed as parameters — the menu module has an implicit dependency on the pipeline having already run. This pattern is pervasive enough that fixing it is a deliberate, dedicated effort rather than an opportunistic patch.
 
 ## 10. Build
 
