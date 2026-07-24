@@ -152,7 +152,6 @@ Loaded once at startup by `misc.config.initialize_config(base_dir)`, which reads
 Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase.
 
 - **`dist/config/config.ini` is a stale build artifact** — points at old input filenames (`draw_input_2025.csv`, `players_2025.csv`) and is missing the `[bracket_draw]` section entirely. Harmless in practice: `bracket_drawer.py` reads config via `config.getint(..., fallback=...)`, so a build from `dist/` would silently use built-in defaults (`max_attempts=2000`, `max_draw_phase=5`) instead of the tuned live values.
-- **`requirements.txt` is missing `readchar`** — `hilmars_lostrommel.spec` bundles it via `collect_all('readchar')` (needed for keypress reading, likely a transitive dependency of `inquirer`), but it isn't listed in `requirements.txt`.
 
 ## 10. Build
 
