@@ -1,5 +1,7 @@
 """Module for viewing brackets in either interactive or table mode."""
 import os
+import webbrowser
+from pathlib import Path
 import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
@@ -15,17 +17,61 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 
+def _open_in_browser(path):
+    """Open an exported HTML file in the default browser (best-effort)."""
+    try:
+        webbrowser.open(Path(path).resolve().as_uri())
+    except Exception as exc:  # pragma: no cover - depends on desktop environment
+        print(f"Could not open {path} automatically: {exc}")
+
+
 def show_bracket(competition, competition_class, bracket):
-    """Display bracket information in either interactive or table mode."""
+    """Choose a bracket type, then view it (table/interactive) or export it to HTML."""
     if not bracket or ('main' not in bracket and 'consolation' not in bracket):
         print("No bracket information available for this competition class.")
         return
 
+    bracket_types = [
+        k
+        for k in ('main', 'consolation')
+        if bracket.get(k) and (bracket[k].get('matches') or bracket[k].get('snapshots'))
+    ]
+    if not bracket_types:
+        print("No bracket matches available to display.")
+        return
+
+    if len(bracket_types) == 1:
+        bracket_type = bracket_types[0]
+    else:
+        choice = inquirer.list_input(
+            "Choose bracket type", choices=[bt.capitalize() for bt in bracket_types])
+        bracket_type = choice.lower()
+
+    # Restrict the downstream viewers/exporter to the single chosen bracket type.
+    single = {bracket_type: bracket[bracket_type]}
+
+    action = inquirer.list_input("Bracket view", choices=["View", "Export to HTML", "Back"])
+    if action == "Back":
+        return
+    if action == "Export to HTML":
+        # Imported lazily to avoid a circular import (bracket_html_exporter reuses
+        # participant_display_fields from this module).
+        from viewer.bracket_html_exporter import export_bracket_html
+        output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+        paths = export_bracket_html(competition, competition_class, single, output_dir)
+        if paths:
+            for path in paths:
+                print(f"Exported: {path}")
+                _open_in_browser(path)
+        else:
+            print("No bracket matches available to export.")
+        return
+
     mode = config["settings"].get("mode", "table")
     if mode == 'interactive':
-        show_bracket_menu(competition, competition_class, bracket)
+        show_bracket_menu(competition, competition_class, single)
     else:
-        show_bracket_tables(competition, competition_class, bracket)
+        show_bracket_tables(competition, competition_class, single)
 
 
 def show_bracket_menu(competition, competition_class, bracket):
@@ -110,49 +156,92 @@ def show_bracket_tables(competition, competition_class, bracket):
         show_bracket_table(bracket['consolation']['matches'], title="Consolation Bracket")
 
 
+def participant_display_fields(p):
+    """Extract structured display data for a participant.
+
+    Returns None for an empty slot, the string "BYE" for a bye, the string
+    "ERR" if extraction failed, or a dict:
+      {"seeding": int|None, "group_no": int|None, "group_pos": int|None,
+       "names": [{"last_name", "start_number", "country", "base"}, ...]}
+    "names" has one entry for a single player, two for a team. If a player
+    can't be resolved via players_by_start_number, its entry is instead
+    {"unknown": start_number}.
+    Consumed by both format_participant_display (terminal) and the HTML
+    exporter, so both renderers stay in sync with a single source of truth.
+    """
+    if p is None:
+        return None
+    if p == "BYE":
+        return "BYE"
+
+    try:
+        names = []
+        for start_number in (p.start_number_a, getattr(p, 'start_number_b', None)):
+            if start_number is None:
+                continue
+            pl = players_by_start_number.get(start_number)
+            if pl is None:
+                names.append({"unknown": start_number})
+            else:
+                names.append({
+                    "last_name": pl.last_name,
+                    "start_number": pl.start_number,
+                    "country": pl.country,
+                    "base": pl.base,
+                })
+
+        return {
+            "seeding": getattr(p, 'seeding', None),
+            "group_no": getattr(p, 'group_no', None),
+            "group_pos": getattr(p, 'group_pos', None),
+            "names": names,
+        }
+    except Exception:
+        return "ERR"
+
+
 def format_participant_display(p):
     """Format a single participant with metadata for vertical display.
-    
+
     Format: seed:{N} | G:{group_no} | gp:{group_pos} | name [country/base] (for teams: PlayerA / PlayerB [country/base])
     Returns a single formatted string, or 'BYE' for bye matches.
     """
-    if p is None:
+    fields = participant_display_fields(p)
+    if fields is None:
         return "-"
-    if p == "BYE":
-        return "BYE"
-    
-    try:
-        # Get player information
-        if getattr(p, 'start_number_b', None) is None:
-            # Single player
-            pl = players_by_start_number.get(p.start_number_a)
-            if pl is None:
-                return f"Unknown({p.start_number_a})"
-            player_name = f"{pl.last_name} ({pl.start_number}) [{pl.country}/{pl.base if pl.base else '-'}]"
+    if fields in ("BYE", "ERR"):
+        return fields
+
+    names = fields["names"]
+    if len(names) < 2:
+        # Single player.
+        name = names[0]
+        if "unknown" in name:
+            return f"Unknown({name['unknown']})"
+        player_name = f"{name['last_name']} ({name['start_number']}) [{name['country']}/{name['base'] if name['base'] else '-'}]"
+    else:
+        # Team: format as "PlayerA [country/base] / PlayerB [country/base]"
+        pa, pb = names
+        if "unknown" not in pa and "unknown" not in pb:
+            player_name = (
+                f"{pa['last_name']} ({pa['start_number']}) [{pa['country']}/{pa['base'] if pa['base'] else '-'}] / "
+                f"{pb['last_name']} ({pb['start_number']}) [{pb['country']}/{pb['base'] if pb['base'] else '-'}]"
+            )
         else:
-            # Team: format as "PlayerA [country/base] / PlayerB [country/base]"
-            pa = players_by_start_number.get(p.start_number_a)
-            pb = players_by_start_number.get(p.start_number_b)
-            if pa and pb:
-                player_name = f"{pa.last_name} ({pa.start_number}) [{pa.country}/{pa.base if pa.base else '-'}] / {pb.last_name} ({pb.start_number}) [{pb.country}/{pb.base if pb.base else '-'}]"
-            else:
-                player_name = f"{p.start_number_a} / {p.start_number_b}"
-        
-        # Build metadata prefix: seed | group | position
-        meta_parts = []
-        if getattr(p, 'seeding', None) is not None:
-            meta_parts.append(f"seed:{p.seeding}")
-        if getattr(p, 'group_no', None) is not None:
-            meta_parts.append(f"G:{p.group_no}")
-        if getattr(p, 'group_pos', None) is not None:
-            meta_parts.append(f"gp:{p.group_pos}")
-        
-        if meta_parts:
-            return " | ".join(meta_parts) + " | " + player_name
-        else:
-            return player_name
-    except Exception:
-        return "ERR"
+            player_name = f"{p.start_number_a} / {p.start_number_b}"
+
+    meta_parts = []
+    if fields["seeding"] is not None:
+        meta_parts.append(f"seed:{fields['seeding']}")
+    if fields["group_no"] is not None:
+        meta_parts.append(f"G:{fields['group_no']}")
+    if fields["group_pos"] is not None:
+        meta_parts.append(f"gp:{fields['group_pos']}")
+
+    if meta_parts:
+        return " | ".join(meta_parts) + " | " + player_name
+    else:
+        return player_name
 
 
 def _get_top_quarter_ids(first_round_matches):
