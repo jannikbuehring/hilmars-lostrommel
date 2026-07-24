@@ -116,12 +116,15 @@ def _build_bracket_payload(bracket_type, matches, snapshots):
             "violation_score": violation_score,
             "violations": violations,
             "matches": _serialize_matches(state),
-            "top25_keys": sorted(_top25_keys(state)),
         })
 
     return {
         "bracket_type": bracket_type,
         "number_of_matches": number_of_matches,
+        # Top 25% is computed once from the complete (final) bracket and held
+        # constant across every snapshot, so the same strongest players stay
+        # green even in early snapshots where few are placed yet.
+        "top25_keys": sorted(_top25_keys(matches)),
         "snapshots": snapshot_entries,
     }
 
@@ -234,7 +237,7 @@ function render(index) {
     el.querySelector('.name').textContent = displayString(participant);
     el.classList.toggle('bye', participant === 'BYE');
     el.classList.toggle('empty', participant === null);
-    const isTop25 = participant && typeof participant === 'object' && snap.top25_keys.includes(participant.key);
+    const isTop25 = participant && typeof participant === 'object' && DATA.top25_keys.includes(participant.key);
     el.classList.toggle('top25', !!isTop25);
   }
 
@@ -267,6 +270,9 @@ document.getElementById('btn-improvement').addEventListener('click', function ()
     }
   }
   alert('No next improvement found.');
+});
+document.getElementById('btn-first').addEventListener('click', function () {
+  render(0);
 });
 document.getElementById('btn-final').addEventListener('click', function () {
   render(DATA.snapshots.length - 1);
@@ -304,6 +310,7 @@ def _render_html_document(title, payload, list_markup):
 <div class="controls">
   <button id="btn-prev">&larr; Prev</button>
   <button id="btn-next">Next &rarr;</button>
+  <button id="btn-first">Show first snapshot</button>
   <button id="btn-improvement">Forward to next improvement</button>
   <button id="btn-final">Show final bracket</button>
   <input type="number" id="jump-input" min="1" placeholder="#">
