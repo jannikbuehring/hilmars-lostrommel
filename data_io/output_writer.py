@@ -14,26 +14,26 @@ def prepare_export_from_group_draw(groups):
                     for member in members:
                         player_a = players_by_start_number[member.start_number_a]
                         player_b = players_by_start_number[member.start_number_b] if member.start_number_b is not None else None
-                    export_line_to_add = SimpleNamespace()
-                    export_line_to_add.S_D_M = member.competition
-                    setattr(export_line_to_add, "class", member.competition_class)
-                    export_line_to_add.seeding = member.seeding
-                    export_line_to_add.group_no = group_number
-                    export_line_to_add.group_pos = None
-                    export_line_to_add.for_main_round = None
-                    export_line_to_add.for_consolation = None
-                    export_line_to_add.draw_number = None
-                    export_line_to_add.startnumber_A = member.start_number_a
-                    export_line_to_add.startnumber_B = member.start_number_b if member.start_number_b is not None else ''
-                    export_line_to_add.last_name_A = player_a.last_name
-                    export_line_to_add.last_name_B = player_b.last_name if player_b is not None else ''
-                    export_line_to_add.country_A = player_a.country
-                    export_line_to_add.country_B = player_b.country if player_b is not None else ''
-                    export_line_to_add.PPP_chapter_A = player_a.base
-                    export_line_to_add.PPP_chapter_B = player_b.base if player_b is not None else ''
 
+                        export_line_to_add = SimpleNamespace()
+                        export_line_to_add.S_D_M = member.competition
+                        setattr(export_line_to_add, "class", member.competition_class)
+                        export_line_to_add.seeding = member.seeding
+                        export_line_to_add.group_no = group_number
+                        export_line_to_add.group_pos = None
+                        export_line_to_add.for_main_round = None
+                        export_line_to_add.for_consolation = None
+                        export_line_to_add.draw_number = None
+                        export_line_to_add.startnumber_A = member.start_number_a
+                        export_line_to_add.startnumber_B = member.start_number_b if member.start_number_b is not None else ''
+                        export_line_to_add.last_name_A = player_a.last_name
+                        export_line_to_add.last_name_B = player_b.last_name if player_b is not None else ''
+                        export_line_to_add.country_A = player_a.country
+                        export_line_to_add.country_B = player_b.country if player_b is not None else ''
+                        export_line_to_add.PPP_chapter_A = player_a.base
+                        export_line_to_add.PPP_chapter_B = player_b.base if player_b is not None else ''
 
-                    export.append(export_line_to_add)
+                        export.append(export_line_to_add)
 
     return export
 
