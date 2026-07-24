@@ -10,7 +10,7 @@
   - Input: CSV files in `input/` (player and draw data)
   - Output: CSV files in `output/` (draw results, explanations)
 - **Core modules:**
-  - `models/`: Data models for players, teams, matches, groups, brackets
+  - `models/`: Data models (`Player`, `DrawDataRow`, `Snapshot`)
   - `data_io/`: Reading/writing input and output files
   - `draw/`: Algorithms for group and bracket drawing (e.g., backtracking for group assignment)
   - `viewer/`: Visualization and reporting (e.g., `group_viewer.py`, `bracket_viewer.py`)
@@ -24,7 +24,7 @@
 - **Build executable:**
   - Uses PyInstaller; see `.spec` file and `build/` output
 - **Testing:**
-  - No formal test suite detected; validate by running main script and checking output files
+  - `pytest` suite in `tests/` (`test_bracket_drawer.py`, `test_validity_checker.py`, `test_input_reader.py`); run via `pytest` from the repo root. Also validate by running the main script and checking output files.
 - **Debugging:**
   - Check logs/output in `output/` and `build/` directories
 
