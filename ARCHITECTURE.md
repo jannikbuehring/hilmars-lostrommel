@@ -149,10 +149,10 @@ Loaded once at startup by `misc.config.initialize_config(base_dir)`, which reads
 
 ## 9. Known Issues
 
-Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase.
-
-- **`dist/config/config.ini` is a stale build artifact** — points at old input filenames (`draw_input_2025.csv`, `players_2025.csv`) and is missing the `[bracket_draw]` section entirely. Harmless in practice: `bracket_drawer.py` reads config via `config.getint(..., fallback=...)`, so a build from `dist/` would silently use built-in defaults (`max_attempts=2000`, `max_draw_phase=5`) instead of the tuned live values.
+Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase. None currently tracked.
 
 ## 10. Build
 
 Packaged via **PyInstaller** (`hilmars_lostrommel.spec`): single console executable (no windowed/GUI mode), entry point `hilmars_lostrommel.py`, `collect_all('readchar')` to bundle that package's data/binaries/hidden imports, UPX compression enabled, no code signing. Build output in `build/hilmars_lostrommel/`; distributable artifacts in `dist/` and `builds/`.
+
+The exe reads `config/config.ini` next to itself at runtime (see `get_base_dir()` in `hilmars_lostrommel.py`), not from PyInstaller's bundled `datas` (this is a onefile build, so bundled datas only get extracted to a temp `_MEIPASS` dir, not next to the exe). Because of that, the spec file copies the live `config/` directory into `DISTPATH` after `EXE()` runs, so every build refreshes `dist/config/config.ini` from source instead of leaving a stale copy behind.
