@@ -115,14 +115,15 @@ Every phase transition/attempt appends a `Snapshot`. On unrecoverable failure, `
 
 ## 7. Viewer / CLI UX (`viewer/`, `misc/menu.py`)
 
-Console-only, via `tabulate` (tables) and `inquirer` (menus) — no GUI, no HTML output, no ASCII bracket trees.
+Console-only for tables/menus, via `tabulate` and `inquirer` — plus one static-file export (HTML/SVG, no server) for brackets; still no GUI window and no network I/O.
 
 - **Menu flow** (`misc/menu.py`): `show_main_menu()` → `View` → `{Players | Groups | Bracket}` → `{Singles | Doubles | Mixed}` → pick a drawn competition class → render via `viewer.group_viewer.show_groups` / `viewer.bracket_viewer.show_bracket`.
 - **Display mode** is driven by `config["settings"]["mode"]` (`normal` = static table; `interactive` = step through `Snapshot`s one action at a time, with jump-to-next-improvement, jump-to-snapshot-number, and jump-to-final actions).
 - `viewer/group_viewer.py`'s interactive replay reconstructs group state by starting from `snapshots[0].initial_groups` and replaying `swap`/`revert` actions up to the current index, rather than storing full state per snapshot.
-- `viewer/bracket_viewer.py` additionally supports Windows `msvcrt`-based arrow-key navigation in a real TTY, falling back to line-based `input()` prompts otherwise; highlights the best quarter in green; falls back to plain `tabulate` format on `UnicodeEncodeError`.
+- `viewer/bracket_viewer.py::show_bracket()` first selects the bracket type (`main`/`consolation` — auto-picked if only one exists, otherwise prompted), then prompts `["View", "Export to HTML", "Back"]` scoped to that single type. "View" dispatches to the existing terminal renderers (`show_bracket_menu`/`show_bracket_tables`, unchanged): highlights the best quarter in green, falls back to plain `tabulate` format on `UnicodeEncodeError`. Participant formatting is centralized in `participant_display_fields()` (structured data) with `format_participant_display()` as a thin string-formatting wrapper around it, so the terminal and HTML renderers share one source of truth.
+- **"Export to HTML"** (`viewer/bracket_html_exporter.py::export_bracket_html`) writes a self-contained `.html` file for the chosen bracket type to `config["files"]["bracket_html_output_dir"]` (default `output/brackets/`), named `{competition}_{competition_class}_{bracket_type}_bracket.html`, and opens it in the default browser (`webbrowser.open` on a `file://` URI). Each file renders the **first round only**, as a Q1–Q4 quarter-grouped list (no later-round tree — `draw_bracket()` never simulates match winners), and embeds **every** recorded `Snapshot` as JSON, with an inline-JS stepper (Prev/Next/Jump-to-snapshot/Forward-to-next-improvement/Show-final) mirroring the terminal's interactive controls — fully offline, works via `file://`, no CDN/network references. Solves the terminal's scroll/cutoff problem for large brackets (64/128+ draws). Quarter membership mirrors `bracket_drawer.py::slot_quarter`. The strongest 25% of players (by `group_pos` asc, then `seeding` desc) are highlighted green, recomputed per snapshot and keyed by stable `start_number`-based identity (not `id()`, which is invalidated by the `copy.deepcopy` every snapshot stores). `_serialize_matches` pads every match to two slots so partial/phase-1 draws (where `slots_to_matches` leaves matches empty or length 1) render without the JS indexing past the array.
 - `viewer/player_viewer.py::show_players_table()` — flat player listing.
-- `viewer/view_config.py` — single shared setting, `table_format = "rounded_outline"`, used by all three viewers.
+- `viewer/view_config.py` — single shared setting, `table_format = "rounded_outline"`, used by the table-based viewers.
 
 ## 8. Configuration (`config/config.ini`, `misc/config.py`)
 
@@ -131,6 +132,7 @@ Loaded once at startup by `misc.config.initialize_config(base_dir)`, which reads
 | Section | Key | Meaning |
 |---|---|---|
 | `[files]` | `draw_data_path`, `players_path`, `output_file_path` | Input/output file locations. |
+| | `bracket_html_output_dir` | Directory for HTML bracket exports (`viewer.bracket_html_exporter`); falls back to `output/brackets` if unset. |
 | `[settings]` | `log_level` | 10/20/30/40/50 = debug/info/warning/error/critical. |
 | | `mode` | `normal` or `interactive` (viewer step-through). |
 | | `random_seed` | If set, makes random outcomes deterministic. |

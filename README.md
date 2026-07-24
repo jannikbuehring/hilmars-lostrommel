@@ -27,6 +27,10 @@ Highest seeds are spread one-per-group first, then a **Monte Carlo / simulated-a
 
 Group winners are placed first, then a rule engine plus genuine **backtracking** fills the remaining bye/quarter slots, keeping group winners/runners-up/etc. apart until later rounds and balancing seeding, country, and training-base conflicts. Details: [ARCHITECTURE.md § Algorithms](ARCHITECTURE.md#5-algorithms-draw).
 
+# Bracket viewer
+
+From the Bracket menu, brackets can be viewed in the terminal or **exported to a self-contained HTML file** with an SVG bracket tree and an in-browser stepper through every draw snapshot — useful for verifying the draw logic on large brackets without terminal scroll/cutoff. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+
 # Configuration
 
 Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracket phase limits) is controlled by `config/config.ini`. Full key reference: [ARCHITECTURE.md § Configuration](ARCHITECTURE.md#8-configuration).
