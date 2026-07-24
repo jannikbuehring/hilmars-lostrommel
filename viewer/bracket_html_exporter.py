@@ -210,6 +210,12 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .slot-box.empty { border-style: dashed; }
 .slot-box.top25 { background: #1f5d33; border-color: #4ec36e; }
 .slot-box.top25 .pos { color: #bfe8c9; }
+.slot-box.changed { animation: flash 1.1s ease-out; }
+@keyframes flash {
+  0% { box-shadow: 0 0 0 3px #ffd54a, 0 0 14px 4px #ffd54a; border-color: #ffd54a; }
+  100% { box-shadow: 0 0 0 0 rgba(255,213,74,0); }
+}
+.controls label { font-size: 13px; color: #aaa; display: flex; align-items: center; gap: 4px; }
 """
 
 _JS = """
@@ -231,8 +237,40 @@ function displayString(participant) {
   return parts.length ? parts.join(' | ') + ' | ' + names : names;
 }
 
+function slotParticipant(snap, pos) {
+  const matchIdx = Math.floor((pos - 1) / 2) + 1;
+  const side = (pos - 1) % 2;
+  const row = snap.matches[String(matchIdx)] || [];
+  return row[side] === undefined ? null : row[side];
+}
+
+function slotIdentity(participant) {
+  if (participant === null || participant === undefined) return '';
+  if (typeof participant === 'string') return participant;
+  return participant.key;
+}
+
+// Positions whose occupant differs between two snapshots. Newly-filled slots
+// (an empty/BYE side that now holds a real participant) are listed first, so
+// stepping forward jumps straight to the insert the step introduced.
+function changedSlots(fromSnap, toSnap) {
+  const inserts = [];
+  const others = [];
+  for (let pos = 1; pos <= DATA.number_of_matches * 2; pos++) {
+    const before = slotIdentity(slotParticipant(fromSnap, pos));
+    const after = slotIdentity(slotParticipant(toSnap, pos));
+    if (before === after) continue;
+    const afterP = slotParticipant(toSnap, pos);
+    if (afterP && typeof afterP === 'object') inserts.push(pos);
+    else others.push(pos);
+  }
+  return inserts.concat(others);
+}
+
 function render(index) {
+  const prevSnap = DATA.snapshots[currentIndex];
   const snap = DATA.snapshots[index];
+  const changed = index === currentIndex ? [] : changedSlots(prevSnap, snap);
   for (let pos = 1; pos <= DATA.number_of_matches * 2; pos++) {
     const matchIdx = Math.floor((pos - 1) / 2) + 1;
     const side = (pos - 1) % 2;
@@ -245,6 +283,21 @@ function render(index) {
     el.classList.toggle('empty', participant === null);
     const isTop25 = participant && typeof participant === 'object' && DATA.top25_keys.includes(participant.key);
     el.classList.toggle('top25', !!isTop25);
+    el.classList.remove('changed');
+  }
+
+  if (changed.length) {
+    // Re-trigger the flash animation reliably by forcing a reflow first.
+    changed.forEach(function (pos) {
+      const el = document.getElementById('slot-' + pos);
+      if (!el) return;
+      void el.offsetWidth;
+      el.classList.add('changed');
+    });
+    if (document.getElementById('auto-scroll').checked) {
+      const target = document.getElementById('slot-' + changed[0]);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
 
   document.getElementById('snapshot-label').textContent =
@@ -321,6 +374,7 @@ def _render_html_document(title, payload, list_markup):
   <button id="btn-final">Show final bracket</button>
   <input type="number" id="jump-input" min="1" placeholder="#">
   <button id="btn-jump">Go to snapshot</button>
+  <label><input type="checkbox" id="auto-scroll" checked> Scroll to change</label>
   <div class="meta">
     <div id="snapshot-label"></div>
     <div id="score-label"></div>
