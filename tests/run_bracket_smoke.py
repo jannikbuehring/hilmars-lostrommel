@@ -138,7 +138,12 @@ for snapshot in snapshots:
     current_top_slots = {start_number: current_slots.get(start_number) for start_number in locked_top_ids}
     if seeded_snapshot_slots is None and snapshot.action == 'top_seed_complete':
         seeded_snapshot_slots = current_top_slots
-    elif seeded_snapshot_slots is not None and snapshot.action in ('initial_fill', 'half0_mc_start', 'half1_mc_start', 'improvement', 'progress', 'final'):
+    elif seeded_snapshot_slots is not None and snapshot.action in (
+        'initial_fill',
+        'half0_mc_start', 'half1_mc_start',
+        'quarter0_mc_start', 'quarter1_mc_start', 'quarter2_mc_start', 'quarter3_mc_start',
+        'improvement', 'progress', 'final',
+    ):
         if current_top_slots != seeded_snapshot_slots:
             raise AssertionError(f'Top seeded participants moved after anchoring: {seeded_snapshot_slots} -> {current_top_slots}')
 
@@ -234,6 +239,7 @@ except ValueError as exc:
         'seed_slot_failure',
         'permutation_failure',
         'capacity_impossible',
+        'quarter_capacity_impossible',
         'unconstrained_distribution_impossible',
         'permutation_internal_inconsistency',
     ):

@@ -6,10 +6,12 @@ import configparser
 from typing import List
 from models.draw_data import DrawDataRow
 from models.draw_data import seeding_by_start_numbers
+from models.player import players_by_start_number
 from models.snapshot import Snapshot
 from checks.bracket_checker import (
     score_bracket,
     check_half_group_separation,
+    check_quarter_group_separation,
     check_no_first_vs_first,
     check_country_balance_halves,
     check_base_conflicts_first_round,
@@ -65,12 +67,23 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     byes = bracket_size - num_participants
     logging.debug("Bracket size: %s, participants: %s, byes: %s", bracket_size, num_participants, byes)
 
+    # Quarter geometry: at most 4 quarters, at least 2; each half contains
+    # quarters_per_half quarters.  For small brackets (2 first-round matches)
+    # there are only 2 quarters (one per half, quarters_per_half = 1).
+    num_quarters = min(4, max(2, number_of_matches))
+    quarters_per_half = max(1, num_quarters // 2)
+
     def slot_to_match(slot: int):
         return ((slot + 1) // 2, 0 if slot % 2 == 1 else 1)
 
     def slot_half(slot: int) -> int:
         match_idx, _ = slot_to_match(slot)
         return 0 if match_idx <= (number_of_matches // 2) else 1
+
+    def slot_quarter(slot: int) -> int:
+        match_idx, _ = slot_to_match(slot)
+        matches_per_quarter = max(1, number_of_matches // 4)
+        return min(3, (match_idx - 1) // matches_per_quarter)
 
     def opponent_slot(slot: int) -> int:
         return slot + 1 if slot % 2 == 1 else slot - 1
@@ -95,6 +108,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     def get_bracket_violations(current_matches):
         return {
+            "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches),
             "half_group_separation": check_half_group_separation(current_matches, number_of_matches),
             "first_vs_first": check_no_first_vs_first(current_matches),
             "country_balance": check_country_balance_halves(current_matches, number_of_matches),
@@ -103,7 +117,15 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     max_attempts = 2000
     try:
-        max_attempts = int(config.get("bracket_draw", {}).get("max_attempts", max_attempts))
+        max_attempts = config.getint("bracket_draw", "max_attempts", fallback=max_attempts)
+    except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+        pass
+
+    # max_draw_phase controls how many phases to execute (1-5; default=5=all).
+    # Set to 1 in config to stop after the top-group-pos seeded placement only.
+    max_draw_phase = 5
+    try:
+        max_draw_phase = config.getint("bracket_draw", "max_draw_phase", fallback=max_draw_phase)
     except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
         pass
 
@@ -122,7 +144,16 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     slot_state = empty_slot_state()
     locked_slots = set()
     hierarchy_groups = bye_hierarchy(bracket_size)
+    # group_top_quarter maps group_no -> quarter (0-3) where that group's top-pos player landed.
+    # group_top_half is kept in sync as quarter // 2 for backward-compat with half-level checks.
+    group_top_quarter = {}
     group_top_half = {}
+
+    def _update_group_top(group_no, slot):
+        """Record the quarter (and derived half) for a group's top-placed participant."""
+        q = slot_quarter(slot)
+        group_top_quarter[group_no] = q
+        group_top_half[group_no] = q // quarters_per_half
 
     def required_half_for_participant_with_map(participant, top_half_map):
         group_no = getattr(participant, "group_no", None)
@@ -199,7 +230,23 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         )
     )
 
-    def place_seeded_batch_backtracking(participants, action_name, feasibility_check=None):
+    def place_seeded_batch_backtracking(participants, action_name, feasibility_check=None, get_required_quarter=None):
+        """Backtracking placer used for remaining (non-top-group-pos) bye recipients.
+
+        When *get_required_quarter* is provided it is called with each participant
+        and must return the required quarter (0-3) or None (unconstrained).
+        When it is not provided the half-constraint derived from group_top_half is
+        used as a fallback.
+        """
+
+        def slot_satisfies_constraint(participant, slot):
+            if get_required_quarter is not None:
+                rq = get_required_quarter(participant)
+                if rq is not None:
+                    return slot_quarter(slot) == rq
+                return True
+            return slot_satisfies_half_constraint(participant, slot)
+
         def recurse(participant_index, group_index):
             if participant_index >= len(participants):
                 if feasibility_check is not None and not feasibility_check():
@@ -213,7 +260,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
             for idx in range(group_index, len(hierarchy_groups)):
                 available = usable_slots_in_group(hierarchy_groups[idx], slot_state, needs_bye)
-                available = [slot for slot in available if slot_satisfies_half_constraint(participant, slot)]
+                available = [slot for slot in available if slot_satisfies_constraint(participant, slot)]
                 if available:
                     candidate_group_index = idx
                     candidate_slots = available
@@ -225,7 +272,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     for slot in range(1, bracket_size + 1)
                     if slot_state[slot] is None and (not needs_bye or slot_state[opponent_slot(slot)] is None)
                 ]
-                candidate_slots = [slot for slot in candidate_slots if slot_satisfies_half_constraint(participant, slot)]
+                candidate_slots = [slot for slot in candidate_slots if slot_satisfies_constraint(participant, slot)]
 
             scored_candidates = []
             for slot in candidate_slots:
@@ -243,8 +290,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             for _, chosen_slot, chosen_matches in best_candidates:
                 slot_state[chosen_slot] = participant
                 locked_slots.add(chosen_slot)
-                if getattr(participant, "group_pos", None) == top_group_pos and getattr(participant, "group_no", None) is not None:
-                    group_top_half[participant.group_no] = slot_half(chosen_slot)
                 bye_slot = None
                 if needs_bye:
                     bye_slot = opponent_slot(chosen_slot)
@@ -273,51 +318,350 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 if bye_slot is not None:
                     locked_slots.remove(bye_slot)
                     slot_state[bye_slot] = None
-                if getattr(participant, "group_pos", None) == top_group_pos and getattr(participant, "group_no", None) is not None:
-                    group_top_half.pop(participant.group_no, None)
 
             return False
 
         if not recurse(0, 0):
             raise_with_failure_snapshot(
-                "seed_slot_failure",
+                "bye_slot_failure",
                 {
-                    "message": "Unable to place top seeded participants without violating half feasibility.",
-                    "type": "seed_slot_failure",
-                    "phase": "top_seed_backtracking",
+                    "message": "Unable to place bye recipients in their required quarters.",
+                    "type": "bye_slot_failure",
+                    "phase": "bye_assign_backtracking",
                     "top_group_pos": top_group_pos,
                     "locked_slots": sorted(locked_slots),
-                    "group_top_half": dict(group_top_half),
+                    "group_top_quarter": dict(group_top_quarter),
                 },
                 list(participants),
             )
 
-    # Feasibility check: after all pos-1 players are placed, verify that the
-    # resulting group_top_half map leaves enough free slots in each half to
-    # accommodate every constrained non-top participant (including those who
-    # will receive a bye and therefore consume two adjacent slots).
+    # ---------------------------------------------------------------------------
+    # Helper: collect the country identifier(s) for a bracket participant.
+    # ---------------------------------------------------------------------------
+    def _participant_countries(participant):
+        countries = []
+        try:
+            countries.append(players_by_start_number[participant.start_number_a].country)
+        except (KeyError, AttributeError):
+            pass
+        try:
+            if getattr(participant, "start_number_b", None) is not None:
+                countries.append(players_by_start_number[participant.start_number_b].country)
+        except (KeyError, AttributeError):
+            pass
+        return countries
+
+    # ---------------------------------------------------------------------------
+    # assign_quarter_buckets
+    # Compute the hard quarter assignment (0-3) for every non-top-group-pos
+    # participant using the group_top_quarter map built during Phase 1.
+    # ---------------------------------------------------------------------------
     remaining_bye_ids = {id(p) for p in bye_recipients if p.group_pos != top_group_pos}
 
-    def top_seed_feasibility_check():
-        req_in_half = {0: 0, 1: 0}
-        for p in class_subset:
-            if p.group_pos == top_group_pos:
-                continue
-            req = required_half_for_participant_with_map(p, group_top_half)
-            if req in (0, 1):
-                # Bye recipients occupy their own slot AND the adjacent BYE slot.
-                slots_needed = 2 if id(p) in remaining_bye_ids else 1
-                req_in_half[req] += slots_needed
-        free_in_half = {
-            h: sum(1 for s in range(1, bracket_size + 1)
-                   if slot_state[s] is None and slot_half(s) == h)
-            for h in (0, 1)
-        }
-        return all(req_in_half[h] <= free_in_half[h] for h in (0, 1))
+    def assign_quarter_buckets(non_top_participants):
+        """Return dict mapping id(participant) → required quarter (0-3).
 
+        Capacity is tracked dynamically: after every commit the remaining slot
+        count for the chosen quarter is decremented.  Bye recipients (those in
+        *remaining_bye_ids*) consume two slots (player + adjacent BYE).
+
+        Selection criterion for delta=1 (2nd-place) players when both options
+        are valid: primary = most remaining quarter capacity, secondary =
+        fewest same-country players already committed to that quarter.  This
+        prevents all players from piling into the same quarter when country
+        counts are tied (the most common case early in assignment).
+        """
+        # Prime the country-count table with already-placed (seeded) participants.
+        quarter_country_counts: dict = {q: {} for q in range(4)}
+        for slot_idx, p in slot_state.items():
+            if p is None or p == "BYE":
+                continue
+            q = slot_quarter(slot_idx)
+            for country in _participant_countries(p):
+                quarter_country_counts[q][country] = quarter_country_counts[q].get(country, 0) + 1
+
+        # quarter_remaining tracks how many free slots each quarter still has.
+        # Initialise from total slots, then subtract already-locked slots.
+        quarter_remaining: dict = {
+            q: sum(1 for s in range(1, bracket_size + 1) if slot_quarter(s) == q)
+            for q in range(4)
+        }
+        for s in locked_slots:
+            quarter_remaining[slot_quarter(s)] -= 1
+
+        required_quarter_map: dict = {}
+        # Tracks which opposite-half quarter each group already used for its
+        # delta=1 player so the delta=2 player goes to the other one.
+        group_opposite_half_used: dict = {}
+
+        delta3_players, delta1_players, delta2_players, unconstrained_players = [], [], [], []
+
+        for p in non_top_participants:
+            group_no = getattr(p, "group_no", None)
+            if group_no is None or group_no not in group_top_quarter:
+                unconstrained_players.append(p)
+                continue
+            delta = p.group_pos - top_group_pos
+            if delta == 3:
+                delta3_players.append(p)
+            elif delta == 1:
+                delta1_players.append(p)
+            elif delta == 2:
+                delta2_players.append(p)
+            else:
+                unconstrained_players.append(p)
+
+        def _slots_for(p):
+            return 2 if id(p) in remaining_bye_ids else 1
+
+        def _commit(p, q):
+            required_quarter_map[id(p)] = q
+            quarter_remaining[q] -= _slots_for(p)
+            for country in _participant_countries(p):
+                quarter_country_counts[q][country] = quarter_country_counts[q].get(country, 0) + 1
+
+        def _country_cost(p, q):
+            return sum(quarter_country_counts[q].get(c, 0) for c in _participant_countries(p))
+
+        def _best_quarter(p, candidates):
+            """Pick the quarter from *candidates* with the most remaining capacity;
+            use country-conflict count as tiebreaker."""
+            return min(candidates, key=lambda q: (-quarter_remaining[q], _country_cost(p, q)))
+
+        # delta=3 (4th place): other quarter of the SAME half as pos-1.
+        for p in delta3_players:
+            top_q = group_top_quarter[p.group_no]
+            top_h = top_q // quarters_per_half
+            same_half_qs = [top_h * quarters_per_half + i for i in range(quarters_per_half)]
+            other_qs = [q for q in same_half_qs if q != top_q]
+            if other_qs:
+                _commit(p, _best_quarter(p, other_qs))
+            else:
+                # Only one quarter in this half (small bracket) — treat as unconstrained.
+                unconstrained_players.append(p)
+
+        # delta=1 (2nd place): pick the OPPOSITE-half quarter with the most
+        # remaining capacity; break ties by fewest same-country conflicts.
+        for p in delta1_players:
+            top_q = group_top_quarter[p.group_no]
+            top_h = top_q // quarters_per_half
+            opp_h = 1 - top_h
+            opp_qs = [opp_h * quarters_per_half + i for i in range(quarters_per_half)]
+            chosen_q = _best_quarter(p, opp_qs)
+            group_opposite_half_used[p.group_no] = chosen_q
+            _commit(p, chosen_q)
+
+        # delta=2 (3rd place): MUST use the OTHER opposite-half quarter so that
+        # 2nd and 3rd from the same group land in different quarters.
+        for p in delta2_players:
+            top_q = group_top_quarter[p.group_no]
+            top_h = top_q // quarters_per_half
+            opp_h = 1 - top_h
+            opp_qs = [opp_h * quarters_per_half + i for i in range(quarters_per_half)]
+            if p.group_no in group_opposite_half_used:
+                already = group_opposite_half_used[p.group_no]
+                other = [q for q in opp_qs if q != already]
+                chosen_q = other[0] if other else opp_qs[0]
+            else:
+                # No delta=1 sibling yet; pick by capacity then country.
+                chosen_q = _best_quarter(p, opp_qs)
+                group_opposite_half_used[p.group_no] = chosen_q
+            _commit(p, chosen_q)
+
+        # Unconstrained players: group by group_no, assign each group to the
+        # quarter with the most remaining capacity.
+        unc_by_group: dict = {}
+        _none_ctr = 0
+        for p in unconstrained_players:
+            gno = getattr(p, "group_no", None)
+            if gno is None:
+                _none_ctr += 1
+                key = f"_none_{_none_ctr}"
+            else:
+                key = gno
+            unc_by_group.setdefault(key, []).append(p)
+
+        for group_members in unc_by_group.values():
+            n = sum(_slots_for(p) for p in group_members)
+            viable = [q for q in range(4) if quarter_remaining[q] >= n]
+            chosen_q = max(viable if viable else range(4), key=lambda q: quarter_remaining[q])
+            for p in group_members:
+                _commit(p, chosen_q)
+
+        return required_quarter_map
+
+    # ---------------------------------------------------------------------------
+    # Phase 1: Place top-group-pos participants in strict seeding batches.
+    #
+    # Batch 0 → hierarchy_groups[0] = [slot 1]        — completely deterministic
+    # Batch 1 → hierarchy_groups[1] = [last slot]     — completely deterministic
+    # Batch 2 → hierarchy_groups[2] (2 slots)         — greedy best-score + shuffle
+    # Batch k → hierarchy_groups[k] (2^(k-1) slots)   — greedy best-score + shuffle
+    # ---------------------------------------------------------------------------
     top_sorted = sorted(top_participants, key=lambda p: -p.seeding)
-    place_seeded_batch_backtracking(top_sorted, "top_seed_assign",
-                                    feasibility_check=top_seed_feasibility_check)
+    n_top = len(top_sorted)
+
+    batch_start = 0
+    for batch_idx, hierarchy_group in enumerate(hierarchy_groups):
+        if batch_start >= n_top:
+            break
+        batch_end = batch_start + len(hierarchy_group)
+        batch_players = top_sorted[batch_start:min(batch_end, n_top)]
+
+        if len(hierarchy_group) == 1 and len(batch_players) == 1:
+            # Completely deterministic: single slot, single player — no scoring.
+            participant = batch_players[0]
+            slot = hierarchy_group[0]
+            needs_bye = id(participant) in bye_recipient_ids
+
+            if slot_state[slot] is not None or (needs_bye and slot_state[opponent_slot(slot)] is not None):
+                raise_with_failure_snapshot(
+                    "seed_slot_failure",
+                    {
+                        "message": f"Required seeded slot {slot} is already occupied.",
+                        "type": "seed_slot_failure",
+                        "phase": "deterministic_batch",
+                        "batch_idx": batch_idx,
+                        "slot": slot,
+                        "locked_slots": sorted(locked_slots),
+                    },
+                    [participant],
+                )
+
+            slot_state[slot] = participant
+            locked_slots.add(slot)
+            if getattr(participant, "group_no", None) is not None:
+                _update_group_top(participant.group_no, slot)
+            bye_slot_det = None
+            if needs_bye:
+                bye_slot_det = opponent_slot(slot)
+                slot_state[bye_slot_det] = "BYE"
+                locked_slots.add(bye_slot_det)
+
+            trial_matches_det = slots_to_matches(slot_state)
+            snapshots.append(
+                Snapshot(
+                    "top_seed_assign",
+                    [slot],
+                    None,
+                    [participant],
+                    get_bracket_violations(trial_matches_det),
+                    score_bracket(trial_matches_det, number_of_matches),
+                    initial_groups=copy.deepcopy(trial_matches_det),
+                )
+            )
+        else:
+            # Greedy best-score placement within this batch's hierarchy group.
+            #
+            # Primary objective: keep (tops + byes) balanced across quarters.
+            # This joint balance is what determines whether non-top player
+            # quarter assignment will be feasible later: each quarter must have
+            # enough free slots to accommodate the non-top players from groups
+            # whose pos-1 landed in the OPPOSITE half.  Concentrating tops+byes
+            # in one quarter reduces its free slots and can make assignment
+            # impossible.
+            #
+            # Implementation: compute the current combined count per quarter
+            # and add a heavy penalty when placing a top (or bye pair) would
+            # push one quarter above the others.  Bracket score is used only
+            # as a tiebreaker within equally-balanced choices.
+            combined_balance_weight = 10000  # kept for clarity; used inside _combined_penalty
+
+            for participant in batch_players:
+                needs_bye = id(participant) in bye_recipient_ids
+                available = usable_slots_in_group(hierarchy_group, slot_state, needs_bye)
+
+                if not available:
+                    # Fall back to any remaining free slot.
+                    available = [
+                        s for s in range(1, bracket_size + 1)
+                        if slot_state[s] is None
+                        and (not needs_bye or slot_state[opponent_slot(s)] is None)
+                    ]
+
+                if not available:
+                    raise_with_failure_snapshot(
+                        "seed_slot_failure",
+                        {
+                            "message": (
+                                f"No slot available for top-seeded participant "
+                                f"{participant.start_number_a} in batch {batch_idx}."
+                            ),
+                            "type": "seed_slot_failure",
+                            "phase": "greedy_batch",
+                            "batch_idx": batch_idx,
+                            "locked_slots": sorted(locked_slots),
+                        },
+                        [participant],
+                    )
+
+                # Current combined (tops + byes) per quarter and per half.
+                tops_in_q_now = {q: sum(1 for gq in group_top_quarter.values() if gq == q) for q in range(num_quarters)}
+                combined_in_q = {
+                    q: (tops_in_q_now[q] +
+                        sum(1 for s in locked_slots if slot_state[s] == "BYE" and slot_quarter(s) == q))
+                    for q in range(num_quarters)
+                }
+                min_combined = min(combined_in_q.values())
+
+                # Half-tops balance: keeps tops per half as equal as possible.
+                # This is the PRIMARY capacity constraint — demand on Q2/Q3 equals
+                # tops_in_H0, so H0 and H1 must have equal (or near-equal) top counts.
+                half_tops_now = {
+                    h: sum(tops_in_q_now[h * quarters_per_half + i] for i in range(quarters_per_half))
+                    for h in range(2)
+                }
+
+                def _combined_penalty(s):
+                    q = slot_quarter(s)
+                    future = combined_in_q[q] + 1 + (1 if needs_bye else 0)
+                    # Allow up to 1 above the current minimum without penalty.
+                    excess = max(0, future - min_combined - 1)
+                    return excess * 10000
+
+                def _half_tops_penalty(s):
+                    h = slot_quarter(s) // quarters_per_half
+                    opp_h = 1 - h
+                    future_h_tops = half_tops_now[h] + 1
+                    opp_tops = half_tops_now[opp_h]
+                    # Penalise if this half would be more than 1 ahead of the opposite half.
+                    excess = max(0, future_h_tops - opp_tops - 1)
+                    return excess * 100000
+
+                scored = [
+                    (sc + _combined_penalty(s) + _half_tops_penalty(s), s, tm)
+                    for s in available
+                    for sc, tm in [score_candidate_placement(participant, s, slot_state, needs_bye)]
+                ]
+                scored.sort(key=lambda x: x[0])
+                best_s = scored[0][0]
+                best_cands = [x for x in scored if x[0] == best_s]
+                rng.shuffle(best_cands)
+                _, chosen_slot, chosen_matches = best_cands[0]
+
+                slot_state[chosen_slot] = participant
+                locked_slots.add(chosen_slot)
+                if getattr(participant, "group_no", None) is not None:
+                    _update_group_top(participant.group_no, chosen_slot)
+                bye_slot_greedy = None
+                if needs_bye:
+                    bye_slot_greedy = opponent_slot(chosen_slot)
+                    slot_state[bye_slot_greedy] = "BYE"
+                    locked_slots.add(bye_slot_greedy)
+
+                snapshots.append(
+                    Snapshot(
+                        "top_seed_assign",
+                        [chosen_slot],
+                        None,
+                        [participant],
+                        get_bracket_violations(chosen_matches),
+                        score_bracket(chosen_matches, number_of_matches),
+                        initial_groups=copy.deepcopy(chosen_matches),
+                    )
+                )
+
+        batch_start = batch_end
 
     post_top_matches = slots_to_matches(slot_state)
     snapshots.append(
@@ -332,11 +676,63 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         )
     )
 
-    remaining_bye_participants = [
-        participant for participant in bye_recipients if participant.group_pos != top_group_pos
+    if max_draw_phase <= 1:
+        # Return the partial bracket (only top-group-pos players placed).
+        return post_top_matches, snapshots
+
+    # ---------------------------------------------------------------------------
+    # Phase 2: Assign quarter buckets to all non-top-group-pos participants and
+    # verify there is enough free space in each quarter.
+    # ---------------------------------------------------------------------------
+    all_non_top = [p for p in class_subset if p.group_pos != top_group_pos]
+    required_quarter = assign_quarter_buckets(all_non_top)
+
+    free_after_top = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
+    free_slots_by_quarter_cap = {
+        q: [s for s in free_after_top if slot_quarter(s) == q]
+        for q in range(4)
+    }
+    required_counts_by_quarter: dict = {q: 0 for q in range(4)}
+    for p in all_non_top:
+        rq = required_quarter.get(id(p))
+        if rq is not None:
+            slots_needed = 2 if id(p) in remaining_bye_ids else 1
+            required_counts_by_quarter[rq] += slots_needed
+
+    over_capacity = [
+        q for q in range(4)
+        if required_counts_by_quarter[q] > len(free_slots_by_quarter_cap[q])
     ]
+    if over_capacity:
+        raise_with_failure_snapshot(
+            "permutation_failure",
+            {
+                "message": "Quarter capacity exceeded by constrained participants.",
+                "type": "quarter_capacity_impossible",
+                "free_slot_capacity": {q: len(free_slots_by_quarter_cap[q]) for q in range(4)},
+                "required_counts": dict(required_counts_by_quarter),
+                "group_top_quarter": dict(group_top_quarter),
+                "over_capacity_quarters": over_capacity,
+                "remaining_start_numbers": [p.start_number_a for p in all_non_top],
+            },
+            all_non_top,
+        )
+
+    # ---------------------------------------------------------------------------
+    # Phase 3: Place remaining bye recipients (non-top-group-pos) in their
+    # assigned quarter using backtracking.
+    # ---------------------------------------------------------------------------
+    remaining_bye_participants = [p for p in bye_recipients if p.group_pos != top_group_pos]
+
+    def _get_req_quarter(participant):
+        return required_quarter.get(id(participant))
+
     if remaining_bye_participants:
-        place_seeded_batch_backtracking(remaining_bye_participants, "bye_assign")
+        place_seeded_batch_backtracking(
+            remaining_bye_participants,
+            "bye_assign",
+            get_required_quarter=_get_req_quarter,
+        )
 
     fixed_state_matches = slots_to_matches(slot_state)
     snapshots.append(
@@ -351,124 +747,72 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         )
     )
 
-    free_slots = [slot for slot in range(1, bracket_size + 1) if slot_state[slot] is None]
+    # ---------------------------------------------------------------------------
+    # Phase 4: Build quarter pools from the remaining (non-bye, non-top) players.
+    # ---------------------------------------------------------------------------
     remaining = [
-        participant
-        for participant in class_subset
-        if id(participant) not in bye_recipient_ids and participant.group_pos != top_group_pos
+        p for p in class_subset
+        if id(p) not in bye_recipient_ids and p.group_pos != top_group_pos
     ]
-    free_slots_by_half = {
-        0: [slot for slot in free_slots if slot_half(slot) == 0],
-        1: [slot for slot in free_slots if slot_half(slot) == 1],
+
+    free_slots = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
+    free_slots_by_quarter = {
+        q: [s for s in free_slots if slot_quarter(s) == q]
+        for q in range(4)
     }
 
-    def build_matches_from_half_pools(pool_h0, pool_h1):
-        """Assign ordered half pools to free slots and return a matches dict."""
+    def build_matches_from_quarter_pools(pools):
+        """Assign each quarter pool (in slot order) and return a matches dict."""
         trial_state = dict(slot_state)
-        for slot, participant in zip(free_slots_by_half[0], pool_h0):
-            trial_state[slot] = participant
-        for slot, participant in zip(free_slots_by_half[1], pool_h1):
-            trial_state[slot] = participant
+        for q in range(4):
+            for slot, participant in zip(free_slots_by_quarter[q], pools[q]):
+                trial_state[slot] = participant
         return slots_to_matches(trial_state)
 
-    # --- Phase 2: Harden half assignment ---
-    # Classify every remaining participant into a fixed half before the MC runs.
-    # Constrained participants (group_no in group_top_half) are individually assigned.
-    # Unconstrained participants are grouped by group_no so that all members of the
-    # same group always land in the same half, preventing "positions 2/3 split across
-    # halves" violations that arose when unconstrained participants were re-shuffled
-    # independently on each MC attempt.
-    required_by_half = {0: [], 1: []}
-    unconstrained_by_group: dict = {}  # group key -> [participants]
+    final_pool_quarter: dict = {q: [] for q in range(4)}
+    for p in remaining:
+        rq = required_quarter.get(id(p), 0)
+        final_pool_quarter[rq].append(p)
 
-    _none_key_counter = 0
-    for participant in remaining:
-        req_half = required_half_for_participant(participant)
-        if req_half in (0, 1):
-            required_by_half[req_half].append(participant)
-        else:
-            group_no = getattr(participant, "group_no", None)
-            if group_no is None:
-                # No group info: treat as an independent singleton
-                _none_key_counter += 1
-                unconstrained_by_group[f"_none_{_none_key_counter}"] = [participant]
-            else:
-                unconstrained_by_group.setdefault(group_no, []).append(participant)
+    for q in range(4):
+        if len(final_pool_quarter[q]) != len(free_slots_by_quarter[q]):
+            raise_with_failure_snapshot(
+                "permutation_failure",
+                {
+                    "message": (
+                        f"Quarter {q} pool size {len(final_pool_quarter[q])} "
+                        f"does not match slot capacity {len(free_slots_by_quarter[q])}."
+                    ),
+                    "type": "quarter_pool_size_mismatch",
+                    "group_top_quarter": dict(group_top_quarter),
+                    "remaining_start_numbers": [p.start_number_a for p in remaining],
+                },
+                remaining,
+            )
 
-    half_capacity = {0: len(free_slots_by_half[0]), 1: len(free_slots_by_half[1])}
-    required_counts = {0: len(required_by_half[0]), 1: len(required_by_half[1])}
-
-    impossible_halves = [h for h in (0, 1) if required_counts[h] > half_capacity[h]]
-    if impossible_halves:
-        raise_with_failure_snapshot(
-            "permutation_failure",
-            {
-                "message": "Half-capacity is exceeded by strictly constrained participants.",
-                "type": "capacity_impossible",
-                "free_slot_capacity": half_capacity,
-                "required_counts": required_counts,
-                "group_top_half": dict(group_top_half),
-                "remaining_start_numbers": [p.start_number_a for p in remaining],
-                "impossible_halves": impossible_halves,
-            },
-            list(remaining),
+    if not remaining:
+        first_full_matches = slots_to_matches(dict(slot_state))
+        first_full_violations = get_bracket_violations(first_full_matches)
+        first_full_score = score_bracket(first_full_matches, number_of_matches)
+        snapshots.append(
+            Snapshot(
+                "final",
+                None,
+                None,
+                None,
+                first_full_violations,
+                first_full_score,
+                initial_groups=copy.deepcopy(first_full_matches),
+            )
         )
+        return first_full_matches, snapshots
 
-    # Greedily assign each unconstrained group to the half with the most remaining
-    # capacity, keeping all members of the same group together.
-    remaining_capacity = {0: half_capacity[0] - required_counts[0], 1: half_capacity[1] - required_counts[1]}
-    final_pool_half = {0: list(required_by_half[0]), 1: list(required_by_half[1])}
+    # Initial shuffle: each quarter pool shuffled independently.
+    current_pools = {q: list(final_pool_quarter[q]) for q in range(4)}
+    for q in range(4):
+        rng.shuffle(current_pools[q])
 
-    unconstrained_groups = list(unconstrained_by_group.values())
-    rng.shuffle(unconstrained_groups)
-
-    for group_members in unconstrained_groups:
-        n = len(group_members)
-        can_fit_0 = remaining_capacity[0] >= n
-        can_fit_1 = remaining_capacity[1] >= n
-        if can_fit_0 and can_fit_1:
-            chosen_half = 0 if remaining_capacity[0] >= remaining_capacity[1] else 1
-        elif can_fit_0:
-            chosen_half = 0
-        elif can_fit_1:
-            chosen_half = 1
-        else:
-            raise_with_failure_snapshot(
-                "permutation_failure",
-                {
-                    "message": "Unable to fit unconstrained group into either half.",
-                    "type": "unconstrained_distribution_impossible",
-                    "free_slot_capacity": half_capacity,
-                    "required_counts": required_counts,
-                    "remaining_capacity": dict(remaining_capacity),
-                    "group_top_half": dict(group_top_half),
-                    "remaining_start_numbers": [p.start_number_a for p in remaining],
-                },
-                list(remaining),
-            )
-        final_pool_half[chosen_half].extend(group_members)
-        remaining_capacity[chosen_half] -= n
-
-    for h in (0, 1):
-        if len(final_pool_half[h]) != half_capacity[h]:
-            raise_with_failure_snapshot(
-                "permutation_failure",
-                {
-                    "message": f"Half {h} pool size {len(final_pool_half[h])} does not match slot capacity {half_capacity[h]}.",
-                    "type": "half_pool_size_mismatch",
-                    "group_top_half": dict(group_top_half),
-                    "remaining_start_numbers": [p.start_number_a for p in remaining],
-                },
-                list(remaining),
-            )
-
-    # Initial fill: shuffle each pool once to produce the starting bracket.
-    init_pool_h0 = list(final_pool_half[0])
-    init_pool_h1 = list(final_pool_half[1])
-    rng.shuffle(init_pool_h0)
-    rng.shuffle(init_pool_h1)
-
-    first_full_matches = build_matches_from_half_pools(init_pool_h0, init_pool_h1)
+    first_full_matches = build_matches_from_quarter_pools(current_pools)
     first_full_violations = get_bracket_violations(first_full_matches)
     first_full_score = score_bracket(first_full_matches, number_of_matches)
 
@@ -486,131 +830,72 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     best_score = first_full_score
     best_matches = copy.deepcopy(first_full_matches)
-
-    if not remaining:
-        snapshots.append(
-            Snapshot(
-                "final",
-                None,
-                None,
-                None,
-                first_full_violations,
-                first_full_score,
-                initial_groups=copy.deepcopy(first_full_matches),
-            )
-        )
-        return first_full_matches, snapshots
+    best_pools = {q: list(current_pools[q]) for q in range(4)}
 
     snapshot_interval = max(1, max_attempts // 10)
 
-    # --- Phase 3a: Half-0 Monte Carlo ---
-    # The half-1 pool is fixed at the initial shuffle; only half-0 is varied.
-    best_pool_h0 = list(init_pool_h0)
-    fixed_pool_h1 = list(init_pool_h1)
+    # ---------------------------------------------------------------------------
+    # Phase 5: Four-phase Monte Carlo — one phase per quarter.
+    # Each phase fixes the other three quarters and shuffles the active one.
+    # ---------------------------------------------------------------------------
+    for active_q in range(4):
+        if not final_pool_quarter[active_q]:
+            continue  # nothing to optimise in this quarter
 
-    snapshots.append(
-        Snapshot(
-            "half0_mc_start",
-            None,
-            None,
-            None,
-            first_full_violations,
-            first_full_score,
-            initial_groups=copy.deepcopy(first_full_matches),
+        snapshots.append(
+            Snapshot(
+                f"quarter{active_q}_mc_start",
+                None,
+                None,
+                None,
+                get_bracket_violations(best_matches),
+                best_score,
+                initial_groups=copy.deepcopy(best_matches),
+            )
         )
-    )
 
-    for attempt in range(max_attempts):
-        trial_pool_h0 = list(final_pool_half[0])
-        rng.shuffle(trial_pool_h0)
-        m_try = build_matches_from_half_pools(trial_pool_h0, fixed_pool_h1)
-        score = score_bracket(m_try, number_of_matches)
+        for attempt in range(max_attempts):
+            trial_pool = list(final_pool_quarter[active_q])
+            rng.shuffle(trial_pool)
+            trial_pools = dict(best_pools)
+            trial_pools[active_q] = trial_pool
+            m_try = build_matches_from_quarter_pools(trial_pools)
+            score = score_bracket(m_try, number_of_matches)
 
-        if score < best_score:
-            best_score = score
-            best_pool_h0 = trial_pool_h0
-            best_matches = copy.deepcopy(m_try)
-            violations = get_bracket_violations(m_try)
-            snapshots.append(
-                Snapshot(
-                    "improvement",
-                    [attempt],
-                    None,
-                    None,
-                    violations,
-                    score,
-                    initial_groups=copy.deepcopy(m_try),
+            if score < best_score:
+                best_score = score
+                best_pools = {q: list(trial_pools[q]) for q in range(4)}
+                best_matches = copy.deepcopy(m_try)
+                violations = get_bracket_violations(m_try)
+                snapshots.append(
+                    Snapshot(
+                        "improvement",
+                        [attempt],
+                        None,
+                        None,
+                        violations,
+                        score,
+                        initial_groups=copy.deepcopy(m_try),
+                    )
                 )
-            )
-            if best_score == 0:
-                break
-        elif attempt % snapshot_interval == 0:
-            violations = get_bracket_violations(m_try)
-            snapshots.append(
-                Snapshot(
-                    "progress",
-                    [attempt],
-                    None,
-                    None,
-                    violations,
-                    score,
-                    initial_groups=copy.deepcopy(m_try),
+                if best_score == 0:
+                    break
+            elif attempt % snapshot_interval == 0:
+                violations = get_bracket_violations(m_try)
+                snapshots.append(
+                    Snapshot(
+                        "progress",
+                        [attempt],
+                        None,
+                        None,
+                        violations,
+                        score,
+                        initial_groups=copy.deepcopy(m_try),
+                    )
                 )
-            )
 
-    # --- Phase 3b: Half-1 Monte Carlo ---
-    # Fix half-0 at the best arrangement found above; vary half-1.
-    best_pool_h1 = list(init_pool_h1)
-
-    snapshots.append(
-        Snapshot(
-            "half1_mc_start",
-            None,
-            None,
-            None,
-            get_bracket_violations(best_matches),
-            best_score,
-            initial_groups=copy.deepcopy(best_matches),
-        )
-    )
-
-    for attempt in range(max_attempts):
-        trial_pool_h1 = list(final_pool_half[1])
-        rng.shuffle(trial_pool_h1)
-        m_try = build_matches_from_half_pools(best_pool_h0, trial_pool_h1)
-        score = score_bracket(m_try, number_of_matches)
-
-        if score < best_score:
-            best_score = score
-            best_pool_h1 = trial_pool_h1
-            best_matches = copy.deepcopy(m_try)
-            violations = get_bracket_violations(m_try)
-            snapshots.append(
-                Snapshot(
-                    "improvement",
-                    [attempt],
-                    None,
-                    None,
-                    violations,
-                    score,
-                    initial_groups=copy.deepcopy(m_try),
-                )
-            )
-            if best_score == 0:
-                break
-        elif attempt % snapshot_interval == 0:
-            violations = get_bracket_violations(m_try)
-            snapshots.append(
-                Snapshot(
-                    "progress",
-                    [attempt],
-                    None,
-                    None,
-                    violations,
-                    score,
-                    initial_groups=copy.deepcopy(m_try),
-                )
-            )
+        if best_score == 0:
+            break
 
     final_violations = get_bracket_violations(best_matches)
     final_score = score_bracket(best_matches, number_of_matches)
