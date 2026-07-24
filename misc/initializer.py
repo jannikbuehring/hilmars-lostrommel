@@ -136,10 +136,10 @@ def initialize_data():
                 print("")
                 for e in errors:
                     print("   ", e)
-                #return
-            else:
-                spinner.text = "The imported data seems valid"
-                spinner.ok()
+                return
+
+            spinner.text = "The imported data seems valid"
+            spinner.ok()
                 
 
         except Exception:
