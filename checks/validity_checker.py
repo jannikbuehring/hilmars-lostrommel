@@ -38,8 +38,8 @@ def find_players_not_in_draw_data(draw_data) -> set:
     }
 
     all_players = set(players_by_start_number.keys())
-    extra_references = referenced_players - all_players
-    return extra_references
+    unreferenced_players = all_players - referenced_players
+    return unreferenced_players
 
 
 def find_players_in_wrong_competition(draw_data) -> list:
