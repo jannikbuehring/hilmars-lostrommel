@@ -149,9 +149,8 @@ Loaded once at startup by `misc.config.initialize_config(base_dir)`, which reads
 
 ## 9. Known Issues
 
-Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase. None of these have been fixed as part of this documentation pass.
+Concrete bugs, dead code, and config/behavior mismatches found while documenting this codebase.
 
-- **Group export drops all but the last group member** — `data_io/output_writer.py:14-17`: the `for member in members:` loop (computing `player_a`/`player_b`) is indented one level deeper than the `export_line_to_add = SimpleNamespace()` block that follows it, so the export line is built and appended once per **group**, using only the last member's data, not once per member.
 - **`dist/config/config.ini` is a stale build artifact** — points at old input filenames (`draw_input_2025.csv`, `players_2025.csv`) and is missing the `[bracket_draw]` section entirely. Harmless in practice: `bracket_drawer.py` reads config via `config.getint(..., fallback=...)`, so a build from `dist/` would silently use built-in defaults (`max_attempts=2000`, `max_draw_phase=5`) instead of the tuned live values.
 - **`requirements.txt` is missing `readchar`** — `hilmars_lostrommel.spec` bundles it via `collect_all('readchar')` (needed for keypress reading, likely a transitive dependency of `inquirer`), but it isn't listed in `requirements.txt`.
 
