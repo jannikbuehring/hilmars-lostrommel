@@ -137,6 +137,25 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     except (TypeError, ValueError, KeyError, configparser.Error):
         pass
 
+    # weights for bracket_checker.score_bracket (lower score = better bracket)
+    bracket_weights = {
+        "quarter_split": 200,
+        "half_split": 150,
+        "first_vs_first": 100,
+        "country_half": 10,
+        "base_first": 20,
+    }
+    for weight_key, config_key in (
+        ("half_split", "half_split_weight"),
+        ("first_vs_first", "first_vs_first_weight"),
+        ("country_half", "country_half_weight"),
+        ("base_first", "base_first_weight"),
+    ):
+        try:
+            bracket_weights[weight_key] = config.getint("bracket_draw", config_key, fallback=bracket_weights[weight_key])
+        except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+            pass
+
     top_group_pos = min(p.group_pos for p in class_subset if p.group_pos is not None)
     top_participants = [p for p in class_subset if p.group_pos == top_group_pos]
     bye_recipients = class_subset[:byes]
@@ -185,7 +204,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         if needs_bye:
             trial_state[opponent_slot(slot)] = "BYE"
         trial_matches = slots_to_matches(trial_state)
-        return score_bracket(trial_matches, number_of_matches), trial_matches
+        return score_bracket(trial_matches, number_of_matches, weights=bracket_weights), trial_matches
 
     def usable_slots_in_group(group, current_state, needs_bye):
         available = []
@@ -207,7 +226,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             None,
             participants,
             violations,
-            score_bracket(current_matches, number_of_matches),
+            score_bracket(current_matches, number_of_matches, weights=bracket_weights),
             initial_groups=copy.deepcopy(current_matches),
         )
         snapshots.append(snapshot)
@@ -225,7 +244,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             None,
             None,
             get_bracket_violations(initial_matches),
-            score_bracket(initial_matches, number_of_matches),
+            score_bracket(initial_matches, number_of_matches, weights=bracket_weights),
             initial_groups=copy.deepcopy(initial_matches),
         )
     )
@@ -303,7 +322,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                         None,
                         [participant],
                         get_bracket_violations(chosen_matches),
-                        score_bracket(chosen_matches, number_of_matches),
+                        score_bracket(chosen_matches, number_of_matches, weights=bracket_weights),
                         initial_groups=copy.deepcopy(chosen_matches),
                     )
                 )
@@ -546,7 +565,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     None,
                     [participant],
                     get_bracket_violations(trial_matches_det),
-                    score_bracket(trial_matches_det, number_of_matches),
+                    score_bracket(trial_matches_det, number_of_matches, weights=bracket_weights),
                     initial_groups=copy.deepcopy(trial_matches_det),
                 )
             )
@@ -656,7 +675,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                         None,
                         [participant],
                         get_bracket_violations(chosen_matches),
-                        score_bracket(chosen_matches, number_of_matches),
+                        score_bracket(chosen_matches, number_of_matches, weights=bracket_weights),
                         initial_groups=copy.deepcopy(chosen_matches),
                     )
                 )
@@ -671,7 +690,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             None,
             list(top_sorted),
             get_bracket_violations(post_top_matches),
-            score_bracket(post_top_matches, number_of_matches),
+            score_bracket(post_top_matches, number_of_matches, weights=bracket_weights),
             initial_groups=copy.deepcopy(post_top_matches),
         )
     )
@@ -742,7 +761,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             None,
             list(top_sorted) + list(remaining_bye_participants),
             get_bracket_violations(fixed_state_matches),
-            score_bracket(fixed_state_matches, number_of_matches),
+            score_bracket(fixed_state_matches, number_of_matches, weights=bracket_weights),
             initial_groups=copy.deepcopy(fixed_state_matches),
         )
     )
@@ -793,7 +812,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     if not remaining:
         first_full_matches = slots_to_matches(dict(slot_state))
         first_full_violations = get_bracket_violations(first_full_matches)
-        first_full_score = score_bracket(first_full_matches, number_of_matches)
+        first_full_score = score_bracket(first_full_matches, number_of_matches, weights=bracket_weights)
         snapshots.append(
             Snapshot(
                 "final",
@@ -814,7 +833,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     first_full_matches = build_matches_from_quarter_pools(current_pools)
     first_full_violations = get_bracket_violations(first_full_matches)
-    first_full_score = score_bracket(first_full_matches, number_of_matches)
+    first_full_score = score_bracket(first_full_matches, number_of_matches, weights=bracket_weights)
 
     snapshots.append(
         Snapshot(
@@ -860,7 +879,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             trial_pools = dict(best_pools)
             trial_pools[active_q] = trial_pool
             m_try = build_matches_from_quarter_pools(trial_pools)
-            score = score_bracket(m_try, number_of_matches)
+            score = score_bracket(m_try, number_of_matches, weights=bracket_weights)
 
             if score < best_score:
                 best_score = score
@@ -898,7 +917,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             break
 
     final_violations = get_bracket_violations(best_matches)
-    final_score = score_bracket(best_matches, number_of_matches)
+    final_score = score_bracket(best_matches, number_of_matches, weights=bracket_weights)
     snapshots.append(
         Snapshot(
             "final",
