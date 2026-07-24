@@ -50,21 +50,26 @@ def show_bracket(competition, competition_class, bracket):
     # Restrict the downstream viewers/exporter to the single chosen bracket type.
     single = {bracket_type: bracket[bracket_type]}
 
-    action = inquirer.list_input("Bracket view", choices=["View", "Export to HTML", "Back"])
+    action = inquirer.list_input("Bracket view", choices=["View", "View HTML", "Back"])
     if action == "Back":
         return
-    if action == "Export to HTML":
+    if action == "View HTML":
         # Imported lazily to avoid a circular import (bracket_html_exporter reuses
         # participant_display_fields from this module).
-        from viewer.bracket_html_exporter import export_bracket_html
+        from viewer.bracket_html_exporter import bracket_html_path, export_bracket_html
         output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
-        paths = export_bracket_html(competition, competition_class, single, output_dir)
-        if paths:
-            for path in paths:
-                print(f"Exported: {path}")
-                _open_in_browser(path)
+        # Brackets are pre-exported during initialization; open the existing file.
+        path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
+        if os.path.exists(path):
+            _open_in_browser(path)
         else:
-            print("No bracket matches available to export.")
+            # Fallback: export on demand if the pre-exported file is missing.
+            paths = export_bracket_html(competition, competition_class, single, output_dir)
+            if paths:
+                for p in paths:
+                    _open_in_browser(p)
+            else:
+                print("No bracket matches available to display.")
         return
 
     mode = config["settings"].get("mode", "table")

@@ -13,6 +13,8 @@ from data_io.output_writer import write_to_csv, prepare_export_from_group_draw, 
 from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import draw_bracket
 
+from misc.config import config
+
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
 
@@ -407,31 +409,49 @@ def initialize_data():
             return
 
     ########################################################################################
-    with yaspin(text="Preparing data for export...", color="cyan") as spinner:
-        try:
-            groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
-            bracket_payload = {
-                'S': singles_brackets,
-                'D': doubles_brackets,
-                'M': mixed_brackets,
-            }
-            export_data.extend(prepare_export_from_group_draw(groups))
-            export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
+    bracket_payload = {
+        'S': singles_brackets,
+        'D': doubles_brackets,
+        'M': mixed_brackets,
+    }
 
-            spinner.text = "Export successfully prepared"
-            spinner.ok()
+    #with yaspin(text="Preparing data for export...", color="cyan") as spinner:
+    #    try:
+    #        groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
+    #        export_data.extend(prepare_export_from_group_draw(groups))
+    #        export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
 
-        except Exception as e:
-            spinner.fail()
-            logging.error("An error occurred: %s", e)
-            return
+    #         spinner.text = "Export successfully prepared"
+    #         spinner.ok()
+
+    #     except Exception as e:
+    #         spinner.fail()
+    #         logging.error("An error occurred: %s", e)
+    #         return
+
+    # ########################################################################################
+    # with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
+    #     try:
+    #         write_to_csv(export_data)
+
+    #         spinner.text = "Successfully created output file"
+    #         spinner.ok()
+
+    #     except Exception as e:
+    #         spinner.fail()
+    #         logging.error("An error occurred: %s", e)
+    #         return
 
     ########################################################################################
-    with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
+    with yaspin(text="Exporting brackets to HTML...", color="cyan") as spinner:
         try:
-            write_to_csv(export_data)
+            from viewer.bracket_html_exporter import export_bracket_html
+            output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+            for competition, brackets in bracket_payload.items():
+                for competition_class, bracket in brackets.items():
+                    export_bracket_html(competition, competition_class, bracket, output_dir)
 
-            spinner.text = "Successfully created output file"
+            spinner.text = "Successfully exported brackets to HTML"
             spinner.ok()
 
         except Exception as e:
