@@ -8,7 +8,6 @@ config = configparser.ConfigParser()
 
 def initialize_config(base_dir):
     """Initialize configuration settings from config.ini file."""
-    global mode
 
     config_dir = os.path.join(base_dir, "config")
     config_path = os.path.join(config_dir, "config.ini")
