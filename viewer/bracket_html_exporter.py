@@ -161,8 +161,8 @@ def _render_bracket_list(number_of_matches):
             )
         sections.append(
             f'<section class="quarter quarter-{quarter}">'
-            f'<h2 class="quarter-header">Q{quarter + 1}</h2>'
-            f'{"".join(rows)}</section>'
+            f'<div class="quarter-label">Q{quarter + 1}</div>'
+            f'<div class="quarter-body">{"".join(rows)}</div></section>'
         )
 
     return f'<div class="bracket-list">{"".join(sections)}</div>'
@@ -181,15 +181,17 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .meta .violations { font-size: 12px; color: #e0a; }
 
 .bracket-list { max-width: 1100px; margin: 0 auto; padding: 20px; }
-.quarter { margin-bottom: 26px; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
-.quarter-header {
-  margin: 0; padding: 8px 14px; font-size: 15px; letter-spacing: 1px;
-  background: #333; border-bottom: 1px solid #3a3a3a;
+.quarter { display: flex; align-items: stretch; margin-bottom: 26px; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
+.quarter-label {
+  flex: none; width: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; letter-spacing: 1px; font-weight: bold; background: #333;
+  border-right: 1px solid #3a3a3a; writing-mode: vertical-rl; transform: rotate(180deg);
 }
-.quarter-0 .quarter-header { border-left: 5px solid #4f8cff; }
-.quarter-1 .quarter-header { border-left: 5px solid #d98a3d; }
-.quarter-2 .quarter-header { border-left: 5px solid #b060d0; }
-.quarter-3 .quarter-header { border-left: 5px solid #d0b040; }
+.quarter-body { flex: 1; padding: 6px 0; }
+.quarter-0 .quarter-label { border-right: 5px solid #4f8cff; }
+.quarter-1 .quarter-label { border-right: 5px solid #d98a3d; }
+.quarter-2 .quarter-label { border-right: 5px solid #b060d0; }
+.quarter-3 .quarter-label { border-right: 5px solid #d0b040; }
 .match { display: flex; align-items: stretch; gap: 8px; padding: 6px 12px; }
 .match-no { flex: none; width: 44px; color: #777; font-size: 12px; align-self: center; text-align: right; }
 .slots { flex: 1; display: flex; flex-direction: column; gap: 3px; }
@@ -329,6 +331,17 @@ def _render_html_document(title, payload, list_markup):
 """
 
 
+def bracket_html_filename(competition, competition_class, bracket_type):
+    """Return the HTML filename for a single bracket type (shared naming convention)."""
+    return f"{competition}_{competition_class}_{bracket_type}_bracket.html"
+
+
+def bracket_html_path(competition, competition_class, bracket_type, output_dir):
+    """Return the full HTML path for a single bracket type."""
+    filename = bracket_html_filename(competition, competition_class, bracket_type)
+    return os.path.join(output_dir, filename)
+
+
 def export_bracket_html(competition, competition_class, bracket, output_dir):
     """Write one self-contained HTML file per bracket type present in *bracket*.
 
@@ -349,8 +362,7 @@ def export_bracket_html(competition, competition_class, bracket, output_dir):
         title = f"{competition} {competition_class} {bracket_type.capitalize()} Bracket"
         document = _render_html_document(title, payload, list_markup)
 
-        filename = f"{competition}_{competition_class}_{bracket_type}_bracket.html"
-        path = os.path.join(output_dir, filename)
+        path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
         with open(path, "w", encoding="utf-8") as f:
             f.write(document)
         written.append(path)

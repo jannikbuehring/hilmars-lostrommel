@@ -29,7 +29,7 @@ Group winners are placed first, then a rule engine plus genuine **backtracking**
 
 # Bracket viewer
 
-From the Bracket menu, brackets can be viewed in the terminal or **exported to a self-contained HTML file** with an SVG bracket tree and an in-browser stepper through every draw snapshot — useful for verifying the draw logic on large brackets without terminal scroll/cutoff. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. From the Bracket menu, brackets can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — an SVG bracket tree with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets without terminal scroll/cutoff. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
 
 # Configuration
 
