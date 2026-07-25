@@ -156,6 +156,33 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     top_group_pos = min(p.group_pos for p in class_subset if p.group_pos is not None)
     top_participants = [p for p in class_subset if p.group_pos == top_group_pos]
+
+    # Per-group opposite/same-half loads, used to weight each group winner by how
+    # much it actually loads its OWN half.  A winner forces its 2nd/3rd (delta 1/2)
+    # into the opposite half and its 4th (delta 3) into the same half; balancing
+    # raw winner counts wrongly assumes every group demands the same 2 opposite
+    # slots, which breaks for uneven groups (e.g. a consolation group missing its
+    # 3rd).  See top_reverse_weight below.
+    group_opp_load: dict = {}
+    group_same_load: dict = {}
+    for _p in class_subset:
+        _g = getattr(_p, "group_no", None)
+        if _g is None or _p.group_pos is None:
+            continue
+        _delta = _p.group_pos - top_group_pos
+        if _delta in (1, 2):
+            group_opp_load[_g] = group_opp_load.get(_g, 0) + 1
+        elif _delta == 3:
+            group_same_load[_g] = group_same_load.get(_g, 0) + 1
+
+    def top_reverse_weight(group_no):
+        """Net load a group's winner places on its OWN half: opposite demand minus
+        same-half demand minus the winner's own slot.  A full group (2nd + 3rd in
+        the opposite half) yields 1 — so this collapses to the plain winner count
+        for symmetric brackets — while a group missing its 3rd yields 0."""
+        if group_no is None:
+            return 1
+        return group_opp_load.get(group_no, 0) - group_same_load.get(group_no, 0) - 1
     bye_recipients = class_subset[:byes]
     bye_recipient_ids = {id(p) for p in bye_recipients}
     slot_state = empty_slot_state()
@@ -346,9 +373,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 # Only one quarter in this half (small bracket) — treat as unconstrained.
                 unconstrained_players.append(p)
 
-        # delta=1 (2nd place): pick the OPPOSITE-half quarter with the most
-        # remaining capacity; break ties by fewest same-country conflicts.
-        for p in delta1_players:
+        def _place_delta1(p):
             top_q = group_top_quarter[p.group_no]
             top_h = top_q // quarters_per_half
             opp_h = 1 - top_h
@@ -356,6 +381,22 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             chosen_q = _best_quarter(p, opp_qs)
             group_opposite_half_used[p.group_no] = chosen_q
             _commit(p, chosen_q)
+
+        # A full group's delta=1 and delta=2 occupy the two DIFFERENT opposite-half
+        # quarters (one each), so their placement is effectively forced.  A "solo"
+        # delta=1 — a short group with no delta=2 sibling, e.g. a consolation group
+        # missing its 3rd — has a real choice, so defer it until AFTER the forced
+        # delta=2 players are committed.  Placed greedily up front, a solo delta=1
+        # can steal the quarter a full group's delta=2 is forced into, overflowing
+        # it and needlessly triggering the quarter-capacity degrade.
+        groups_with_delta2 = {p.group_no for p in delta2_players}
+        paired_delta1 = [p for p in delta1_players if p.group_no in groups_with_delta2]
+        solo_delta1 = [p for p in delta1_players if p.group_no not in groups_with_delta2]
+
+        # delta=1 (paired): pick the OPPOSITE-half quarter with the most remaining
+        # capacity; break ties by fewest same-country conflicts.
+        for p in paired_delta1:
+            _place_delta1(p)
 
         # delta=2 (3rd place): MUST use the OTHER opposite-half quarter so that
         # 2nd and 3rd from the same group land in different quarters.
@@ -373,6 +414,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 chosen_q = _best_quarter(p, opp_qs)
                 group_opposite_half_used[p.group_no] = chosen_q
             _commit(p, chosen_q)
+
+        # delta=1 (solo): short groups whose delta=1 has no delta=2 sibling — placed
+        # last, into whatever opposite-half capacity the forced players left free.
+        for p in solo_delta1:
+            _place_delta1(p)
 
         # Unconstrained players: group by group_no, assign each group to the
         # quarter with the most remaining capacity.
@@ -430,22 +476,24 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             for q in range(num_quarters)
         }
         min_combined = min(combined_in_q.values())
-        # Half balance is on the *net* load (tops - byes), not raw tops — the PRIMARY
-        # capacity constraint.  A group top forces its 2nd/3rd (delta 1/2) into the
-        # OPPOSITE half, so demand on a half equals the tops opposite it; a bye instead
-        # consumes a slot with no opposite demand.  So each bye a half holds requires
-        # that half to carry one extra top to stay feasible (tops and byes co-locate).
-        # Balancing raw tops alone would treat a 3-2 and a 2-3 split as equal even when
-        # a bye makes only one of them placeable.
-        half_tops_now = {
-            h: sum(tops_in_q_now[h * quarters_per_half + i] for i in range(quarters_per_half))
-            for h in range(2)
-        }
+        # Half balance is on the *net load* (winner reverse-weights minus byes), not
+        # raw tops — the PRIMARY capacity constraint.  A group winner forces its
+        # 2nd/3rd (delta 1/2) into the OPPOSITE half and its 4th (delta 3) into the
+        # SAME half, so its net pressure on its own half is top_reverse_weight(g)
+        # (= 1 for a full group); a bye consumes a slot with no opposite demand, so
+        # each bye a half holds requires one extra unit of winner load to stay
+        # feasible (winners and byes co-locate).  Balancing raw tops would treat a
+        # 3-2 and a 2-3 split as equal even when only one is fillable, and would
+        # over-count a winner from an uneven group (e.g. a consolation group missing
+        # its 3rd, whose weight is 0).
+        half_load_now = {0: 0, 1: 0}
+        for _gno, _gq in group_top_quarter.items():
+            half_load_now[_gq // quarters_per_half] += top_reverse_weight(_gno)
         byes_in_half_now = {
             h: sum(1 for s in locked_slots if slot_state[s] == "BYE" and slot_half(s) == h)
             for h in range(2)
         }
-        half_net_now = {h: half_tops_now[h] - byes_in_half_now[h] for h in range(2)}
+        half_net_now = {h: half_load_now[h] - byes_in_half_now[h] for h in range(2)}
 
         def _combined_penalty(s):
             q = slot_quarter(s)
@@ -457,10 +505,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         def _half_tops_penalty(s):
             h = slot_quarter(s) // quarters_per_half
             opp_h = 1 - h
-            # Only a top-group-pos participant adds to the top count; a bye recipient
-            # (top or the Phase 1b non-tops that also call this helper) subtracts one.
+            # A winner adds its reverse-weight; a bye recipient (winner, or the Phase
+            # 1b non-winners that also call this helper) subtracts one for its bye.
             is_top = participant.group_pos == top_group_pos
-            future_h_net = half_net_now[h] + (1 if is_top else 0) - (1 if needs_bye else 0)
+            tw = top_reverse_weight(getattr(participant, "group_no", None)) if is_top else 0
+            future_h_net = half_net_now[h] + tw - (1 if needs_bye else 0)
             opp_net = half_net_now[opp_h]
             # Penalise if this half's net load would be more than 1 ahead of the opposite.
             excess = max(0, future_h_net - opp_net - 1)
