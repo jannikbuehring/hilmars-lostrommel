@@ -187,32 +187,34 @@ def test_relative_top_half_relation_for_consolation_like_bracket(eight_players):
     assert_group_half_relations(relative_matches, 2)
 
 
-def test_impossible_strict_layout_raises_with_failure_snapshot(eight_players):
-    impossible_rows = [
+def test_over_constrained_layout_degrades_to_best_effort(eight_players):
+    """A layout too tight for hard quarter separation must not abort the draw.
+
+    Instead of raising, draw_bracket degrades gracefully: it fills every slot
+    with a score-minimising best-effort bracket and records the degrade path in
+    the snapshots (half/quarter separation become soft, heavily weighted goals).
+    """
+    over_constrained_rows = [
         DrawDataRow('S', 'M1', 500, 1, 1, 1, True, False, 1, ''),
         DrawDataRow('S', 'M1', 490, 1, 1, 2, True, False, 2, ''),
         DrawDataRow('S', 'M1', 480, 1, 1, 2, True, False, 3, ''),
         DrawDataRow('S', 'M1', 470, 1, 1, 3, True, False, 4, ''),
     ]
 
-    for row in impossible_rows:
+    for row in over_constrained_rows:
         seeding_by_start_numbers[str(row.start_number_a)] = row.seeding
 
-    with pytest.raises(ValueError) as exc_info:
-        draw_bracket(impossible_rows)
+    matches, snapshots = draw_bracket(over_constrained_rows)
 
-    failure_snapshots = getattr(exc_info.value, 'snapshots', None)
-    assert failure_snapshots, 'Strict slotting failure did not expose snapshots on exception.'
-
-    last_snapshot = failure_snapshots[-1]
-    assert last_snapshot.action in ('seed_slot_failure', 'permutation_failure')
-
-    failure_info = last_snapshot.violations.get('failure', {})
-    assert failure_info.get('type') in (
-        'seed_slot_failure',
-        'permutation_failure',
-        'capacity_impossible',
-        'quarter_capacity_impossible',
-        'unconstrained_distribution_impossible',
-        'permutation_internal_inconsistency',
+    # Every participant is placed — the draw is never aborted.
+    placed = sorted(
+        p.start_number_a
+        for participants in matches.values()
+        for p in participants
+        if p is not None and p != 'BYE'
     )
+    assert placed == [1, 2, 3, 4]
+
+    # The graceful-degradation path was taken and a final bracket produced.
+    assert any(s.action == 'quarter_capacity_degrade' for s in snapshots)
+    assert snapshots[-1].action == 'final'
