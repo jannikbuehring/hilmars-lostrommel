@@ -236,6 +236,52 @@ def test_five_groups_three_positions_no_capacity_degrade():
         seeding_by_start_numbers.clear()
 
 
+def test_uneven_consolation_layout_no_capacity_degrade():
+    """Regression for the S W1 consolation case: groups 1-4 give pos {4,5,6} but
+    group 5 only pos {4,5} = 14 players, bracket size 16, 2 byes.
+
+    Group 5's winner demands only ONE opposite-half player (it has no 3rd), so a
+    raw winner count over-weights it and mis-balances the halves.  Weighting each
+    winner by its actual opposite-load (top_reverse_weight) keeps the halves
+    feasible so the structured draw never falls back to the degrade path.
+    """
+    seeding_by_start_numbers.clear()
+    for sn in range(101, 115):  # 14 players
+        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500 - sn)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    # groups 1-4 -> positions 4,5,6 ; group 5 -> positions 4,5 (missing its 3rd).
+    layout = [(g, pos) for g in range(1, 5) for pos in (4, 5, 6)] + [(5, 4), (5, 5)]
+
+    def build_rows():
+        rows = []
+        seed = 300
+        sn = 101
+        for group_no, group_pos in layout:
+            seeding_by_start_numbers[str(sn)] = seed
+            rows.append(DrawDataRow('S', 'W1', seed, 5, group_no, group_pos, True, False, sn, ''))
+            seed -= 1
+            sn += 1
+        return rows
+
+    try:
+        for rng_seed in range(50):
+            random.seed(rng_seed)
+            matches, snapshots = draw_bracket(build_rows())
+
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable uneven consolation layout.'
+
+            half_sep_violations = check_half_group_separation(matches, len(matches))
+            assert not half_sep_violations, \
+                f'Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}'
+
+            assert_group_half_relations(matches, 4)
+    finally:
+        seeding_by_start_numbers.clear()
+
+
 def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     """A layout too tight for hard quarter separation must not abort the draw.
 
