@@ -25,7 +25,7 @@ Highest seeds are spread one-per-group first, then a **Monte Carlo / simulated-a
 
 # Bracket draw
 
-Group winners are placed first, then a rule engine plus genuine **backtracking** fills the remaining bye/quarter slots, keeping group winners/runners-up/etc. apart until later rounds and balancing seeding, country, and training-base conflicts. Details: [ARCHITECTURE.md § Algorithms](ARCHITECTURE.md#5-algorithms-draw).
+Group winners are placed first; when byes outnumber the winners the remaining byes are then distributed with the same balanced placer, and a rule engine plus Monte-Carlo refinement fills the rest — keeping group winners/runners-up/etc. apart until later rounds and balancing seeding, country, and training-base conflicts. Structurally over-tight brackets degrade to a best-effort layout instead of failing. Details: [ARCHITECTURE.md § Algorithms](ARCHITECTURE.md#5-algorithms-draw).
 
 # Bracket viewer
 
