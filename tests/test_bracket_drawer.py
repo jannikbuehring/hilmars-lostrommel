@@ -1,4 +1,6 @@
 """Tests for draw/bracket_drawer.py, converted from the original run_bracket_smoke.py script."""
+import random
+
 import pytest
 
 from models.player import Player, players_list, players_by_start_number
@@ -185,6 +187,53 @@ def test_relative_top_half_relation_for_consolation_like_bracket(eight_players):
 
     relative_matches, _ = draw_bracket(relative_rows)
     assert_group_half_relations(relative_matches, 2)
+
+
+def test_five_groups_three_positions_no_capacity_degrade():
+    """Regression for the S W1 main case: 5 groups x pos {1,2,3} = 15 players.
+
+    Bracket size 16, 1 bye (attached to the #1 seed).  The bye must pull the
+    half split toward the half holding it (tops - byes balance), otherwise the
+    final group winner lands in the wrong half and the bracket degrades even
+    though a perfect placement exists.
+    """
+    seeding_by_start_numbers.clear()
+    # Fresh players so country/base don't manufacture unrelated violations.
+    for sn in range(101, 116):
+        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500 - sn)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    def build_rows():
+        start_numbers = list(range(101, 116))  # 15 players
+        rows = []
+        seed = 300
+        # 5 groups, positions 1..3, seedings strictly descending.
+        for group_no in range(1, 6):
+            for group_pos in range(1, 4):
+                sn = start_numbers.pop(0)
+                seeding_by_start_numbers[str(sn)] = seed
+                rows.append(DrawDataRow('S', 'W1', seed, 5, group_no, group_pos, True, False, sn, ''))
+                seed -= 1
+        return rows
+
+    try:
+        # The misplacement is a random tiebreak, so a single draw is flaky; the
+        # fix guarantees feasibility for EVERY RNG state, so no seed may degrade.
+        for rng_seed in range(50):
+            random.seed(rng_seed)
+            matches, snapshots = draw_bracket(build_rows())
+
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 15-player / 1-bye layout.'
+
+            half_sep_violations = check_half_group_separation(matches, len(matches))
+            assert not half_sep_violations, \
+                f'Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}'
+
+            assert_group_half_relations(matches, 1)
+    finally:
+        seeding_by_start_numbers.clear()
 
 
 def test_over_constrained_layout_degrades_to_best_effort(eight_players):
