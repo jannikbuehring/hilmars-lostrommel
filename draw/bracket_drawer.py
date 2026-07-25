@@ -430,12 +430,22 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             for q in range(num_quarters)
         }
         min_combined = min(combined_in_q.values())
-        # Half-tops balance: keeps tops per half as equal as possible — the PRIMARY
-        # capacity constraint, since demand on the opposite half equals the tops there.
+        # Half balance is on the *net* load (tops - byes), not raw tops — the PRIMARY
+        # capacity constraint.  A group top forces its 2nd/3rd (delta 1/2) into the
+        # OPPOSITE half, so demand on a half equals the tops opposite it; a bye instead
+        # consumes a slot with no opposite demand.  So each bye a half holds requires
+        # that half to carry one extra top to stay feasible (tops and byes co-locate).
+        # Balancing raw tops alone would treat a 3-2 and a 2-3 split as equal even when
+        # a bye makes only one of them placeable.
         half_tops_now = {
             h: sum(tops_in_q_now[h * quarters_per_half + i] for i in range(quarters_per_half))
             for h in range(2)
         }
+        byes_in_half_now = {
+            h: sum(1 for s in locked_slots if slot_state[s] == "BYE" and slot_half(s) == h)
+            for h in range(2)
+        }
+        half_net_now = {h: half_tops_now[h] - byes_in_half_now[h] for h in range(2)}
 
         def _combined_penalty(s):
             q = slot_quarter(s)
@@ -447,10 +457,13 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         def _half_tops_penalty(s):
             h = slot_quarter(s) // quarters_per_half
             opp_h = 1 - h
-            future_h_tops = half_tops_now[h] + 1
-            opp_tops = half_tops_now[opp_h]
-            # Penalise if this half would be more than 1 ahead of the opposite half.
-            excess = max(0, future_h_tops - opp_tops - 1)
+            # Only a top-group-pos participant adds to the top count; a bye recipient
+            # (top or the Phase 1b non-tops that also call this helper) subtracts one.
+            is_top = participant.group_pos == top_group_pos
+            future_h_net = half_net_now[h] + (1 if is_top else 0) - (1 if needs_bye else 0)
+            opp_net = half_net_now[opp_h]
+            # Penalise if this half's net load would be more than 1 ahead of the opposite.
+            excess = max(0, future_h_net - opp_net - 1)
             return excess * 100000
 
         scored = [
