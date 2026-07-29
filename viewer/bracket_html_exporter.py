@@ -181,6 +181,7 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .controls button { background: #3a3a3a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
 .controls button:disabled { opacity: 0.4; cursor: default; }
 .controls input[type=number] { width: 70px; background: #1e1e1e; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 5px; }
+.class-title { font-size: 15px; font-weight: bold; color: #eee; margin-right: 8px; }
 .meta { margin-left: auto; font-size: 13px; color: #aaa; text-align: right; }
 .meta .violations { font-size: 12px; color: #e0a; }
 
@@ -206,6 +207,14 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 }
 .pos { color: #888; flex: none; min-width: 34px; }
 .name { overflow: hidden; text-overflow: ellipsis; }
+/* Metadata columns. Their widths are measured once at load (widest value in the
+   whole history) and written to --col-* , so every row's columns line up no
+   matter how many digits a value has. */
+.fld { display: inline-block; }
+.fld-seeding { width: var(--col-seeding, auto); }
+.fld-group_no { width: var(--col-group_no, auto); }
+.fld-group_pos { width: var(--col-group_pos, auto); }
+.measure-probe { position: absolute; visibility: hidden; top: -9999px; left: -9999px; white-space: nowrap; }
 .slot-box.bye .name { color: #888; font-style: italic; }
 .slot-box.empty { border-style: dashed; }
 .slot-box.top25 { background: #1f5d33; border-color: #4ec36e; }
@@ -222,19 +231,91 @@ _JS = """
 const DATA = JSON.parse(document.getElementById('bracket-data').textContent);
 let currentIndex = DATA.snapshots.length - 1;
 
-function displayString(participant) {
-  if (participant === null || participant === undefined) return '';
-  if (participant === 'BYE') return 'BYE';
-  if (participant === 'ERR') return 'ERR';
-  const parts = [];
-  if (participant.seeding !== null) parts.push('seed:' + participant.seeding);
-  if (participant.group_no !== null) parts.push('G:' + participant.group_no);
-  if (participant.group_pos !== null) parts.push('gp:' + participant.group_pos);
-  const names = participant.names.map(function (n) {
+const FIELD_LABELS = { seeding: 'Seed: ', group_no: 'G: ', group_pos: 'P: ' };
+const COLUMN_GAP_PX = 18;
+
+function fieldText(participant, field) {
+  const value = participant[field];
+  return (value === null || value === undefined) ? '' : FIELD_LABELS[field] + value;
+}
+
+function participantNames(participant) {
+  return participant.names.map(function (n) {
     if ('unknown' in n) return 'Unknown(' + n.unknown + ')';
-    return n.last_name + ' (' + n.start_number + ') [' + n.country + '/' + (n.base ? n.base : '-') + ']';
+    const full = (n.first_name ? n.first_name + ' ' : '') + n.last_name;
+    return '[' + n.country + '/' + (n.base ? n.base : '-') + '] ' + full + ' (' + n.start_number + ')';
   }).join(' / ');
-  return parts.length ? parts.join(' | ') + ' | ' + names : names;
+}
+
+// Fields that occur at least once anywhere in the history get a column; a field
+// that is always null (e.g. no seeding at all) is dropped entirely.
+const ACTIVE_FIELDS = (function () {
+  const seen = {};
+  DATA.snapshots.forEach(function (snap) {
+    Object.keys(snap.matches).forEach(function (matchIdx) {
+      snap.matches[matchIdx].forEach(function (p) {
+        if (!p || typeof p !== 'object') return;
+        Object.keys(FIELD_LABELS).forEach(function (field) {
+          if (p[field] !== null && p[field] !== undefined) seen[field] = true;
+        });
+      });
+    });
+  });
+  return Object.keys(FIELD_LABELS).filter(function (field) { return seen[field]; });
+})();
+
+// Measure the widest value each column ever holds and pin the column to that
+// width (plus a gap), so a two-digit value can never push the columns after it
+// out of line — the tabulated look, but robust for any value length.
+function measureColumnWidths() {
+  const probe = document.createElement('div');
+  probe.className = 'slot-box measure-probe';
+  const inner = document.createElement('span');
+  inner.className = 'name';
+  probe.appendChild(inner);
+  document.body.appendChild(probe);
+
+  const widest = {};
+  DATA.snapshots.forEach(function (snap) {
+    Object.keys(snap.matches).forEach(function (matchIdx) {
+      snap.matches[matchIdx].forEach(function (p) {
+        if (!p || typeof p !== 'object') return;
+        ACTIVE_FIELDS.forEach(function (field) {
+          const text = fieldText(p, field);
+          inner.textContent = text;
+          const width = inner.getBoundingClientRect().width;
+          if (!(field in widest) || width > widest[field]) widest[field] = width;
+        });
+      });
+    });
+  });
+
+  ACTIVE_FIELDS.forEach(function (field) {
+    document.documentElement.style.setProperty(
+      '--col-' + field, Math.ceil(widest[field] || 0) + COLUMN_GAP_PX + 'px');
+  });
+  document.body.removeChild(probe);
+}
+
+// Fill a slot's .name with one span per metadata column plus the player span.
+// Plain strings (BYE/ERR/empty) are written as-is, without columns.
+function renderName(el, participant) {
+  el.textContent = '';
+  if (participant === null || participant === undefined) return;
+  if (typeof participant === 'string') {
+    el.textContent = participant;
+    return;
+  }
+  ACTIVE_FIELDS.forEach(function (field) {
+    const span = document.createElement('span');
+    span.className = 'fld fld-' + field;
+    span.textContent = fieldText(participant, field);
+    el.appendChild(span);
+  });
+  const players = document.createElement('span');
+  players.className = 'players';
+  players.textContent = participantNames(participant);
+  el.appendChild(players);
 }
 
 function slotParticipant(snap, pos) {
@@ -278,7 +359,7 @@ function render(index) {
     const participant = row[side] === undefined ? null : row[side];
     const el = document.getElementById('slot-' + pos);
     if (!el) continue;
-    el.querySelector('.name').textContent = displayString(participant);
+    renderName(el.querySelector('.name'), participant);
     el.classList.toggle('bye', participant === 'BYE');
     el.classList.toggle('empty', participant === null);
     const isTop25 = participant && typeof participant === 'object' && DATA.top25_keys.includes(participant.key);
@@ -350,11 +431,33 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'ArrowRight') document.getElementById('btn-next').click();
 });
 
+measureColumnWidths();
 render(currentIndex);
 """
 
 
-def _render_html_document(title, payload, list_markup):
+_COMPETITION_NAMES = {"S": "Singles", "D": "Doubles", "M": "Mixed"}
+_CLASS_GENDER_NAMES = {"M": "Men", "W": "Women", "X": "Mixed"}
+
+
+def _class_display_name(competition, competition_class, bracket_type):
+    """Human-readable class heading, e.g. ("S", "M1", "main") -> "Singles Men 1 Main".
+
+    Falls back to the raw codes for any competition/class shape not covered by
+    the maps, so an unexpected class code still produces a usable heading.
+    """
+    competition_name = _COMPETITION_NAMES.get(competition, competition)
+    class_name = competition_class
+    if len(competition_class) >= 2 and competition_class[0] in _CLASS_GENDER_NAMES:
+        gender_name = _CLASS_GENDER_NAMES[competition_class[0]]
+        # Mixed classes ("X") inside the Mixed competition would read
+        # "Mixed Mixed 1"; drop the redundant repetition.
+        prefix = "" if gender_name == competition_name else f"{gender_name} "
+        class_name = f"{prefix}{competition_class[1:]}"
+    return f"{competition_name} {class_name} {bracket_type.capitalize()}"
+
+
+def _render_html_document(title, heading, payload, list_markup):
     # Escape "</script" so embedded participant data (names/bases from CSV input)
     # can never prematurely close the <script> tag it's embedded in.
     payload_json = json.dumps(payload, default=str).replace("</script", "<\\/script")
@@ -367,6 +470,7 @@ def _render_html_document(title, payload, list_markup):
 </head>
 <body>
 <div class="controls">
+  <span class="class-title">{html.escape(heading)}</span>
   <button id="btn-prev">&larr; Prev</button>
   <button id="btn-next">Next &rarr;</button>
   <button id="btn-first">Show first snapshot</button>
@@ -417,8 +521,9 @@ def export_bracket_html(competition, competition_class, bracket, output_dir):
         snapshots = selected.get('snapshots', [])
         payload = _build_bracket_payload(bracket_type, matches, snapshots)
         list_markup = _render_bracket_list(payload["number_of_matches"])
-        title = f"{competition} {competition_class} {bracket_type.capitalize()} Bracket"
-        document = _render_html_document(title, payload, list_markup)
+        heading = _class_display_name(competition, competition_class, bracket_type)
+        title = f"{heading} Bracket"
+        document = _render_html_document(title, heading, payload, list_markup)
 
         path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
         with open(path, "w", encoding="utf-8") as f:

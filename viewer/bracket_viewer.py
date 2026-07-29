@@ -167,7 +167,7 @@ def participant_display_fields(p):
     Returns None for an empty slot, the string "BYE" for a bye, the string
     "ERR" if extraction failed, or a dict:
       {"seeding": int|None, "group_no": int|None, "group_pos": int|None,
-       "names": [{"last_name", "start_number", "country", "base"}, ...]}
+       "names": [{"first_name", "last_name", "start_number", "country", "base"}, ...]}
     "names" has one entry for a single player, two for a team. If a player
     can't be resolved via players_by_start_number, its entry is instead
     {"unknown": start_number}.
@@ -189,6 +189,7 @@ def participant_display_fields(p):
                 names.append({"unknown": start_number})
             else:
                 names.append({
+                    "first_name": pl.first_name,
                     "last_name": pl.last_name,
                     "start_number": pl.start_number,
                     "country": pl.country,
