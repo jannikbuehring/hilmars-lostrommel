@@ -142,6 +142,156 @@ def check_no_first_vs_first(matches: Dict[int, List]):
     return violations
 
 
+def _bracket_position_bounds(matches: Dict[int, List]):
+    """Return (top, bottom) group_pos present in *matches*, or None when empty.
+
+    Both bounds are relative to this bracket, like check_no_first_vs_first's
+    bracket_top_position: a main draw normally runs 1..3, a consolation 4..6.
+    """
+    positions = []
+    for participants in matches.values():
+        for p in participants:
+            if p == "BYE" or p is None:
+                continue
+            if getattr(p, "group_pos", None) is not None:
+                positions.append(p.group_pos)
+    if not positions:
+        return None
+    return min(positions), max(positions)
+
+
+def _participant_countries(participant):
+    """Return the country/countries a bracket participant brings to a match.
+
+    A doubles/mixed participant is a team of two and therefore carries two
+    countries.  Duplicated from draw.bracket_drawer's identically named closure,
+    which is nested inside draw_bracket() and so cannot be imported.
+    """
+    countries = []
+    try:
+        countries.append(players_by_start_number[participant.start_number_a].country)
+    except (KeyError, AttributeError):
+        pass
+    try:
+        if getattr(participant, "start_number_b", None) is not None:
+            countries.append(players_by_start_number[participant.start_number_b].country)
+    except (KeyError, AttributeError):
+        pass
+    return countries
+
+
+def _first_round_pair(participants):
+    """Return the two real opponents of a match, or None if it isn't a real pairing.
+
+    slots_to_matches yields short, empty and half-filled ([None, player]) matches
+    while a draw is still in progress, and a bye match holds the string "BYE".
+    """
+    if len(participants) < 2:
+        return None
+    a, b = participants[0], participants[1]
+    if a is None or b is None or a == "BYE" or b == "BYE":
+        return None
+    return a, b
+
+
+def check_top_easy_first_round(matches: Dict[int, List]):
+    """Bracket-top placements earned a BYE or a bottom-tier round-one opponent.
+
+    open_questions.md: "Gruppenerste ... nach Möglichkeit Freilos oder gegen
+    Gruppendritten" and "1. gegen dritter oder freilos ist wichtiger als
+    länderverteilung".  Returns (match_idx, top_player, opponent) per aggrieved
+    top placement.
+
+    Top-vs-top is deliberately NOT reported here: check_no_first_vs_first owns
+    that match, so the two terms partition the space instead of double-charging
+    one pairing.  Note that top-vs-top is unreachable by construction anyway (see
+    ARCHITECTURE.md §5 phase 1), which makes this check the rule that actually
+    constrains a group winner's opponent.
+
+    Only applies with at least three placement tiers (bottom - top >= 2).  In a
+    two-tier bracket — every doubles/mixed draw — "bottom" IS the runner-up, so
+    the rule would collapse into a restatement of check_no_first_vs_first.
+    """
+    bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        return []
+    top, bottom = bounds
+    if bottom - top < 2:
+        return []
+
+    violations = []
+    for match_idx, participants in matches.items():
+        pair = _first_round_pair(participants)
+        if pair is None:
+            continue
+        a, b = pair
+        for player, opponent in ((a, b), (b, a)):
+            if getattr(player, "group_pos", None) != top:
+                continue
+            if getattr(opponent, "group_pos", None) not in (top, bottom):
+                violations.append((match_idx, player, opponent))
+    return violations
+
+
+def check_no_bottom_vs_bottom(matches: Dict[int, List]):
+    """Check that no two bottom-tier placements meet in round one.
+
+    open_questions.md: "3. gegen 3. wäre nicht okay, 2. gegen 3. schon".  The
+    consequence of check_top_easy_first_round — the scarce bottom-tier players
+    are owed to the top placements, and pairing two of them wastes both.  This
+    also subsumes the runner-up preference ("Gruppenzweiten nach Möglichkeit
+    Freilos oder gegen Gruppendritten, sonst gegen Gruppenzweiten"): given
+    {2,2,3,3}, penalising 3-vs-3 is exactly what pushes the 3s onto the 2s, and
+    no other term distinguishes {2v3, 2v3} from {2v2, 3v3}.
+
+    Soft, not hard: with very many byes it is structurally forced ("Bei ganz
+    vielen freilosen dritter gegen dritter").  Same three-tier guard as
+    check_top_easy_first_round, since a two-tier bracket's "bottom" is the
+    runner-up and runner-up-vs-runner-up is the accepted fallback.
+    """
+    bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        return []
+    top, bottom = bounds
+    if bottom - top < 2:
+        return []
+
+    violations = []
+    for match_idx, participants in matches.items():
+        pair = _first_round_pair(participants)
+        if pair is None:
+            continue
+        a, b = pair
+        if getattr(a, "group_pos", None) == bottom and getattr(b, "group_pos", None) == bottom:
+            violations.append((match_idx, a, b))
+    return violations
+
+
+def check_country_conflicts_first_round(matches: Dict[int, List]):
+    """Return matches whose two opponents share a country in round one.
+
+    open_questions.md: "same country matchups nach Möglichkeit vermeiden".
+    Complements check_country_balance_halves/_quarters, which only balance
+    *counts* across halves and quarters and so never object to a same-country
+    pairing.  Unlike the placement rules above this applies to every bracket,
+    with no tier guard.
+
+    For doubles/mixed a participant is a team carrying up to two countries; a
+    same-country *team* is not a conflict, only an overlap with the OPPONENT is.
+    Returns (match_idx, sorted shared countries, a, b).
+    """
+    violations = []
+    for match_idx, participants in matches.items():
+        pair = _first_round_pair(participants)
+        if pair is None:
+            continue
+        a, b = pair
+        shared = {c for c in _participant_countries(a) if c} & {c for c in _participant_countries(b) if c}
+        if shared:
+            violations.append((match_idx, sorted(shared), a, b))
+    return violations
+
+
 def check_country_balance_halves(matches: Dict[int, List], number_of_matches: int):
     """Compute country counts per half and flag imbalances.
 
@@ -289,6 +439,9 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
             "quarter_split": 200,
             "half_split": 150,
             "first_vs_first": 100,
+            "top_easy_opponent": 70,
+            "bottom_vs_bottom": 50,
+            "country_first": 35,
             "country_half": 10,
             "country_quarter": 4,
             "base_first": 20,
@@ -298,6 +451,14 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     score += len(check_quarter_group_separation(matches, number_of_matches)) * weights.get("quarter_split", 200)
     score += len(check_half_group_separation(matches, number_of_matches)) * weights.get("half_split", 150)
     score += len(check_no_first_vs_first(matches)) * weights.get("first_vs_first", 100)
+    # Round-one matchup quality, all three deliberately ranked ABOVE the country
+    # weights below ("1. gegen dritter oder freilos ist wichtiger als
+    # länderverteilung") and below the structural separation weights above.  Keep
+    # 2 * top_easy_opponent under min(half_split, quarter_split) so the soft
+    # degrade path in _fill_residual_soft can never trade away a separation.
+    score += len(check_top_easy_first_round(matches)) * weights.get("top_easy_opponent", 70)
+    score += len(check_no_bottom_vs_bottom(matches)) * weights.get("bottom_vs_bottom", 50)
+    score += len(check_country_conflicts_first_round(matches)) * weights.get("country_first", 35)
     country_violations = check_country_balance_halves(matches, number_of_matches)
     # country_violations entries are (country, c0, c1, violation_amount)
     country_violation_magnitude = sum(v[3] for v in country_violations) if country_violations else 0
