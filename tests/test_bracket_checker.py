@@ -1,9 +1,38 @@
-"""Tests for the per-quarter country distribution check in checks/bracket_checker.py."""
+"""Tests for the violation checks and scoring in checks/bracket_checker.py.
+
+Covers the per-quarter country distribution check plus the three round-one
+matchup-quality rules (top-gets-an-easy-opponent, no bottom-vs-bottom, no
+same-country pairing) and the weight ladder that ranks them.
+"""
+import configparser
+import pathlib
+
 import pytest
 
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
-from checks.bracket_checker import check_country_balance_quarters, score_bracket
+from checks.bracket_checker import (
+    check_country_balance_quarters,
+    check_no_first_vs_first,
+    check_top_easy_first_round,
+    check_no_bottom_vs_bottom,
+    check_country_conflicts_first_round,
+    score_bracket,
+)
+
+# score_bracket's own defaults, spelled out so a partially-specified weights dict
+# never silently reintroduces a term through the .get() fallbacks.
+DEFAULT_WEIGHTS = {
+    'quarter_split': 200,
+    'half_split': 150,
+    'first_vs_first': 100,
+    'top_easy_opponent': 70,
+    'bottom_vs_bottom': 50,
+    'country_first': 35,
+    'country_half': 10,
+    'country_quarter': 4,
+    'base_first': 20,
+}
 
 
 def register_players(specs):
@@ -20,6 +49,11 @@ def singles(start_number):
 
 def doubles(start_number_a, start_number_b):
     return DrawDataRow('D', 'W1', '', '', '', '', True, False, start_number_a, start_number_b)
+
+
+def tiered(start_number, group_no, group_pos):
+    """A singles row that carries a group placement (singles() leaves it blank)."""
+    return DrawDataRow('S', 'M1', '', '', group_no, group_pos, True, False, start_number, '')
 
 
 @pytest.fixture(autouse=True)
@@ -100,8 +134,183 @@ def test_quarter_country_term_contributes_to_score():
     # All 4 GER players in quarter 0 of an 8-match bracket.
     matches = {i: [grouped[i * 2 - 1], grouped[i * 2]] for i in range(1, 9)}
 
-    weights_without = {
-        'quarter_split': 200, 'half_split': 150, 'first_vs_first': 100,
-        'country_half': 10, 'country_quarter': 0, 'base_first': 20,
-    }
+    weights_without = {**DEFAULT_WEIGHTS, 'country_quarter': 0}
     assert score_bracket(matches, len(matches)) > score_bracket(matches, len(matches), weights=weights_without)
+
+
+# ---------------------------------------------------------------------------
+# Round-one matchup quality: top gets a BYE or a bottom-tier opponent,
+# no bottom-vs-bottom, no same-country pairing.
+# ---------------------------------------------------------------------------
+
+def three_tier_matches(pairings):
+    """Build a matches dict from [(pos_a, pos_b), ...], one group per participant.
+
+    Each participant gets its own group_no so the group-separation checks stay out
+    of the way; start numbers are allocated sequentially.
+    """
+    matches = {}
+    start_number = 1
+    for match_idx, (pos_a, pos_b) in enumerate(pairings, start=1):
+        side = []
+        for pos in (pos_a, pos_b):
+            if pos == 'BYE':
+                side.append('BYE')
+            else:
+                side.append(tiered(start_number, start_number, pos))
+                start_number += 1
+        matches[match_idx] = side
+    return matches
+
+
+def test_top_gets_bottom_opponent_is_clean():
+    """1-vs-3 is exactly what the rule asks for."""
+    matches = three_tier_matches([(1, 3), (1, 3), (2, 2), (2, 3)])
+    assert check_top_easy_first_round(matches) == []
+
+
+def test_top_against_middle_violates():
+    """A group winner facing a runner-up is the violation the rule exists for."""
+    matches = three_tier_matches([(1, 2), (1, 3), (2, 3), (3, 2)])
+    violations = check_top_easy_first_round(matches)
+    assert len(violations) == 1
+    match_idx, player, opponent = violations[0]
+    assert match_idx == 1
+    assert (player.group_pos, opponent.group_pos) == (1, 2)
+
+
+def test_top_with_bye_is_clean():
+    """A BYE satisfies the earned-easier-matchup right outright."""
+    matches = three_tier_matches([(1, 'BYE'), ('BYE', 1), (2, 3), (3, 2)])
+    assert check_top_easy_first_round(matches) == []
+
+
+def test_partial_match_is_not_a_violation():
+    """slots_to_matches emits short and half-filled matches mid-draw."""
+    row = tiered(1, 1, 1)
+    matches = {1: [None, row], 2: [tiered(2, 2, 1)], 3: [], 4: [None, None]}
+    assert check_top_easy_first_round(matches) == []
+    assert check_no_bottom_vs_bottom(matches) == []
+    assert check_country_conflicts_first_round(matches) == []
+
+
+def test_top_vs_top_is_left_to_first_vs_first():
+    """The two terms partition the space; rule A never double-charges a 1-vs-1."""
+    matches = three_tier_matches([(1, 1), (2, 3), (2, 3), (3, 2)])
+    assert check_top_easy_first_round(matches) == []
+    assert len(check_no_first_vs_first(matches)) == 1
+
+
+def test_two_tier_bracket_is_exempt():
+    """Doubles/mixed have only 2 tiers, where "bottom" IS the runner-up."""
+    register_players([(i, f'C{i}') for i in range(1, 9)])
+    matches = three_tier_matches([(1, 2), (2, 2), (1, 2), (2, 2)])
+    assert check_top_easy_first_round(matches) == []
+    assert check_no_bottom_vs_bottom(matches) == []
+    # The country rule has no tier guard, so it still applies here.
+    assert check_country_conflicts_first_round(matches) == []
+
+
+def test_bottom_vs_bottom_flagged():
+    """3-vs-3 is not okay, 2-vs-3 is (open_questions.md 29.07)."""
+    matches = three_tier_matches([(3, 3), (2, 3), (1, 3), (2, 2)])
+    violations = check_no_bottom_vs_bottom(matches)
+    assert len(violations) == 1
+    assert violations[0][0] == 1
+
+
+def test_relative_tiers_in_consolation():
+    """Bounds are relative to the bracket: a consolation draw runs 4..6."""
+    matches = three_tier_matches([(4, 6), (4, 5), (6, 6), (5, 6)])
+    top_violations = check_top_easy_first_round(matches)
+    assert [v[0] for v in top_violations] == [2]          # 4-vs-6 clean, 4-vs-5 not
+    assert [v[0] for v in check_no_bottom_vs_bottom(matches)] == [3]
+
+
+def test_same_country_round_one_flagged():
+    """Two players of one country must not meet in round one."""
+    register_players([(1, 'GER'), (2, 'GER'), (3, 'GER'), (4, 'SWE')])
+    matches = {
+        1: [tiered(1, 1, 1), tiered(2, 2, 3)],   # GER vs GER
+        2: [tiered(3, 3, 1), tiered(4, 4, 3)],   # GER vs SWE
+    }
+    violations = check_country_conflicts_first_round(matches)
+    assert len(violations) == 1
+    assert violations[0][0] == 1 and violations[0][1] == ['GER']
+
+
+def test_same_country_doubles_teams():
+    """A team's own two countries are not a conflict; an overlap with the opponent is."""
+    register_players([(1, 'GER'), (2, 'GER'), (3, 'GER'), (4, 'SWE'),
+                      (5, 'SWE'), (6, 'SWE'), (7, 'GER'), (8, 'SWE')])
+    # GER/GER vs GER/SWE -> shares GER.  SWE/SWE vs GER/SWE -> shares SWE.
+    assert len(check_country_conflicts_first_round({1: [doubles(1, 2), doubles(3, 4)]})) == 1
+    assert len(check_country_conflicts_first_round({1: [doubles(5, 6), doubles(7, 8)]})) == 1
+    # All-GER team vs all-SWE team -> no shared country.
+    assert check_country_conflicts_first_round({1: [doubles(1, 2), doubles(5, 6)]}) == []
+
+
+def test_new_terms_contribute_to_score():
+    """Each new term must actually move the score."""
+    register_players([(i, 'GER' if i in (5, 6) else f'C{i}') for i in range(1, 9)])
+    matches = {
+        1: [tiered(1, 1, 1), tiered(2, 2, 2)],   # rule A: winner vs runner-up
+        2: [tiered(3, 3, 3), tiered(4, 4, 3)],   # rule B: 3rd vs 3rd
+        3: [tiered(5, 5, 2), tiered(6, 6, 3)],   # rule C: GER vs GER
+        4: [tiered(7, 7, 1), tiered(8, 8, 3)],   # clean
+    }
+    baseline = score_bracket(matches, len(matches))
+    for term in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first'):
+        without = score_bracket(matches, len(matches), weights={**DEFAULT_WEIGHTS, term: 0})
+        assert baseline > without, f'{term} does not contribute to the score'
+
+
+def test_new_weights_outrank_country_distribution():
+    """"1. gegen dritter oder freilos ist wichtiger als länderverteilung"."""
+    register_players([(i, f'C{i}') for i in range(1, 9)])
+    # One rule-A violation, no country imbalance.
+    rule_a = {
+        1: [tiered(1, 1, 1), tiered(2, 2, 2)],
+        2: [tiered(3, 3, 1), tiered(4, 4, 3)],
+        3: [tiered(5, 5, 1), tiered(6, 6, 3)],
+        4: [tiered(7, 7, 1), tiered(8, 8, 3)],
+    }
+    assert len(check_top_easy_first_round(rule_a)) == 1
+    weights = DEFAULT_WEIGHTS
+    # A single rule-A violation must cost more than a 3-unit country-half imbalance.
+    assert weights['top_easy_opponent'] > 3 * weights['country_half']
+    assert weights['bottom_vs_bottom'] > 2 * weights['country_half']
+    for term in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first'):
+        assert weights[term] > weights['country_half'] > weights['country_quarter']
+
+
+def test_soft_matchup_terms_never_outweigh_a_separation():
+    """Two placement violations must stay cheaper than one half/quarter split.
+
+    _fill_residual_soft optimises score_bracket alone over every free slot, so if
+    this inverted it would manufacture a separation violation to fix a matchup one
+    ("Darf eigentlich nicht verletzt werden, country und base lieber violaten").
+    Checked against both ladders: the defaults here, and the live config.ini.
+    """
+    def assert_ladder(weights, label):
+        structural = min(weights['half_split'], weights['quarter_split'])
+        assert 2 * weights['top_easy_opponent'] < structural, label
+        assert weights['top_easy_opponent'] < structural, label
+
+    assert_ladder(DEFAULT_WEIGHTS, 'defaults')
+
+    parser = configparser.ConfigParser()
+    parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
+    live = dict(DEFAULT_WEIGHTS)
+    for key, config_key in (
+        ('half_split', 'half_split_weight'),
+        ('top_easy_opponent', 'top_easy_opponent_weight'),
+        ('bottom_vs_bottom', 'bottom_vs_bottom_weight'),
+        ('country_first', 'country_first_weight'),
+        ('country_half', 'country_half_weight'),
+        ('country_quarter', 'country_quarter_weight'),
+    ):
+        live[key] = parser.getint('bracket_draw', config_key, fallback=live[key])
+    assert_ladder(live, 'config.ini')
+    for term in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first'):
+        assert live[term] > live['country_half'] > live['country_quarter'], term

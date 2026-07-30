@@ -6,7 +6,12 @@ import pytest
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
-from checks.bracket_checker import check_half_group_separation
+from checks.bracket_checker import (
+    check_half_group_separation,
+    check_quarter_group_separation,
+    check_top_easy_first_round,
+    check_no_bottom_vs_bottom,
+)
 from misc.config import config
 
 
@@ -488,5 +493,140 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
                     f'Phase 1b placed a bye recipient in slot {slot}, outside the leftover '
                     f'hierarchy batch {sorted(batch4_slots)} (rng_seed={rng_seed}).'
                 )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+# ---------------------------------------------------------------------------
+# Round-one matchup quality (open_questions.md 17/19/20 + the 29.07 addendum):
+# a group winner earned a BYE or a lowest-placed opponent.
+#
+# These are end-to-end regressions for the Phase-2 rebalance_bottom_tier_quarters
+# post-pass, NOT for the score alone: the phase-5 Monte Carlo only shuffles within
+# a quarter, so a winner can only be paired with a bottom-tier player that Phase 2
+# already assigned to its quarter.  Before the post-pass the real input produced 22
+# rule-A violations across the singles draws; after it, zero.
+# ---------------------------------------------------------------------------
+
+def build_tiered_rows(number_of_groups, positions, competition_class='M1', first_start_number=201):
+    """Register fresh players and return rows for number_of_groups x positions.
+
+    Unique countries and bases per player so the country/base terms cannot
+    manufacture unrelated violations, and strictly descending seedings.
+    """
+    total = number_of_groups * len(positions)
+    for sn in range(first_start_number, first_start_number + total):
+        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 2000 - sn)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    rows = []
+    start_numbers = list(range(first_start_number, first_start_number + total))
+    seed = 300
+    for group_no in range(1, number_of_groups + 1):
+        for group_pos in positions:
+            sn = start_numbers.pop(0)
+            seeding_by_start_numbers[str(sn)] = seed
+            rows.append(
+                DrawDataRow('S', competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, '')
+            )
+            seed -= 1
+    return rows
+
+
+def test_group_winners_get_bye_or_bottom_opponent():
+    """The live S M1 main layout: 10 groups x pos {1,2,3} = 30 players, bracket 32.
+
+    Phase 2's capacity tie-break used to split the 3rd places 2/3 across the two
+    quarters that needed 3 and 2, stranding one group winner per half with no
+    lowest-placed opponent available in its quarter -- unreachable for phase 5.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            matches, snapshots = draw_bracket(build_tiered_rows(10, (1, 2, 3)))
+
+            violations = check_top_easy_first_round(matches)
+            assert not violations, (
+                f'Group winner without a BYE or lowest-placed opponent '
+                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+            )
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 30-player layout.'
+            assert not check_half_group_separation(matches, len(matches))
+            assert not check_quarter_group_separation(matches, len(matches))
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_small_bracket_group_winners_get_bottom_opponents():
+    """5 groups x pos {1,2,3} = 15 players, bracket 16, 1 bye.
+
+    The tightest 3-tier layout: 4 non-bye winners and only 5 residual slots per
+    half, so every quarter's bottom-tier supply has to be exactly right.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(50):
+            random.seed(rng_seed)
+            matches, _ = draw_bracket(build_tiered_rows(5, (1, 2, 3), competition_class='W1'))
+            violations = check_top_easy_first_round(matches)
+            assert not violations, (
+                f'Group winner without a BYE or lowest-placed opponent '
+                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+            )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_consolation_tiers_are_relative():
+    """A consolation-style draw runs pos {4,5,6}; the rule follows the bracket's own bounds."""
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            matches, _ = draw_bracket(build_tiered_rows(5, (4, 5, 6), competition_class='W2'))
+            violations = check_top_easy_first_round(matches)
+            assert not violations, (
+                f'4th place without a BYE or 6th-place opponent '
+                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+            )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_two_tier_draw_reports_no_new_placement_violations():
+    """Doubles/mixed layouts have only 2 tiers, so both placement rules are exempt.
+
+    Without the tier guard the arithmetically forced runner-up pairings here would
+    score a permanent penalty and defeat the score==0 early exits.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(10):
+            random.seed(rng_seed)
+            matches, _ = draw_bracket(build_tiered_rows(7, (1, 2), competition_class='M3'))
+            assert check_top_easy_first_round(matches) == []
+            assert check_no_bottom_vs_bottom(matches) == []
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_bottom_players_not_paired_when_avoidable():
+    """3rd-vs-3rd must be avoided whenever the geometry allows it.
+
+    Soft rule: with very many byes it is structurally forced ("Bei ganz vielen
+    freilosen dritter gegen dritter"), which is why this uses the 30-player /
+    2-bye layout where every 3rd place can be spent on a group winner.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            matches, _ = draw_bracket(build_tiered_rows(10, (1, 2, 3)))
+            violations = check_no_bottom_vs_bottom(matches)
+            assert not violations, \
+                f'Avoidable lowest-vs-lowest pairing (rng_seed={rng_seed}): {[v[0] for v in violations]}'
     finally:
         seeding_by_start_numbers.clear()

@@ -14,11 +14,40 @@ from checks.bracket_checker import (
     check_half_group_separation,
     check_quarter_group_separation,
     check_no_first_vs_first,
+    check_top_easy_first_round,
+    check_no_bottom_vs_bottom,
+    check_country_conflicts_first_round,
     check_country_balance_halves,
+    check_country_balance_quarters,
     check_base_conflicts_first_round,
 )
 from misc.config import config
 import copy
+
+
+def _max_matching(items, allowed):
+    """Maximum bipartite matching (Kuhn's algorithm): items -> slots.
+
+    *items* is an ordered list of keys, *allowed* maps each key to its set of
+    candidate slots.  Returns {slot: item}; a perfect matching exists for the
+    whole list iff len(result) == len(items).  Candidate slots are visited in
+    sorted order so the result is deterministic under the shared seeded RNG.
+    """
+    match = {}
+
+    def _augment(item, seen):
+        for slot in sorted(allowed[item]):
+            if slot in seen:
+                continue
+            seen.add(slot)
+            if slot not in match or _augment(match[slot], seen):
+                match[slot] = item
+                return True
+        return False
+
+    for item in items:
+        _augment(item, set())
+    return match
 
 def draw_bracket(class_subset: list[DrawDataRow]):
     """
@@ -112,7 +141,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches),
             "half_group_separation": check_half_group_separation(current_matches, number_of_matches),
             "first_vs_first": check_no_first_vs_first(current_matches),
+            "top_easy_opponent": check_top_easy_first_round(current_matches),
+            "bottom_vs_bottom": check_no_bottom_vs_bottom(current_matches),
+            "country_first": check_country_conflicts_first_round(current_matches),
             "country_balance": check_country_balance_halves(current_matches, number_of_matches),
+            "country_balance_quarters": check_country_balance_quarters(current_matches, number_of_matches),
             "base_conflicts": check_base_conflicts_first_round(current_matches),
         }
 
@@ -154,6 +187,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         "quarter_split": 200,
         "half_split": 150,
         "first_vs_first": 100,
+        "top_easy_opponent": 70,
+        "bottom_vs_bottom": 50,
+        "country_first": 35,
         "country_half": 10,
         "country_quarter": 4,
         "base_first": 20,
@@ -161,6 +197,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     for weight_key, config_key in (
         ("half_split", "half_split_weight"),
         ("first_vs_first", "first_vs_first_weight"),
+        ("top_easy_opponent", "top_easy_opponent_weight"),
+        ("bottom_vs_bottom", "bottom_vs_bottom_weight"),
+        ("country_first", "country_first_weight"),
         ("country_half", "country_half_weight"),
         ("country_quarter", "country_quarter_weight"),
         ("base_first", "base_first_weight"),
@@ -441,6 +480,108 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         return required_quarter_map
 
     # ---------------------------------------------------------------------------
+    # rebalance_bottom_tier_quarters
+    # Post-pass over the Phase-2 assignment so every quarter holding a non-bye
+    # group winner also holds a bottom-tier player to pair it with.
+    # ---------------------------------------------------------------------------
+    def rebalance_bottom_tier_quarters(required_quarter, residual_players):
+        """Repair the per-quarter bottom-tier supply that check_top_easy_first_round needs.
+
+        A group winner earned a BYE or a lowest-placed opponent, and that outranks
+        the country distribution (open_questions.md 29.07).  Scoring alone cannot
+        deliver it: the phase-5 Monte Carlo only shuffles WITHIN a quarter, so a
+        non-bye winner can only be paired with a bottom-tier player that Phase 2
+        already assigned to its quarter — and assign_quarter_buckets decides that
+        blind to this rule, breaking the very first capacity tie on quarter index.
+        For the live 10-group/32-slot layout that deterministically splits the
+        3rd places 2/3 across the two quarters that need 3 and 2, stranding one
+        winner in each half.
+
+        Exchanging the quarters of a group's delta=1/delta=2 pair is exactly
+        capacity-neutral (each quarter still receives one of the two), and both
+        stay in the opposite half in different quarters — so the half separation
+        and the 2nd/3rd different-quarter rule are untouched and only the
+        deliberately lower-weighted country spread can shift.  That makes it safe
+        to repair the allocation AFTER capacity has been settled, which a tie-break
+        inside _best_quarter could not do: it would only steer the first delta=1 of
+        each half (capacity forces the rest), and ranking it above capacity would
+        risk the far more expensive quarter_capacity_degrade path.
+
+        Deterministic and consumes no RNG.  Known limitation: only delta=1/delta=2
+        pairs can be swapped, because only those two share a half and so can trade
+        quarters without moving anyone across halves.  A 4-tier bracket's bottom
+        tier is delta=3, which lives in the anchor's OWN half, so there swapping
+        would break the half separation outright — that case bails out below and
+        falls back to scoring alone.
+        """
+        positions = [p.group_pos for p in class_subset if p.group_pos is not None]
+        if not positions:
+            return
+        bottom_pos = max(positions)
+        bottom_delta = bottom_pos - top_group_pos
+        # delta < 2: fewer than three tiers, the rule is exempt (see the checker).
+        # delta > 2: the bottom tier sits in the anchor's own half, so no swap here
+        # is half-preserving; leave it to the score.
+        if bottom_delta != 2:
+            return
+
+        # Non-bye winners whose opponent slot is still free — one bottom-tier
+        # player is owed to each of them, in their own quarter.
+        demand = {q: 0 for q in range(4)}
+        for slot in range(1, bracket_size + 1):
+            participant = slot_state[slot]
+            if participant is None or participant == "BYE":
+                continue
+            if participant.group_pos != top_group_pos:
+                continue
+            if slot_state[opponent_slot(slot)] is None:
+                demand[slot_quarter(slot)] += 1
+
+        players_by_identity = {id(p): p for p in residual_players}
+
+        def unmet_demand():
+            supply = {q: 0 for q in range(4)}
+            for participant_id, quarter in required_quarter.items():
+                participant = players_by_identity.get(participant_id)
+                if participant is not None and participant.group_pos == bottom_pos:
+                    supply[quarter] += 1
+            return sum(max(0, demand[q] - supply[q]) for q in range(4))
+
+        # Swap candidates: a bottom-tier player and a delta 1/2 sibling of the same
+        # group that currently sit in different quarters.
+        members_by_group: dict = {}
+        for p in residual_players:
+            group_no = getattr(p, "group_no", None)
+            if group_no is not None:
+                members_by_group.setdefault(group_no, []).append(p)
+
+        swap_candidates = []
+        for members in members_by_group.values():
+            bottom_members = [p for p in members if p.group_pos == bottom_pos]
+            other_members = [
+                p for p in members
+                if p.group_pos != bottom_pos and p.group_pos - top_group_pos in (1, 2)
+            ]
+            for low in bottom_members:
+                for high in other_members:
+                    if required_quarter.get(id(low)) != required_quarter.get(id(high)):
+                        swap_candidates.append((low, high))
+
+        # Greedy first-improving swaps; bounded by the candidate count.
+        for _ in range(len(swap_candidates)):
+            base_cost = unmet_demand()
+            if base_cost == 0:
+                return
+            for low, high in swap_candidates:
+                low_q, high_q = required_quarter[id(low)], required_quarter[id(high)]
+                required_quarter[id(low)], required_quarter[id(high)] = high_q, low_q
+                if unmet_demand() < base_cost:
+                    break
+                required_quarter[id(low)], required_quarter[id(high)] = low_q, high_q
+            else:
+                return  # no single swap improves any more
+
+    # ---------------------------------------------------------------------------
     # Per-step placement penalty, evaluated against an EXPLICIT trial state so a
     # whole batch of participants can be scored as one joint assignment.
     #
@@ -567,6 +708,32 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
         return chosen
 
+    def matching_seed(participants, pool, allowed_slots):
+        """Feasibility-only assignment, used when greedy_assignment strands a player.
+
+        greedy_assignment picks each slot by cost, so an early low-cost choice can
+        leave a later participant with nothing even though the batch is solvable.
+        Ignoring cost entirely and solving the pure bipartite matching gives a
+        starting point for the hill-climb in exactly those cases.  Returns the slot
+        list aligned with *participants*, or None when no perfect matching exists.
+        """
+        candidates = {}
+        for participant in participants:
+            needs_bye = id(participant) in bye_recipient_ids
+            allowed = allowed_slots[id(participant)] if allowed_slots is not None else None
+            candidates[id(participant)] = {
+                slot for slot in pool
+                if (allowed is None or slot in allowed)
+                and slot_state[slot] is None
+                and not (needs_bye and slot_state[opponent_slot(slot)] is not None)
+            }
+        ids = [id(p) for p in participants]
+        matched = _max_matching(ids, candidates)
+        if len(matched) < len(ids):
+            return None
+        slot_for = {item: slot for slot, item in matched.items()}
+        return [slot_for[i] for i in ids]
+
     # ---------------------------------------------------------------------------
     # Joint placer for a whole batch of participants.
     #
@@ -617,6 +784,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 # Too large to enumerate: start from the player-by-player result
                 # and improve it with random swaps/moves within the budget.
                 seed = greedy_assignment(participants, pool, allowed_slots)
+                if seed is None:
+                    seed = matching_seed(participants, pool, allowed_slots)
                 if seed is not None:
                     best_cost = evaluate_assignment(participants, seed)
                 if best_cost is not None:
@@ -826,7 +995,12 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     remaining_byes = list(non_top_bye_recipients)
     for hierarchy_group in hierarchy_groups:
         while remaining_byes:
-            free_in_group = [s for s in hierarchy_group if slot_state[s] is None]
+            # Every phase-1b participant is a bye recipient and occupies the whole
+            # match, so a slot whose partner is already taken cannot host one.
+            free_in_group = [
+                s for s in hierarchy_group
+                if slot_state[s] is None and slot_state[opponent_slot(s)] is None
+            ]
             if not free_in_group:
                 break
 
@@ -846,19 +1020,38 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 allowed = {s for s in free_in_group if slot_quarter(s) in allowed_qs}
                 if not allowed:
                     continue
+                # Simply taking the top N by seeding can be jointly unassignable even
+                # when every member has a candidate slot on its own (e.g. four players
+                # needing half 0 while only three half-0 slots are free).  Admit a
+                # player only while a perfect matching survives; a rejected one stays
+                # in remaining_byes for the next round of this level, or the next
+                # level.  Matchable subsets form a transversal matroid, so this
+                # seeding-ordered greedy yields the highest-seeded maximum-size chunk.
+                trial_allowed = dict(allowed_slots)
+                trial_allowed[id(participant)] = allowed
+                trial_ids = [id(p) for p in chunk] + [id(participant)]
+                if len(_max_matching(trial_ids, trial_allowed)) < len(trial_ids):
+                    continue
                 chunk.append(participant)
                 chunk_groups.add(group_no)
                 allowed_slots[id(participant)] = allowed
             if not chunk:
                 break
 
-            chosen_slots = place_batch(
-                chunk, [free_in_group], action_name="bye_assign", allowed_slots=allowed_slots
-            )
-            if chosen_slots is None:
-                # Constraints leave no feasible assignment here; the per-participant
-                # tiers below take over for these players.
+            chosen_slots = None
+            while chunk:
+                chosen_slots = place_batch(
+                    chunk, [free_in_group], action_name="bye_assign", allowed_slots=allowed_slots
+                )
+                if chosen_slots is not None:
+                    break
+                # Never abandon a whole hierarchy level over one un-placeable player:
+                # drop the lowest-seeded chunk member and retry, so the strong slots
+                # still go to as many high seeds as will fit.
+                allowed_slots.pop(id(chunk.pop()), None)
+            if not chunk:
                 break
+
             for participant, slot in zip(chunk, chosen_slots):
                 group_no = getattr(participant, "group_no", None)
                 if group_no is not None:
@@ -917,6 +1110,10 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         if p.group_pos != top_group_pos and id(p) not in bye_recipient_ids
     ]
     required_quarter = assign_quarter_buckets(residual_non_top)
+    # Capacity-neutral repair pass so each quarter can actually serve its non-bye
+    # group winners a bottom-tier opponent.  Runs before the capacity check below,
+    # which by construction still sees the same per-quarter counts.
+    rebalance_bottom_tier_quarters(required_quarter, residual_non_top)
 
     def _fill_residual_soft(residual_players):
         """Best-effort fill of all free slots when hard quarter buckets overflow.
