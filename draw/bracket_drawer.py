@@ -2,6 +2,7 @@
 import math
 import random
 import logging
+import itertools
 import configparser
 from typing import List
 from models.draw_data import DrawDataRow
@@ -121,6 +122,19 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
         pass
 
+    # Evaluation budget for the joint per-batch assignment in Phase 1/1b.  A batch
+    # is solved exactly when its assignment count P(pool, batch) fits the budget,
+    # otherwise a hill-climb seeded with the player-by-player result runs for that
+    # many iterations.  Raising it buys optimality on large batches at the cost of
+    # draw runtime.
+    joint_batch_max_evaluations = 5000
+    try:
+        joint_batch_max_evaluations = config.getint(
+            "bracket_draw", "joint_batch_max_evaluations", fallback=joint_batch_max_evaluations
+        )
+    except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+        pass
+
     # max_draw_phase controls how many phases to execute (1-5; default=5=all).
     # Set to 1 in config to stop after the top-group-pos seeded placement only.
     max_draw_phase = 5
@@ -141,12 +155,14 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         "half_split": 150,
         "first_vs_first": 100,
         "country_half": 10,
+        "country_quarter": 4,
         "base_first": 20,
     }
     for weight_key, config_key in (
         ("half_split", "half_split_weight"),
         ("first_vs_first", "first_vs_first_weight"),
         ("country_half", "country_half_weight"),
+        ("country_quarter", "country_quarter_weight"),
         ("base_first", "base_first_weight"),
     ):
         try:
@@ -216,24 +232,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     def required_half_for_participant(participant):
         return required_half_for_participant_with_map(participant, group_top_half)
-
-    def score_candidate_placement(participant, slot, current_state, needs_bye):
-        trial_state = dict(current_state)
-        trial_state[slot] = participant
-        if needs_bye:
-            trial_state[opponent_slot(slot)] = "BYE"
-        trial_matches = slots_to_matches(trial_state)
-        return score_bracket(trial_matches, number_of_matches, weights=bracket_weights), trial_matches
-
-    def usable_slots_in_group(group, current_state, needs_bye):
-        available = []
-        for slot in group:
-            if current_state[slot] is not None:
-                continue
-            if needs_bye and current_state[opponent_slot(slot)] is not None:
-                continue
-            available.append(slot)
-        return available
 
     def raise_with_failure_snapshot(action, failure_details, participants=None):
         current_matches = slots_to_matches(slot_state)
@@ -443,7 +441,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         return required_quarter_map
 
     # ---------------------------------------------------------------------------
-    # Balanced greedy placer for a single bye recipient.
+    # Per-step placement penalty, evaluated against an EXPLICIT trial state so a
+    # whole batch of participants can be scored as one joint assignment.
     #
     # Primary objective: keep (tops + byes) balanced across quarters/halves.
     # This joint balance is what determines whether the remaining non-bye player
@@ -451,28 +450,13 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # free slots for the players whose group top landed in the OPPOSITE half.
     # Concentrating tops+byes in one quarter shrinks its free slots and can make
     # the later assignment impossible.  Bracket score is only a tiebreaker.
-    #
-    # *slot_pool_tiers* is an ordered list of candidate slot lists; the first
-    # tier that yields any usable slot is used (later tiers are fallbacks).
-    # Returns the chosen slot, or None when no tier had a usable slot.
     # ---------------------------------------------------------------------------
-    def place_bye_greedy(participant, slot_pool_tiers, action_name="top_seed_assign"):
-        needs_bye = id(participant) in bye_recipient_ids
-
-        available = []
-        for tier in slot_pool_tiers:
-            usable = usable_slots_in_group(tier, slot_state, needs_bye)
-            if usable:
-                available = usable
-                break
-        if not available:
-            return None
-
-        # Current combined (tops + byes) per quarter and per half.
-        tops_in_q_now = {q: sum(1 for gq in group_top_quarter.values() if gq == q) for q in range(num_quarters)}
+    def placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye):
+        # Combined (tops + byes) per quarter in the trial state.
+        tops_in_q_now = {q: sum(1 for gq in trial_tops.values() if gq == q) for q in range(num_quarters)}
         combined_in_q = {
             q: (tops_in_q_now[q] +
-                sum(1 for s in locked_slots if slot_state[s] == "BYE" and slot_quarter(s) == q))
+                sum(1 for s in trial_locked if trial_state[s] == "BYE" and slot_quarter(s) == q))
             for q in range(num_quarters)
         }
         min_combined = min(combined_in_q.values())
@@ -487,67 +471,214 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # over-count a winner from an uneven group (e.g. a consolation group missing
         # its 3rd, whose weight is 0).
         half_load_now = {0: 0, 1: 0}
-        for _gno, _gq in group_top_quarter.items():
+        for _gno, _gq in trial_tops.items():
             half_load_now[_gq // quarters_per_half] += top_reverse_weight(_gno)
         byes_in_half_now = {
-            h: sum(1 for s in locked_slots if slot_state[s] == "BYE" and slot_half(s) == h)
+            h: sum(1 for s in trial_locked if trial_state[s] == "BYE" and slot_half(s) == h)
             for h in range(2)
         }
         half_net_now = {h: half_load_now[h] - byes_in_half_now[h] for h in range(2)}
 
-        def _combined_penalty(s):
-            q = slot_quarter(s)
-            future = combined_in_q[q] + 1 + (1 if needs_bye else 0)
-            # Allow up to 1 above the current minimum without penalty.
-            excess = max(0, future - min_combined - 1)
-            return excess * 10000
+        q = slot_quarter(slot)
+        future = combined_in_q[q] + 1 + (1 if needs_bye else 0)
+        # Allow up to 1 above the current minimum without penalty.
+        combined_excess = max(0, future - min_combined - 1)
 
-        def _half_tops_penalty(s):
-            h = slot_quarter(s) // quarters_per_half
-            opp_h = 1 - h
-            # A winner adds its reverse-weight; a bye recipient (winner, or the Phase
-            # 1b non-winners that also call this helper) subtracts one for its bye.
-            is_top = participant.group_pos == top_group_pos
-            tw = top_reverse_weight(getattr(participant, "group_no", None)) if is_top else 0
-            future_h_net = half_net_now[h] + tw - (1 if needs_bye else 0)
-            opp_net = half_net_now[opp_h]
-            # Penalise if this half's net load would be more than 1 ahead of the opposite.
-            excess = max(0, future_h_net - opp_net - 1)
-            return excess * 100000
+        h = q // quarters_per_half
+        # A winner adds its reverse-weight; a bye recipient (winner, or the Phase
+        # 1b non-winners that also go through here) subtracts one for its bye.
+        is_top = participant.group_pos == top_group_pos
+        tw = top_reverse_weight(getattr(participant, "group_no", None)) if is_top else 0
+        future_h_net = half_net_now[h] + tw - (1 if needs_bye else 0)
+        # Penalise if this half's net load would be more than 1 ahead of the opposite.
+        half_excess = max(0, future_h_net - half_net_now[1 - h] - 1)
 
-        scored = [
-            (sc + _combined_penalty(s) + _half_tops_penalty(s), s, tm)
-            for s in available
-            for sc, tm in [score_candidate_placement(participant, s, slot_state, needs_bye)]
-        ]
-        scored.sort(key=lambda x: x[0])
-        best_s = scored[0][0]
-        best_cands = [x for x in scored if x[0] == best_s]
-        random.shuffle(best_cands)
-        _, chosen_slot, chosen_matches = best_cands[0]
+        return combined_excess * 10000 + half_excess * 100000
 
-        slot_state[chosen_slot] = participant
-        locked_slots.add(chosen_slot)
+    def _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye):
+        """Commit one placement onto a trial state (mirrors the real commit)."""
+        trial_state[slot] = participant
+        trial_locked.add(slot)
         # Only top-group-pos players anchor their group's quarter/half.
         if participant.group_pos == top_group_pos and getattr(participant, "group_no", None) is not None:
-            _update_group_top(participant.group_no, chosen_slot)
+            trial_tops[participant.group_no] = slot_quarter(slot)
         if needs_bye:
-            bye_slot = opponent_slot(chosen_slot)
-            slot_state[bye_slot] = "BYE"
-            locked_slots.add(bye_slot)
+            bye_slot = opponent_slot(slot)
+            trial_state[bye_slot] = "BYE"
+            trial_locked.add(bye_slot)
 
-        snapshots.append(
-            Snapshot(
-                action_name,
-                [chosen_slot],
-                None,
-                [participant],
-                get_bracket_violations(chosen_matches),
-                score_bracket(chosen_matches, number_of_matches, weights=bracket_weights),
-                initial_groups=copy.deepcopy(chosen_matches),
+    def evaluate_assignment(participants, slots):
+        """Total cost of assigning *participants* (in order) to *slots*.
+
+        Simulates the sequential commit, summing the same per-step penalties the
+        single-slot placer used, then scores the finished batch ONCE.  Because a
+        sequential greedy result is itself one of the assignments in this search
+        space and scores identically here, the joint search can only match or
+        beat the old player-by-player behaviour.
+
+        Returns the cost, or None when the assignment is infeasible (slot taken,
+        or bye-adjacency blocked by an earlier player of the same batch).
+        """
+        trial_state = dict(slot_state)
+        trial_locked = set(locked_slots)
+        trial_tops = dict(group_top_quarter)
+        total = 0
+        for participant, slot in zip(participants, slots):
+            needs_bye = id(participant) in bye_recipient_ids
+            if trial_state[slot] is not None:
+                return None
+            if needs_bye and trial_state[opponent_slot(slot)] is not None:
+                return None
+            total += placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
+            _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
+        total += score_bracket(slots_to_matches(trial_state), number_of_matches, weights=bracket_weights)
+        return total
+
+    def greedy_assignment(participants, pool, allowed_slots):
+        """Player-by-player assignment — the pre-joint behaviour, kept as the
+        starting point for the hill-climb on batches too large to enumerate."""
+        trial_state = dict(slot_state)
+        trial_locked = set(locked_slots)
+        trial_tops = dict(group_top_quarter)
+        chosen = []
+        for participant in participants:
+            needs_bye = id(participant) in bye_recipient_ids
+            allowed = allowed_slots[id(participant)] if allowed_slots is not None else None
+            best = None
+            for slot in pool:
+                if slot in chosen or (allowed is not None and slot not in allowed):
+                    continue
+                if trial_state[slot] is not None:
+                    continue
+                if needs_bye and trial_state[opponent_slot(slot)] is not None:
+                    continue
+                step_state = dict(trial_state)
+                step_locked = set(trial_locked)
+                step_tops = dict(trial_tops)
+                cost = placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
+                _apply_placement(participant, slot, step_state, step_locked, step_tops, needs_bye)
+                cost += score_bracket(slots_to_matches(step_state), number_of_matches, weights=bracket_weights)
+                if best is None or cost < best[0]:
+                    best = (cost, slot)
+            if best is None:
+                return None
+            slot = best[1]
+            chosen.append(slot)
+            _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
+        return chosen
+
+    # ---------------------------------------------------------------------------
+    # Joint placer for a whole batch of participants.
+    #
+    # Every participant of a seeding batch is assigned in ONE optimisation rather
+    # than one at a time, so an early player's locally-best slot can no longer
+    # force a worse assignment on the rest of its batch.
+    #
+    # *slot_pool_tiers* is an ordered list of candidate slot lists; the first tier
+    # that admits a feasible assignment for the whole batch is used (later tiers
+    # are fallbacks).  *allowed_slots* optionally restricts individual
+    # participants (used by Phase 1b, where each player is bound to the quarters
+    # its group's anchor allows).
+    #
+    # Returns the list of chosen slots (aligned with *participants*), or None
+    # when no tier admitted a feasible assignment.
+    # ---------------------------------------------------------------------------
+    def place_batch(participants, slot_pool_tiers, action_name="top_seed_assign", allowed_slots=None):
+        if not participants:
+            return []
+        k = len(participants)
+
+        best_slots = None
+        for tier in slot_pool_tiers:
+            pool = []
+            for slot in tier:
+                if slot not in pool and slot_state[slot] is None:
+                    pool.append(slot)
+            if len(pool) < k:
+                continue
+
+            best_cost = None
+            candidates = []
+            if math.perm(len(pool), k) <= joint_batch_max_evaluations:
+                # Small enough to solve exactly.
+                for slots in itertools.permutations(pool, k):
+                    if allowed_slots is not None and any(
+                        s not in allowed_slots[id(p)] for p, s in zip(participants, slots)
+                    ):
+                        continue
+                    cost = evaluate_assignment(participants, list(slots))
+                    if cost is None:
+                        continue
+                    if best_cost is None or cost < best_cost:
+                        best_cost, candidates = cost, [list(slots)]
+                    elif cost == best_cost:
+                        candidates.append(list(slots))
+            else:
+                # Too large to enumerate: start from the player-by-player result
+                # and improve it with random swaps/moves within the budget.
+                seed = greedy_assignment(participants, pool, allowed_slots)
+                if seed is not None:
+                    best_cost = evaluate_assignment(participants, seed)
+                if best_cost is not None:
+                    current = seed
+                    for _ in range(joint_batch_max_evaluations):
+                        trial = list(current)
+                        spare = [s for s in pool if s not in trial]
+                        if k >= 2 and (not spare or random.random() < 0.5):
+                            i, j = random.sample(range(k), 2)
+                            trial[i], trial[j] = trial[j], trial[i]
+                        elif spare:
+                            trial[random.randrange(k)] = random.choice(spare)
+                        else:
+                            continue
+                        if allowed_slots is not None and any(
+                            s not in allowed_slots[id(p)] for p, s in zip(participants, trial)
+                        ):
+                            continue
+                        cost = evaluate_assignment(participants, trial)
+                        if cost is not None and cost < best_cost:
+                            best_cost, current = cost, trial
+                    candidates = [current]
+
+            if candidates:
+                random.shuffle(candidates)
+                best_slots = candidates[0]
+                break
+
+        if best_slots is None:
+            return None
+
+        # Replay the winning assignment on the real state, snapshotting per
+        # participant so the interactive viewer keeps its step granularity.
+        for participant, slot in zip(participants, best_slots):
+            needs_bye = id(participant) in bye_recipient_ids
+            slot_state[slot] = participant
+            locked_slots.add(slot)
+            if participant.group_pos == top_group_pos and getattr(participant, "group_no", None) is not None:
+                _update_group_top(participant.group_no, slot)
+            if needs_bye:
+                bye_slot = opponent_slot(slot)
+                slot_state[bye_slot] = "BYE"
+                locked_slots.add(bye_slot)
+
+            step_matches = slots_to_matches(slot_state)
+            snapshots.append(
+                Snapshot(
+                    action_name,
+                    [slot],
+                    None,
+                    [participant],
+                    get_bracket_violations(step_matches),
+                    score_bracket(step_matches, number_of_matches, weights=bracket_weights),
+                    initial_groups=copy.deepcopy(step_matches),
+                )
             )
-        )
-        return chosen_slot
+        return best_slots
+
+    def place_bye_greedy(participant, slot_pool_tiers, action_name="top_seed_assign"):
+        """Single-participant convenience wrapper around place_batch."""
+        chosen = place_batch([participant], slot_pool_tiers, action_name)
+        return chosen[0] if chosen else None
 
     # ---------------------------------------------------------------------------
     # Phase 1: Place top-group-pos participants in strict seeding batches.
@@ -610,25 +741,24 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 )
             )
         else:
-            # Greedy balanced placement within this batch's hierarchy group,
-            # falling back to any remaining free slot.
+            # Joint balanced placement of the WHOLE batch within its hierarchy
+            # group, falling back to any remaining free slot.
             any_slot_tier = list(range(1, bracket_size + 1))
-            for participant in batch_players:
-                if place_bye_greedy(participant, [hierarchy_group, any_slot_tier]) is None:
-                    raise_with_failure_snapshot(
-                        "seed_slot_failure",
-                        {
-                            "message": (
-                                f"No slot available for top-seeded participant "
-                                f"{participant.start_number_a} in batch {batch_idx}."
-                            ),
-                            "type": "seed_slot_failure",
-                            "phase": "greedy_batch",
-                            "batch_idx": batch_idx,
-                            "locked_slots": sorted(locked_slots),
-                        },
-                        [participant],
-                    )
+            if place_batch(batch_players, [hierarchy_group, any_slot_tier]) is None:
+                raise_with_failure_snapshot(
+                    "seed_slot_failure",
+                    {
+                        "message": (
+                            f"No slot assignment available for top-seeded batch {batch_idx} "
+                            f"(participants {[p.start_number_a for p in batch_players]})."
+                        ),
+                        "type": "seed_slot_failure",
+                        "phase": "joint_batch",
+                        "batch_idx": batch_idx,
+                        "locked_slots": sorted(locked_slots),
+                    },
+                    batch_players,
+                )
 
         batch_start = batch_end
 
@@ -685,7 +815,57 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         return list(range(num_quarters))
 
     any_slot_tier = list(range(1, bracket_size + 1))
-    for participant in non_top_bye_recipients:
+
+    # Continue the seeded-slot hierarchy where Phase 1 stopped.  Phase 1 breaks out
+    # of its batch loop as soon as the group winners run out, leaving the rest of
+    # the partially-filled batch — and every later batch — untouched; any hierarchy
+    # slot still free is therefore the strongest slot left, and the next-highest
+    # bye recipients should fill it before dropping to a weaker one.  Each batch is
+    # assigned jointly, exactly like Phase 1, with every participant masked to the
+    # quarters its group's anchor allows, so the separation rules still bind.
+    remaining_byes = list(non_top_bye_recipients)
+    for hierarchy_group in hierarchy_groups:
+        while remaining_byes:
+            free_in_group = [s for s in hierarchy_group if slot_state[s] is None]
+            if not free_in_group:
+                break
+
+            # A group's 2nd constrains its 3rd via group_opposite_quarter_used, which
+            # only holds while they are assigned in separate batches — so never take
+            # two participants of the same group into one chunk.
+            chunk = []
+            chunk_groups = set()
+            allowed_slots = {}
+            for participant in remaining_byes:
+                if len(chunk) >= len(free_in_group):
+                    break
+                group_no = getattr(participant, "group_no", None)
+                if group_no is not None and group_no in chunk_groups:
+                    continue
+                allowed_qs = _required_quarters_for(participant)
+                allowed = {s for s in free_in_group if slot_quarter(s) in allowed_qs}
+                if not allowed:
+                    continue
+                chunk.append(participant)
+                chunk_groups.add(group_no)
+                allowed_slots[id(participant)] = allowed
+            if not chunk:
+                break
+
+            chosen_slots = place_batch(
+                chunk, [free_in_group], action_name="bye_assign", allowed_slots=allowed_slots
+            )
+            if chosen_slots is None:
+                # Constraints leave no feasible assignment here; the per-participant
+                # tiers below take over for these players.
+                break
+            for participant, slot in zip(chunk, chosen_slots):
+                group_no = getattr(participant, "group_no", None)
+                if group_no is not None:
+                    group_opposite_quarter_used.setdefault(group_no, slot_quarter(slot))
+                remaining_byes.remove(participant)
+
+    for participant in remaining_byes:
         allowed_qs = _required_quarters_for(participant)
         quarter_tier = [s for s in any_slot_tier if slot_quarter(s) in allowed_qs]
         required_half = required_half_for_participant(participant)
