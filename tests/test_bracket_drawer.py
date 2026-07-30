@@ -7,6 +7,7 @@ from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
 from checks.bracket_checker import check_half_group_separation
+from misc.config import config
 
 
 def participant_slots(match_map):
@@ -313,3 +314,179 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     # The graceful-degradation path was taken and a final bracket produced.
     assert any(s.action == 'quarter_capacity_degrade' for s in snapshots)
     assert snapshots[-1].action == 'final'
+
+
+def _quarter_of(match_idx, number_of_matches):
+    return min(3, (match_idx - 1) // max(1, number_of_matches // 4))
+
+
+def _winner_quarters_by_country(matches, country):
+    """Quarters holding a group winner (top group_pos) of *country*."""
+    quarters = []
+    for match_idx, participants in matches.items():
+        for p in participants:
+            if p in (None, 'BYE') or p.group_pos != 1:
+                continue
+            if players_by_start_number[p.start_number_a].country == country:
+                quarters.append(_quarter_of(match_idx, len(matches)))
+    return quarters
+
+
+def test_group_winner_countries_spread_across_quarters():
+    """open_questions.md: 4 GER group winners must land one per quarter.
+
+    Phase 1 assigns each seeding batch jointly and scores it with score_bracket,
+    which includes the quarter-level country term — so among slot assignments
+    that tie on the structural (tops+byes) balance penalties, the winners spread
+    across the quarters by country.  Halves stay the stronger signal
+    (country_half outweighs country_quarter).
+    """
+    seeding_by_start_numbers.clear()
+    # 8 groups x pos {1,2} = 16 players in a 16-slot bracket.
+    # Winners alternate GER/SWE; the rest get unique countries so they add no noise.
+    winner_countries = ['GER', 'SWE', 'GER', 'SWE', 'GER', 'SWE', 'GER', 'SWE']
+    for group_no in range(1, 9):
+        Player(group_no, f'W{group_no}', f'Win{group_no}', winner_countries[group_no - 1], f'B{group_no}', 'F', 1500)
+    for sn in range(9, 17):
+        Player(sn, f'R{sn}', f'Rest{sn}', f'C{sn}', f'B{sn}', 'F', 1000)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    def build_rows():
+        rows = []
+        seed = 300
+        for group_pos in (1, 2):
+            for group_no in range(1, 9):
+                sn = group_no if group_pos == 1 else group_no + 8
+                seeding_by_start_numbers[str(sn)] = seed
+                rows.append(DrawDataRow('S', 'M1', seed, 8, group_no, group_pos, True, False, sn, ''))
+                seed -= 1
+        return rows
+
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            matches, _ = draw_bracket(build_rows())
+
+            for country in ('GER', 'SWE'):
+                quarters = sorted(_winner_quarters_by_country(matches, country))
+                assert quarters == [0, 1, 2, 3], (
+                    f'{country} group winners should sit one per quarter, got {quarters} (rng_seed={rng_seed}).'
+                )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_batch_is_assigned_jointly_not_player_by_player():
+    """Each seeding batch is optimised as a whole, beating player-by-player placement.
+
+    12 group winners + 3 runners-up fill a 16-slot bracket, so batch 4 places its
+    last four winners into eight candidate slots — 1680 assignments, small enough
+    to solve exactly.  Placing those four one at a time lets an early player take a
+    slot that forces a worse assignment on the rest; the joint search finds the
+    better whole-batch assignment every time.
+
+    joint_batch_max_evaluations = 0 reproduces the old player-by-player behaviour
+    (the enumeration budget is never met, and the hill-climb runs zero iterations
+    on top of its greedy seed), which makes the two strategies directly comparable.
+    """
+    winner_countries = {sn: ('GER' if sn % 2 else 'SWE') for sn in range(1, 13)}
+
+    def phase1_score(budget, rng_seed):
+        players_list.clear()
+        players_by_start_number.clear()
+        seeding_by_start_numbers.clear()
+        for sn in range(1, 13):
+            Player(sn, f'W{sn}', f'Win{sn}', winner_countries[sn], f'B{sn}', 'F', 1500 - sn)
+        for sn in range(13, 16):
+            Player(sn, f'R{sn}', f'Rest{sn}', 'NOR', f'B{sn}', 'F', 1000)
+        for p in players_list:
+            players_by_start_number[p.start_number] = p
+
+        rows = []
+        seed = 300
+        for group_no in range(1, 13):
+            seeding_by_start_numbers[str(group_no)] = seed
+            rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 1, True, False, group_no, ''))
+            seed -= 1
+        for offset, group_no in enumerate((1, 2, 3)):
+            sn = 13 + offset
+            seeding_by_start_numbers[str(sn)] = seed
+            rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 2, True, False, sn, ''))
+            seed -= 1
+
+        config.read_dict({'bracket_draw': {
+            'joint_batch_max_evaluations': str(budget),
+            'max_draw_phase': '1',
+        }})
+        random.seed(rng_seed)
+        _matches, snapshots = draw_bracket(rows)
+        return next(s.violation_score for s in snapshots if s.action == 'top_seed_complete')
+
+    try:
+        for rng_seed in range(10):
+            player_by_player = phase1_score(0, rng_seed)
+            joint = phase1_score(5000, rng_seed)
+            assert joint < player_by_player, (
+                f'Joint batch assignment scored {joint}, no better than the player-by-player '
+                f'{player_by_player} (rng_seed={rng_seed}).'
+            )
+    finally:
+        config.remove_section('bracket_draw')
+        seeding_by_start_numbers.clear()
+
+
+def test_phase_1b_continues_the_seeded_slot_hierarchy():
+    """Phase 1b picks up the seeded-slot hierarchy where Phase 1 stopped.
+
+    10 group winners in a 32-slot bracket fill hierarchy batches 0-3 (slots 1, 32,
+    16, 17, 8, 9, 24, 25) and two of batch 4's eight slots {4,5,12,13,20,21,28,29}.
+    With 12 byes against 10 winners, two runners-up also receive byes and must take
+    leftover batch-4 slots rather than arbitrary free ones.
+
+    Every phase-1b player is a bye recipient and therefore occupies a whole match,
+    so this pins the canonical *seeded side* of the match rather than the match
+    itself (the balance penalties already drive the match choice).  What the
+    continuation really buys is the batch structure that lets phase 1b assign its
+    recipients jointly, the same way phase 1 does.
+    """
+    seeding_by_start_numbers.clear()
+    for sn in range(1, 21):
+        Player(sn, f'P{sn}', f'L{sn}', f'C{sn}', f'B{sn}', 'F', 1500 - sn)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    # 10 groups x pos {1,2} = 20 players -> 32-slot bracket, 12 byes vs 10 winners.
+    def build_rows():
+        rows = []
+        seed = 300
+        for group_pos in (1, 2):
+            for group_no in range(1, 11):
+                sn = group_no if group_pos == 1 else group_no + 10
+                seeding_by_start_numbers[str(sn)] = seed
+                rows.append(DrawDataRow('S', 'M1', seed, 10, group_no, group_pos, True, False, sn, ''))
+                seed -= 1
+        return rows
+
+    batch4_slots = {4, 5, 12, 13, 20, 21, 28, 29}
+
+    try:
+        for rng_seed in range(10):
+            random.seed(rng_seed)
+            _matches, snapshots = draw_bracket(build_rows())
+
+            bye_assign_slots = [
+                slot
+                for snapshot in snapshots
+                if snapshot.action == 'bye_assign'
+                for slot in (snapshot.groups or [])
+            ]
+            assert bye_assign_slots, 'Phase 1b did not run — the fixture no longer exercises it.'
+
+            for slot in bye_assign_slots:
+                assert slot in batch4_slots, (
+                    f'Phase 1b placed a bye recipient in slot {slot}, outside the leftover '
+                    f'hierarchy batch {sorted(batch4_slots)} (rng_seed={rng_seed}).'
+                )
+    finally:
+        seeding_by_start_numbers.clear()

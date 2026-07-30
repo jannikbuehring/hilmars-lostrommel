@@ -196,6 +196,73 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
     return violations
 
 
+def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: int):
+    """Compute country counts per quarter and flag concentrations.
+
+    Returns list of violations as tuples:
+      (country, counts_per_quarter, violation_amount)
+
+    Complements :func:`check_country_balance_halves` at the finer quarter
+    granularity: a country's players should ideally spread one per quarter
+    (4 GER players -> one in each quarter).  The per-quarter allowance is
+    ceil(total / num_quarters), plus 1 for doubles/mixed, and the violation is
+    the excess above that allowance summed over the quarters.  As in the halves
+    check, excess explained by full-country teams (which occupy a single slot
+    with two same-country players) is forgiven.
+
+    Weighted *below* the half-level balance in score_bracket, so spreading
+    across the halves stays the more important objective.
+    """
+    # Derive the quarter count from the bracket itself rather than assuming 4:
+    # small brackets only ever yield quarters 0/1 (see _match_quarter).
+    num_quarters = len({_match_quarter(i, number_of_matches) for i in range(1, number_of_matches + 1)})
+    if num_quarters < 2:
+        return []
+
+    counts = defaultdict(lambda: [0] * num_quarters)
+    # track full-country teams per country per quarter (counts of teams)
+    full_team_counts = defaultdict(lambda: [0] * num_quarters)
+    is_doubles = False
+    for match_idx, participants in matches.items():
+        quarter = _match_quarter(match_idx, number_of_matches)
+        if quarter >= num_quarters:
+            continue
+        for p in participants:
+            if p == "BYE" or p is None:
+                continue
+            try:
+                a = players_by_start_number[p.start_number_a]
+            except Exception:
+                continue
+            counts[a.country][quarter] += 1
+            if getattr(p, "start_number_b", None) is not None:
+                b = players_by_start_number[p.start_number_b]
+                counts[b.country][quarter] += 1
+                is_doubles = True
+                try:
+                    if a.country == b.country:
+                        full_team_counts[a.country][quarter] += 1
+                except Exception:
+                    pass
+
+    violations = []
+    for country, quarter_counts in counts.items():
+        total = sum(quarter_counts)
+        # Ideal share rounded up; doubles get one extra slot of slack per quarter.
+        allowed = -(-total // num_quarters) + (1 if is_doubles else 0)
+        teams = full_team_counts.get(country, [0] * num_quarters)
+        violation_amount = 0
+        for quarter, count in enumerate(quarter_counts):
+            excess = count - allowed
+            if excess <= 0:
+                continue
+            # players in this quarter that are explained by full-country teams
+            violation_amount += max(0, excess - teams[quarter] * 2)
+        if violation_amount > 0:
+            violations.append((country, list(quarter_counts), violation_amount))
+    return violations
+
+
 def check_base_conflicts_first_round(matches: Dict[int, List]):
     """Return list of matches where both participants share the same base in first round."""
     violations = []
@@ -223,6 +290,7 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
             "half_split": 150,
             "first_vs_first": 100,
             "country_half": 10,
+            "country_quarter": 4,
             "base_first": 20,
         }
 
@@ -234,5 +302,10 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     # country_violations entries are (country, c0, c1, violation_amount)
     country_violation_magnitude = sum(v[3] for v in country_violations) if country_violations else 0
     score += country_violation_magnitude * weights.get("country_half", 10)
+    # Quarter-level country spread, deliberately weighted below country_half so
+    # balancing the halves stays the more important objective.
+    quarter_country_violations = check_country_balance_quarters(matches, number_of_matches)
+    quarter_country_magnitude = sum(v[-1] for v in quarter_country_violations)
+    score += quarter_country_magnitude * weights.get("country_quarter", 4)
     score += len(check_base_conflicts_first_round(matches)) * weights.get("base_first", 20)
     return score
