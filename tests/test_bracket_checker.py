@@ -12,6 +12,7 @@ import pytest
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from checks.bracket_checker import (
+    check_bye_balance_halves,
     check_country_balance_quarters,
     check_no_first_vs_first,
     check_top_easy_first_round,
@@ -136,6 +137,54 @@ def test_quarter_country_term_contributes_to_score():
 
     weights_without = {**DEFAULT_WEIGHTS, 'country_quarter': 0}
     assert score_bracket(matches, len(matches)) > score_bracket(matches, len(matches), weights=weights_without)
+
+
+# ---------------------------------------------------------------------------
+# Bye distribution across the halves.
+# ---------------------------------------------------------------------------
+
+def bye_bracket(bye_matches, number_of_matches=8):
+    """An 8-match bracket whose matches in *bye_matches* hold a BYE."""
+    register_players([(i, f'C{i}') for i in range(1, number_of_matches * 2 + 1)])
+    matches = {}
+    for match_idx in range(1, number_of_matches + 1):
+        if match_idx in bye_matches:
+            matches[match_idx] = [singles(match_idx * 2 - 1), 'BYE']
+        else:
+            matches[match_idx] = [singles(match_idx * 2 - 1), singles(match_idx * 2)]
+    return matches
+
+
+def test_evenly_split_byes_are_clean():
+    """3 byes per half of an 8-match bracket -> no violation."""
+    assert not check_bye_balance_halves(bye_bracket({1, 2, 3, 5, 6, 7}), 8)
+
+
+def test_odd_bye_count_may_differ_by_one():
+    """5 byes can only ever split 3/2, so that must not be flagged."""
+    assert not check_bye_balance_halves(bye_bracket({1, 2, 3, 5, 6}), 8)
+
+
+def test_uneven_byes_across_halves_violate():
+    """The S M1 consolation failure mode: 6 byes split 4/2."""
+    violations = check_bye_balance_halves(bye_bracket({1, 2, 3, 4, 5, 6}), 8)
+    assert violations, 'A 4/2 bye split should be flagged.'
+    count_half0, count_half1, magnitude = violations[0]
+    assert (count_half0, count_half1) == (4, 2)
+    # allowed difference is 1, so the excess is 1
+    assert magnitude == 1
+
+
+def test_bye_balance_is_not_part_of_the_score():
+    """Byes never move after Phase 1b, so scoring the term would only stop the
+    phase-5 `score == 0` early exits from ever firing."""
+    grouped = {sn: DrawDataRow('S', 'M1', '', '', sn, 1, True, False, sn, '') for sn in range(1, 17)}
+    register_players([(i, f'C{i}') for i in range(1, 17)])
+    balanced = {i: [grouped[i * 2 - 1], 'BYE' if i in (1, 2, 3, 5, 6, 7) else grouped[i * 2]] for i in range(1, 9)}
+    lopsided = {i: [grouped[i * 2 - 1], 'BYE' if i in (1, 2, 3, 4, 5, 6) else grouped[i * 2]] for i in range(1, 9)}
+
+    assert check_bye_balance_halves(lopsided, 8) and not check_bye_balance_halves(balanced, 8)
+    assert score_bracket(lopsided, 8) == score_bracket(balanced, 8)
 
 
 # ---------------------------------------------------------------------------

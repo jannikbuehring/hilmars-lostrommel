@@ -346,6 +346,32 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
     return violations
 
 
+def check_bye_balance_halves(matches: Dict[int, List], number_of_matches: int):
+    """Flag byes unevenly spread across the two halves.
+
+    Returns a list with at most one violation tuple:
+      (count_half0, count_half1, violation_amount)
+
+    "Freilose ... gleichmaessig auf die Haelften verteilen" (open_questions.md).  A
+    difference of 1 is allowed, since an odd number of byes cannot split evenly;
+    the violation amount is the excess above that, mirroring the magnitude
+    convention of the country balance checks.
+
+    Deliberately NOT part of :func:`score_bracket` — see the note there.  The
+    drawer enforces the rule while it places the byes (Phase 1/1b
+    ``placement_penalty``); this checker exists so the viewers can report it.
+    """
+    counts = [0, 0]
+    for match_idx, participants in matches.items():
+        if any(p == "BYE" for p in participants):
+            counts[_match_half(match_idx, number_of_matches)] += 1
+
+    violation_amount = abs(counts[0] - counts[1]) - 1
+    if violation_amount <= 0:
+        return []
+    return [(counts[0], counts[1], violation_amount)]
+
+
 def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: int):
     """Compute country counts per quarter and flag concentrations.
 
@@ -469,4 +495,10 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     quarter_country_magnitude = sum(v[-1] for v in quarter_country_violations)
     score += quarter_country_magnitude * weights.get("country_quarter", 4)
     score += len(check_base_conflicts_first_round(matches)) * weights.get("base_first", 20)
+    # check_bye_balance_halves is deliberately absent: the byes are locked into
+    # place by Phase 1/1b and never move again, so from Phase 2 on the term would
+    # be a constant no phase can improve -- and a bracket whose bye count cannot
+    # split evenly would then never reach score 0, defeating the early exits in
+    # all four phase-5 quarter loops.  The rule is enforced where it can be, by
+    # bracket_drawer's placement_penalty, and reported via get_bracket_violations.
     return score
