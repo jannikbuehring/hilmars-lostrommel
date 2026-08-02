@@ -3,7 +3,9 @@ Initializer module for setting up configuration, reading data,
 performing draws, and exporting results.
 """
 import logging
+import time
 import traceback
+from datetime import datetime
 
 from yaspin import yaspin
 
@@ -14,6 +16,7 @@ from draw.group_drawer import draw_groups_monte_carlo
 from draw.bracket_drawer import draw_bracket
 
 from misc.config import config
+from misc.version import __version__
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
@@ -30,11 +33,19 @@ mixed_brackets = {}
 
 def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export."""
+    pipeline_start = time.perf_counter()
     bracket_failures = []
 
     def draw_bracket_with_snapshot_fallback(class_subset, competition, competition_class, bracket_kind):
+        """Draw one bracket, returning (matches, snapshots, elapsed_seconds).
+
+        The elapsed time is reported on the failure path too, so a bracket that
+        exhausted its attempts still shows how long that search took.
+        """
+        start = time.perf_counter()
         try:
-            return draw_bracket(class_subset=class_subset)
+            matches, snapshots = draw_bracket(class_subset=class_subset)
+            return matches, snapshots, time.perf_counter() - start
         except Exception as exc:
             snapshots = getattr(exc, "snapshots", [])
             failure_snapshot = getattr(exc, "failure_snapshot", snapshots[-1] if snapshots else None)
@@ -56,7 +67,7 @@ def initialize_data():
             )
             # Keep matches empty so failed brackets are not exported as real draws.
             # Snapshots are preserved for interactive debugging.
-            return {}, snapshots
+            return {}, snapshots, time.perf_counter() - start
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
@@ -278,21 +289,21 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=main_round_participants,
                         competition='S',
                         competition_class=competition_class,
                         bracket_kind='main',
                     )
-                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=consolation_round_participants,
                         competition='S',
                         competition_class=competition_class,
                         bracket_kind='consolation',
                     )
                     singles_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
                     }
 
                 competition_classes_list = list(singles_competition_classes)
@@ -326,21 +337,21 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
                     
-                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=main_round_participants,
                         competition='D',
                         competition_class=competition_class,
                         bracket_kind='main',
                     )
-                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=consolation_round_participants,
                         competition='D',
                         competition_class=competition_class,
                         bracket_kind='consolation',
                     )
                     doubles_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
                     }
 
                 competition_classes_list = list(doubles_competition_classes)
@@ -374,21 +385,21 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots = draw_bracket_with_snapshot_fallback(
+                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=main_round_participants,
                         competition='M',
                         competition_class=competition_class,
                         bracket_kind='main',
                     )
-                    consolation_bracket, consolation_snapshots = draw_bracket_with_snapshot_fallback(
+                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
                         class_subset=consolation_round_participants,
                         competition='M',
                         competition_class=competition_class,
                         bracket_kind='consolation',
                     )
                     mixed_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots}
+                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
+                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
                     }
 
                 competition_classes_list = list(mixed_competition_classes)
@@ -447,9 +458,18 @@ def initialize_data():
         try:
             from viewer.bracket_html_exporter import export_bracket_html
             output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+            # Read the total once, before the export loop, so every exported file
+            # reports the same run duration and none of them include the cost of
+            # writing the HTML itself.
+            run_meta = {
+                'version': __version__,
+                'total_seconds': time.perf_counter() - pipeline_start,
+                'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'random_seed': config["settings"].get("random_seed") or None,
+            }
             for competition, brackets in bracket_payload.items():
                 for competition_class, bracket in brackets.items():
-                    export_bracket_html(competition, competition_class, bracket, output_dir)
+                    export_bracket_html(competition, competition_class, bracket, output_dir, run_meta=run_meta)
 
             spinner.text = "Successfully exported brackets to HTML"
             spinner.ok()
