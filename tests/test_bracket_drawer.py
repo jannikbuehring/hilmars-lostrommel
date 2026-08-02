@@ -7,6 +7,7 @@ from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
 from checks.bracket_checker import (
+    check_bye_balance_halves,
     check_half_group_separation,
     check_quarter_group_separation,
     check_top_easy_first_round,
@@ -508,13 +509,21 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
 # rule-A violations across the singles draws; after it, zero.
 # ---------------------------------------------------------------------------
 
-def build_tiered_rows(number_of_groups, positions, competition_class='M1', first_start_number=201):
+def build_tiered_rows(number_of_groups, positions, competition_class='M1', first_start_number=201,
+                      short_groups=()):
     """Register fresh players and return rows for number_of_groups x positions.
 
     Unique countries and bases per player so the country/base terms cannot
     manufacture unrelated violations, and strictly descending seedings.
+
+    *short_groups* lists group numbers that omit the LAST position, i.e. an uneven
+    class where not every group sent a qualifier for that tier.
     """
-    total = number_of_groups * len(positions)
+    group_positions = {
+        group_no: (positions[:-1] if group_no in short_groups else positions)
+        for group_no in range(1, number_of_groups + 1)
+    }
+    total = sum(len(p) for p in group_positions.values())
     for sn in range(first_start_number, first_start_number + total):
         Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 2000 - sn)
     for p in players_list:
@@ -524,7 +533,7 @@ def build_tiered_rows(number_of_groups, positions, competition_class='M1', first
     start_numbers = list(range(first_start_number, first_start_number + total))
     seed = 300
     for group_no in range(1, number_of_groups + 1):
-        for group_pos in positions:
+        for group_pos in group_positions[group_no]:
             sn = start_numbers.pop(0)
             seeding_by_start_numbers[str(sn)] = seed
             rows.append(
@@ -609,6 +618,40 @@ def test_two_tier_draw_reports_no_new_placement_violations():
             matches, _ = draw_bracket(build_tiered_rows(7, (1, 2), competition_class='M3'))
             assert check_top_easy_first_round(matches) == []
             assert check_no_bottom_vs_bottom(matches) == []
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_byes_split_evenly_across_halves_in_uneven_class():
+    """The live S M1 consolation layout: 10 groups x pos {4,5,6}, four of them
+    without a 6th -> 26 players, 32 slots, 6 byes.
+
+    The exact blind spot of the two older placement_penalty terms: the half term
+    balances the NET load, and a full group's winner placed together with its bye
+    is net-neutral, so a half with 4 winners + 4 byes and one with 2 winners + 2
+    byes both scored 0 -- with a perfect 4/4/4/4 per-quarter count on top, which
+    is all the combined-quarter term looks at.  Byes then came out 4/2.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(10, (4, 5, 6), short_groups=(6, 7, 8, 10))
+            assert len(rows) == 26
+            matches, snapshots = draw_bracket(rows)
+
+            bye_half_counts = {0: 0, 1: 0}
+            for match_idx, participants in matches.items():
+                if 'BYE' in participants:
+                    bye_half_counts[0 if match_idx <= (len(matches) // 2) else 1] += 1
+            assert sum(bye_half_counts.values()) == 6
+            assert not check_bye_balance_halves(matches, len(matches)), (
+                f'Byes unevenly spread across the halves (rng_seed={rng_seed}): {bye_half_counts}'
+            )
+            # Bye balance is ranked below both feasibility penalties, so it must
+            # never be what pushes a placeable layout onto the degrade path.
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 26-player layout.'
     finally:
         seeding_by_start_numbers.clear()
 

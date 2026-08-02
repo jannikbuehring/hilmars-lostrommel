@@ -19,6 +19,7 @@ from checks.bracket_checker import (
     check_country_conflicts_first_round,
     check_country_balance_halves,
     check_country_balance_quarters,
+    check_bye_balance_halves,
     check_base_conflicts_first_round,
 )
 from misc.config import config
@@ -146,6 +147,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             "country_first": check_country_conflicts_first_round(current_matches),
             "country_balance": check_country_balance_halves(current_matches, number_of_matches),
             "country_balance_quarters": check_country_balance_quarters(current_matches, number_of_matches),
+            # Reported only -- deliberately not part of score_bracket, see the note there.
+            "bye_balance_halves": check_bye_balance_halves(current_matches, number_of_matches),
             "base_conflicts": check_base_conflicts_first_round(current_matches),
         }
 
@@ -585,7 +588,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # Per-step placement penalty, evaluated against an EXPLICIT trial state so a
     # whole batch of participants can be scored as one joint assignment.
     #
-    # Primary objective: keep (tops + byes) balanced across quarters/halves.
+    # Primary objective: keep (tops + byes) balanced across quarters/halves, plus
+    # the byes on their own balanced across the halves.
     # This joint balance is what determines whether the remaining non-bye player
     # quarter assignment will be feasible later: each quarter must keep enough
     # free slots for the players whose group top landed in the OPPOSITE half.
@@ -634,7 +638,27 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # Penalise if this half's net load would be more than 1 ahead of the opposite.
         half_excess = max(0, future_h_net - half_net_now[1 - h] - 1)
 
-        return combined_excess * 10000 + half_excess * 100000
+        # The byes must ALSO be even across the halves on their own
+        # ("Freilose ... gleichmaessig auf die Haelften verteilen").  Neither term
+        # above can see that: half_excess balances the NET load, and a full group's
+        # winner (top_reverse_weight 1) placed together with its bye is exactly
+        # net-neutral (tw - 1 == 0), so a half holding 4 winners + 4 byes and one
+        # holding 2 winners + 2 byes both score 0 there; combined_excess is blind
+        # too, since that same split can be a perfect 4/4/4/4 per quarter.  Same
+        # "allow up to 1 ahead" shape as the terms above, so an odd bye count stays
+        # penalty-free, and because evaluate_assignment accumulates the per-step
+        # cost, any final split with a gap >= 2 charges at least one unit whatever
+        # the placement order.
+        bye_half_excess = 0
+        if needs_bye:
+            bye_half_excess = max(0, (byes_in_half_now[h] + 1) - byes_in_half_now[1 - h] - 1)
+
+        # Ladder: half net load (feasibility) > quarter tops+byes (feasibility) >
+        # bye half balance > score_bracket (a few thousand at most under the live
+        # weights).  So bye balance never overrides a feasibility constraint and
+        # cannot push the draw onto the quarter_capacity_degrade path, but always
+        # outranks the country/matchup tiebreakers.
+        return combined_excess * 10000 + half_excess * 100000 + bye_half_excess * 5000
 
     def _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye):
         """Commit one placement onto a trial state (mirrors the real commit)."""
