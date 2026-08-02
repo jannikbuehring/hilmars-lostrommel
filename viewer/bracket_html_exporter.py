@@ -9,7 +9,9 @@ simulates match winners), so no later-round tree is drawn.
 import html
 import json
 import os
+from datetime import datetime
 
+from misc.version import APP_NAME, __version__
 from viewer.bracket_viewer import participant_display_fields
 
 
@@ -184,6 +186,10 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .class-title { font-size: 15px; font-weight: bold; color: #eee; margin-right: 8px; }
 .meta { margin-left: auto; font-size: 13px; color: #aaa; text-align: right; }
 .meta .violations { font-size: 12px; color: #e0a; }
+.export-meta {
+  max-width: 1100px; margin: 0 auto; padding: 12px 20px 24px;
+  border-top: 1px solid #333; font-size: 12px; color: #777;
+}
 
 .bracket-list { max-width: 1100px; margin: 0 auto; padding: 20px; }
 .quarter { display: flex; align-items: stretch; margin-bottom: 26px; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
@@ -457,7 +463,47 @@ def _class_display_name(competition, competition_class, bracket_type):
     return f"{competition_name} {class_name} {bracket_type.capitalize()}"
 
 
-def _render_html_document(title, heading, payload, list_markup):
+def _format_duration(seconds):
+    """Human-readable duration, or None if no duration was recorded."""
+    if seconds is None:
+        return None
+    if seconds < 60:
+        return f"{seconds:.2f} s"
+    minutes, remainder = divmod(seconds, 60)
+    return f"{int(minutes)} min {remainder:.1f} s"
+
+
+def _render_footer(heading, draw_seconds, run_meta):
+    """Provenance line below the bracket: which build produced this file, when,
+    and how long it took.
+
+    *run_meta* is absent when the exporter runs outside the initialization
+    pipeline (the on-demand re-export in bracket_viewer), so every part is
+    optional and simply omitted when its value is missing.
+    """
+    meta = run_meta or {}
+    version = meta.get('version', __version__)
+
+    parts = [f"{APP_NAME} v{version}"]
+
+    draw_text = _format_duration(draw_seconds)
+    if draw_text:
+        parts.append(f"{heading} drawn in {draw_text}")
+
+    total_text = _format_duration(meta.get('total_seconds'))
+    if total_text:
+        parts.append(f"total run {total_text}")
+
+    seed = meta.get('random_seed')
+    if seed:
+        parts.append(f"seed {seed}")
+
+    parts.append(f"generated {meta.get('generated_at') or datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+    return f'<footer class="export-meta">{html.escape(" · ".join(str(p) for p in parts))}</footer>'
+
+
+def _render_html_document(title, heading, payload, list_markup, footer_markup):
     # Escape "</script" so embedded participant data (names/bases from CSV input)
     # can never prematurely close the <script> tag it's embedded in.
     payload_json = json.dumps(payload, default=str).replace("</script", "<\\/script")
@@ -465,6 +511,7 @@ def _render_html_document(title, heading, payload, list_markup):
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="generator" content="{html.escape(f'{APP_NAME} {__version__}')}">
 <title>{html.escape(title)}</title>
 <style>{_CSS}</style>
 </head>
@@ -486,6 +533,7 @@ def _render_html_document(title, heading, payload, list_markup):
   </div>
 </div>
 {list_markup}
+{footer_markup}
 <script type="application/json" id="bracket-data">{payload_json}</script>
 <script>{_JS}</script>
 </body>
@@ -504,8 +552,13 @@ def bracket_html_path(competition, competition_class, bracket_type, output_dir):
     return os.path.join(output_dir, filename)
 
 
-def export_bracket_html(competition, competition_class, bracket, output_dir):
+def export_bracket_html(competition, competition_class, bracket, output_dir, run_meta=None):
     """Write one self-contained HTML file per bracket type present in *bracket*.
+
+    *run_meta* carries the run-wide provenance shown in each file's footer
+    (version, total run time, timestamp, seed). It is optional so the on-demand
+    re-export in bracket_viewer, which runs after the pipeline has finished,
+    still works with whatever metadata the bracket dict itself carries.
 
     Returns the list of file paths written.
     """
@@ -519,11 +572,22 @@ def export_bracket_html(competition, competition_class, bracket, output_dir):
 
         matches = selected['matches']
         snapshots = selected.get('snapshots', [])
+        draw_seconds = selected.get('draw_seconds')
         payload = _build_bracket_payload(bracket_type, matches, snapshots)
         list_markup = _render_bracket_list(payload["number_of_matches"])
         heading = _class_display_name(competition, competition_class, bracket_type)
         title = f"{heading} Bracket"
-        document = _render_html_document(title, heading, payload, list_markup)
+        # Same provenance as the footer, but machine-readable for anything that
+        # parses the embedded JSON instead of the rendered page.
+        payload["meta"] = {
+            "version": (run_meta or {}).get('version', __version__),
+            "draw_seconds": draw_seconds,
+            "total_seconds": (run_meta or {}).get('total_seconds'),
+            "generated_at": (run_meta or {}).get('generated_at'),
+            "random_seed": (run_meta or {}).get('random_seed'),
+        }
+        footer_markup = _render_footer(heading, draw_seconds, run_meta)
+        document = _render_html_document(title, heading, payload, list_markup, footer_markup)
 
         path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
         with open(path, "w", encoding="utf-8") as f:

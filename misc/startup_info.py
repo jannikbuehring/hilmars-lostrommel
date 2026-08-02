@@ -1,5 +1,15 @@
+from misc.version import __version__
+
+# Total width of the banner box, including both border characters.
+_BOX_WIDTH = 101
+
+
 def print_startup_info():
-    startup_info = """
+    # The banner is a fixed-width ASCII box, so the version line is padded to
+    # the box width instead of interpolated inline - that keeps the right-hand
+    # border aligned no matter how long the version string grows.
+    version_line = f"| Version {__version__}".ljust(_BOX_WIDTH - 1) + "|"
+    startup_info = f"""
 +---------------------------------------------------------------------------------------------------+
 |  _    _ _ _                             _               _                                      _  |
 | | |  | (_) |                           | |             | |                                    | | |
@@ -9,8 +19,8 @@ def print_startup_info():
 | |_|  |_|_|_|_| |_| |_|\__,_|_|   |___/ |______\___/|___/\__|_|  \___/|_| |_| |_|_| |_| |_|\___|_| |
 |                                                                                                   |   
 +---------------------------------------------------------------------------------------------------+
-| Version 0.9                                                                                       |
-+---------------------------------------------------------------------------------------------------+   
+{version_line}
++---------------------------------------------------------------------------------------------------+
 | Author: Jannik Bühring                                                                            |
 +---------------------------------------------------------------------------------------------------+   
     """
