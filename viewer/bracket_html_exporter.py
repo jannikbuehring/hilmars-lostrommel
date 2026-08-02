@@ -354,6 +354,17 @@ function changedSlots(fromSnap, toSnap) {
   return inserts.concat(others);
 }
 
+// The per-rule violation breakdown is debug output, hidden unless the checkbox is ticked.
+// Split out of render() so toggling it repaints only this label -- a full render() would
+// clear the 'changed' flash of the step the user just took.
+function renderViolations(snap) {
+  const show = document.getElementById('show-violations').checked;
+  const entries = !show ? [] : Object.entries(snap.violations || {})
+    .filter(function (kv) { return kv[1] && (Array.isArray(kv[1]) ? kv[1].length : true); })
+    .map(function (kv) { return kv[0] + ': ' + JSON.stringify(kv[1]); });
+  document.getElementById('violations-label').textContent = entries.join('  |  ');
+}
+
 function render(index) {
   const prevSnap = DATA.snapshots[currentIndex];
   const snap = DATA.snapshots[index];
@@ -391,10 +402,7 @@ function render(index) {
     'Snapshot ' + (index + 1) + '/' + DATA.snapshots.length + (snap.action ? ' (' + snap.action + ')' : '');
   document.getElementById('score-label').textContent =
     snap.violation_score === null ? '' : 'Violation score: ' + snap.violation_score;
-  const violationEntries = Object.entries(snap.violations || {})
-    .filter(function (kv) { return kv[1] && (Array.isArray(kv[1]) ? kv[1].length : true); })
-    .map(function (kv) { return kv[0] + ': ' + JSON.stringify(kv[1]); });
-  document.getElementById('violations-label').textContent = violationEntries.join('  |  ');
+  renderViolations(snap);
 
   document.getElementById('btn-prev').disabled = index === 0;
   document.getElementById('btn-next').disabled = index === DATA.snapshots.length - 1;
@@ -431,6 +439,9 @@ document.getElementById('btn-jump').addEventListener('click', function () {
   } else {
     alert('Enter a valid snapshot number (1-' + DATA.snapshots.length + ').');
   }
+});
+document.getElementById('show-violations').addEventListener('change', function () {
+  renderViolations(DATA.snapshots[currentIndex]);
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'ArrowLeft') document.getElementById('btn-prev').click();
@@ -526,6 +537,7 @@ def _render_html_document(title, heading, payload, list_markup, footer_markup):
   <input type="number" id="jump-input" min="1" placeholder="#">
   <button id="btn-jump">Go to snapshot</button>
   <label><input type="checkbox" id="auto-scroll" checked> Scroll to change</label>
+  <label><input type="checkbox" id="show-violations"> Show violation details</label>
   <div class="meta">
     <div id="snapshot-label"></div>
     <div id="score-label"></div>
