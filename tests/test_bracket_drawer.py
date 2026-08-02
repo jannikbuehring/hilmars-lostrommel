@@ -5,13 +5,17 @@ import pytest
 
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
-from draw.bracket_drawer import draw_bracket
+from draw.bracket_drawer import draw_bracket, TIER_QUARTER_BALANCE_WEIGHT
 from checks.bracket_checker import (
     check_bye_balance_halves,
     check_half_group_separation,
     check_quarter_group_separation,
     check_top_easy_first_round,
     check_no_bottom_vs_bottom,
+    check_placement_balance_quarters,
+    check_round_two_matchups,
+    score_bracket,
+    score_round_two,
 )
 from misc.config import config
 
@@ -386,26 +390,36 @@ def test_group_winner_countries_spread_across_quarters():
 def test_batch_is_assigned_jointly_not_player_by_player():
     """Each seeding batch is optimised as a whole, beating player-by-player placement.
 
-    12 group winners + 3 runners-up fill a 16-slot bracket, so batch 4 places its
-    last four winners into eight candidate slots — 1680 assignments, small enough
-    to solve exactly.  Placing those four one at a time lets an early player take a
-    slot that forces a worse assignment on the rest; the joint search finds the
-    better whole-batch assignment every time.
+    12 group winners + 5 runners-up fill a 32-slot bracket, so batch 4 places its
+    last four winners into the eight slots of its hierarchy level — 1680
+    assignments, small enough to solve exactly.  Placing those four one at a time
+    lets an early player take a slot that forces a worse assignment on the rest;
+    the joint search finds the better whole-batch assignment every time.
 
     joint_batch_max_evaluations = 0 reproduces the old player-by-player behaviour
     (the enumeration budget is never met, and the hill-climb runs zero iterations
     on top of its greedy seed), which makes the two strategies directly comparable.
-    """
-    winner_countries = {sn: ('GER' if sn % 2 else 'SWE') for sn in range(1, 13)}
 
-    def phase1_score(budget, rng_seed):
+    Compared on the objective place_batch actually minimises, which is score_bracket
+    PLUS the two terms deliberately kept out of it (tier-quarter balance and
+    round-two matchup quality).  Comparing score_bracket alone reported the joint
+    search as *better* on a layout where it had in fact bought its 10-point country
+    edge with a tier imbalance — the trade TIER_QUARTER_BALANCE_WEIGHT now forbids.
+
+    Three winner countries, not two: with only two the tier-balance term pins the
+    assignment tightly enough that player-by-player reaches the joint optimum on
+    its own, and the fixture stops discriminating.
+    """
+    countries = ('GER', 'SWE', 'NOR')
+
+    def phase1_objective(budget, rng_seed):
         players_list.clear()
         players_by_start_number.clear()
         seeding_by_start_numbers.clear()
         for sn in range(1, 13):
-            Player(sn, f'W{sn}', f'Win{sn}', winner_countries[sn], f'B{sn}', 'F', 1500 - sn)
-        for sn in range(13, 16):
-            Player(sn, f'R{sn}', f'Rest{sn}', 'NOR', f'B{sn}', 'F', 1000)
+            Player(sn, f'W{sn}', f'Win{sn}', countries[(sn - 1) % 3], f'B{sn}', 'F', 1500 - sn)
+        for sn in range(13, 18):
+            Player(sn, f'R{sn}', f'Rest{sn}', 'FIN', f'B{sn}', 'F', 1000)
         for p in players_list:
             players_by_start_number[p.start_number] = p
 
@@ -415,7 +429,7 @@ def test_batch_is_assigned_jointly_not_player_by_player():
             seeding_by_start_numbers[str(group_no)] = seed
             rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 1, True, False, group_no, ''))
             seed -= 1
-        for offset, group_no in enumerate((1, 2, 3)):
+        for offset, group_no in enumerate((1, 2, 3, 4, 5)):
             sn = 13 + offset
             seeding_by_start_numbers[str(sn)] = seed
             rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 2, True, False, sn, ''))
@@ -426,13 +440,22 @@ def test_batch_is_assigned_jointly_not_player_by_player():
             'max_draw_phase': '1',
         }})
         random.seed(rng_seed)
-        _matches, snapshots = draw_bracket(rows)
-        return next(s.violation_score for s in snapshots if s.action == 'top_seed_complete')
+        # max_draw_phase = 1 returns the bracket with only the winners placed.
+        matches, _snapshots = draw_bracket(rows)
+        number_of_matches = len(matches)
+        tier_units = sum(
+            v[-1] for v in check_placement_balance_quarters(matches, number_of_matches)
+        )
+        return (
+            score_bracket(matches, number_of_matches)
+            + tier_units * TIER_QUARTER_BALANCE_WEIGHT
+            + score_round_two(matches, bounds=(1, 2))
+        )
 
     try:
         for rng_seed in range(10):
-            player_by_player = phase1_score(0, rng_seed)
-            joint = phase1_score(5000, rng_seed)
+            player_by_player = phase1_objective(0, rng_seed)
+            joint = phase1_objective(5000, rng_seed)
             assert joint < player_by_player, (
                 f'Joint batch assignment scored {joint}, no better than the player-by-player '
                 f'{player_by_player} (rng_seed={rng_seed}).'
@@ -652,6 +675,172 @@ def test_byes_split_evenly_across_halves_in_uneven_class():
             # never be what pushes a placeable layout onto the degrade path.
             assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
                 f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 26-player layout.'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def quarter_tier_counts(matches):
+    """{group_pos: [count per quarter]} for a finished bracket."""
+    number_of_matches = len(matches)
+    matches_per_quarter = max(1, number_of_matches // 4)
+    counts = {}
+    for match_idx, participants in matches.items():
+        quarter = min(3, (match_idx - 1) // matches_per_quarter)
+        for participant in participants:
+            if participant in (None, 'BYE'):
+                continue
+            counts.setdefault(participant.group_pos, [0, 0, 0, 0])[quarter] += 1
+    return counts
+
+
+def test_tiers_spread_evenly_across_the_quarters_of_each_half():
+    """The live S M2 main layout: 11 groups x pos {1,2,3} = 33 players, 64 slots.
+
+    31 byes, so every group winner AND every runner-up is placed by Phase 1/1b --
+    and those two tiers are therefore fully decided before Phase 2 runs.  Both used
+    to come out lopsided (runners-up 4/2 across the quarters of one half), because
+    placement_penalty only ever balanced tops+byes per quarter, which is blind to
+    the tier MIX: a quarter with 3 winners + 1 runner-up and one with 1 winner +
+    2 runners-up score identically there.
+
+    The 3rd places are deliberately not asserted: 9 of them get byes but the last
+    2 are placed by Phase 2, so the tier is still incomplete while Phase 1c runs
+    (which is exactly why assignment_quality_cost ignores unfinished tiers).
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(6):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(11, (1, 2, 3))
+            assert len(rows) == 33
+            matches, _snapshots = draw_bracket(rows)
+
+            counts = quarter_tier_counts(matches)
+            for group_pos in (1, 2):
+                per_quarter = counts[group_pos]
+                assert sum(per_quarter) == 11
+                for half_start in (0, 2):
+                    low, high = sorted(per_quarter[half_start:half_start + 2])
+                    assert high - low <= 1, (
+                        f'group_pos {group_pos} split {per_quarter} across the quarters '
+                        f'(rng_seed={rng_seed}).'
+                    )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
+    """With 31 of 32 first-round matches a walkover, round two is the real first round.
+
+    11 winners, 11 runners-up and 11 third places into 64 slots: byes go to every
+    winner, every runner-up and 9 thirds, leaving one real match of 3rd-vs-3rd.
+    Ignoring every other rule, round two could serve the 11 winners with 9
+    third-place walkovers plus the one undetermined match -- 10 harmless partners
+    -- leaving exactly ONE winner on a runner-up.  Before round two was scored at
+    all, five were.
+
+    Two, not one, is the achievable bound: the layout that reaches one leaves the
+    runners-up split 4/2 across the quarters of a half, and Phase 1c will not buy
+    a round-two unit (42) with a tier unit (2500).  That ranking is deliberate --
+    even distribution is a level-1 rule in open_questions.md, the round-two
+    preference a level-2 one -- and it is stable, not incidental: every rng seed
+    lands on exactly 2.
+
+    Round-two 1-vs-1 is structurally impossible here (hierarchy levels 0-3 supply
+    one match to each round-two pair and level 4 the other, so it needs
+    n_top > bracket_size / 4), and 3-vs-3 is avoidable, so both must be clean.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(6):
+            random.seed(rng_seed)
+            matches, _snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
+            round_two = check_round_two_matchups(matches, bounds=(1, 3))
+            assert len(round_two['top_easy_opponent']) <= 2, (
+                f'{len(round_two["top_easy_opponent"])} group winners meet a runner-up in '
+                f'round two (rng_seed={rng_seed}); at most two are forced.'
+            )
+            assert round_two['first_vs_first'] == []
+            assert round_two['bottom_vs_bottom'] == []
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
+    """The repair pass swaps bye recipients, which must stay feasibility-neutral.
+
+    Both slots are (player, BYE) matches before and after, so every per-quarter and
+    per-half bye count is invariant; a swap that would move a group winner to a
+    different quarter is refused so the group anchors -- and Phase 2's dependence
+    on them -- stay fixed.  Separations are a hard gate, since at 2500 a tier unit
+    would otherwise outweigh both split weights.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(6):
+            random.seed(rng_seed)
+            matches, snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
+            swaps = [s for s in snapshots if s.action == 'bye_swap']
+            before = next(s for s in snapshots if s.action == 'top_seed_complete')
+            after = next(s for s in snapshots if s.action == 'seeded_byes')
+
+            for key in ('half_group_separation', 'quarter_group_separation'):
+                assert len(after.violations[key]) <= max(
+                    len(before.violations[key]),
+                    max((len(s.violations[key]) for s in swaps), default=0),
+                ), f'{key} grew across Phase 1c (rng_seed={rng_seed}).'
+            assert not check_bye_balance_halves(matches, len(matches)), (
+                f'Phase 1c unbalanced the byes across the halves (rng_seed={rng_seed}).'
+            )
+            # Every accepted swap must strictly improve, so none may repeat a state.
+            assert len({tuple(s.groups) for s in swaps}) == len(swaps)
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_phase_1c_is_deterministic_and_consumes_no_randomness():
+    """Drawing the same layout twice under one seed must give one bracket.
+
+    The pass deliberately takes no numbers from the shared RNG stream: doing so
+    would shift every downstream random outcome, so a change in a drawn bracket
+    would no longer be attributable to the rules rather than to the pass running.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        drawn = []
+        for _ in range(2):
+            random.seed(4)
+            matches, snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
+            drawn.append((
+                {i: [p if p == 'BYE' else p.start_number_a for p in ps if p is not None]
+                 for i, ps in matches.items()},
+                sum(1 for s in snapshots if s.action == 'bye_swap'),
+            ))
+            seeding_by_start_numbers.clear()
+        assert drawn[0] == drawn[1]
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_residual_third_avoids_the_quarter_its_runner_up_already_took():
+    """Phase 2 must see the quarters Phase 1b already used for a group's 2nd.
+
+    12 groups x pos {1,2,3} = 36 players into 64 slots: 28 byes cover every winner,
+    every runner-up and 4 thirds, so 8 third places are residual.  assign_quarter_
+    buckets built its group_opposite_half_used map from the residual players alone,
+    so for those 8 groups it had no record of where Phase 1b had put the runner-up
+    and picked on capacity alone -- landing in the very same quarter, 8 times over.
+    "Darf eigentlich nicht verletzt werden" (open_questions.md).
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(4):
+            random.seed(rng_seed)
+            matches, _snapshots = draw_bracket(build_tiered_rows(12, (1, 2, 3)))
+            violations = check_quarter_group_separation(matches, len(matches))
+            assert not violations, (
+                f'2nd/3rd of a group share a quarter (rng_seed={rng_seed}): {violations}'
+            )
     finally:
         seeding_by_start_numbers.clear()
 

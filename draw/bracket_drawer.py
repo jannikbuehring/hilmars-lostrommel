@@ -21,9 +21,25 @@ from checks.bracket_checker import (
     check_country_balance_quarters,
     check_bye_balance_halves,
     check_base_conflicts_first_round,
+    check_placement_balance_quarters,
+    check_round_two_matchups,
+    score_round_two,
+    ROUND_TWO_DEFAULT_WEIGHTS,
 )
 from misc.config import config
 import copy
+
+
+# Rank 4 of the Phase-1 penalty ladder (see placement_penalty): a placement tier
+# must not be lopsided between the two quarters of ONE half.  Deliberately NOT a
+# config key -- the ladder ranks are a strict-ordering proof (feasibility >
+# explicit distribution rules > quality tiebreakers), not a matter of taste, and
+# a value above 5000 would silently outrank the feasibility terms and push
+# placeable layouts onto the quarter_capacity_degrade path.  It sits 2x below
+# bye_half_excess (byes are both a rule and a feasibility input, tier spread is
+# quality only) and an order of magnitude above the score_bracket values actually
+# seen during Phase 1/1b (measured ceiling 250 on a 33-player/64-slot draw).
+TIER_QUARTER_BALANCE_WEIGHT = 2500
 
 
 def _max_matching(items, allowed):
@@ -138,6 +154,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         return matches
 
     def get_bracket_violations(current_matches):
+        # The round-two entries are spread as FLAT keys rather than one nested
+        # dict: both viewers hide an empty violation list, and the HTML exporter
+        # decides that with `Array.isArray(v) ? v.length : true` -- a dict would
+        # always render, even when there is nothing to report.
+        round_two = check_round_two_matchups(current_matches, bounds=bracket_bounds)
         return {
             "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches),
             "half_group_separation": check_half_group_separation(current_matches, number_of_matches),
@@ -149,6 +170,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             "country_balance_quarters": check_country_balance_quarters(current_matches, number_of_matches),
             # Reported only -- deliberately not part of score_bracket, see the note there.
             "bye_balance_halves": check_bye_balance_halves(current_matches, number_of_matches),
+            "placement_balance_quarters": check_placement_balance_quarters(current_matches, number_of_matches),
+            "round2_first_vs_first": round_two["first_vs_first"],
+            "round2_top_easy_opponent": round_two["top_easy_opponent"],
+            "round2_bottom_vs_bottom": round_two["bottom_vs_bottom"],
+            "round2_country_first": round_two["country_first"],
             "base_conflicts": check_base_conflicts_first_round(current_matches),
         }
 
@@ -212,8 +238,34 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
             pass
 
+    # weights for bracket_checker.score_round_two (round-two matchup quality)
+    round_two_weights = dict(ROUND_TWO_DEFAULT_WEIGHTS)
+    for weight_key in round_two_weights:
+        try:
+            round_two_weights[weight_key] = config.getint(
+                "bracket_draw", f"{weight_key}_weight", fallback=round_two_weights[weight_key]
+            )
+        except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+            pass
+
     top_group_pos = min(p.group_pos for p in class_subset if p.group_pos is not None)
     top_participants = [p for p in class_subset if p.group_pos == top_group_pos]
+    # Ground-truth tier range, taken from the INPUT rather than from a bracket
+    # state.  Every tier-guarded checker derives (top, bottom) from the matches it
+    # is handed, which is right for a finished bracket but wrong for the partial
+    # states this drawer scores: during Phase 1 only the winners are placed, so a
+    # derived range reads (top, top) and the three-tier guard switches the
+    # round-two rules off exactly where they are needed.
+    bracket_bounds = (
+        top_group_pos,
+        max(p.group_pos for p in class_subset if p.group_pos is not None),
+    )
+    # How many participants each placement tier will end up holding, so a partial
+    # state can tell a finished tier from one still being filled.
+    tier_totals: dict = {}
+    for _p in class_subset:
+        if _p.group_pos is not None:
+            tier_totals[_p.group_pos] = tier_totals.get(_p.group_pos, 0) + 1
 
     # Per-group opposite/same-half loads, used to weight each group winner by how
     # much it actually loads its OWN half.  A winner forces its 2nd/3rd (delta 1/2)
@@ -367,6 +419,24 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # delta=1 player so the delta=2 player goes to the other one.
         group_opposite_half_used: dict = {}
 
+        # Seed it from what Phase 1/1b already committed.  A group's delta=1 may
+        # have received a bye and been placed back in Phase 1b, in which case it
+        # is NOT in non_top_participants and this map would start empty — leaving
+        # the residual delta=2 to be chosen on capacity alone and land in the very
+        # quarter its runner-up already occupies.  That is a violation of a rule
+        # that "darf eigentlich nicht verletzt werden" (open_questions.md), and it
+        # fires for every group of that shape: a 12-group / 36-player / 64-slot
+        # layout produced 8 of them.  Mirrors _required_quarters_for's
+        # group_opposite_quarter_used, which enforces the same thing inside 1b.
+        for placed_slot, placed in slot_state.items():
+            if placed is None or placed == "BYE":
+                continue
+            placed_group = getattr(placed, "group_no", None)
+            if placed_group is None or placed.group_pos is None:
+                continue
+            if placed.group_pos - top_group_pos in (1, 2):
+                group_opposite_half_used.setdefault(placed_group, slot_quarter(placed_slot))
+
         delta3_players, delta1_players, delta2_players, unconstrained_players = [], [], [], []
 
         for p in non_top_participants:
@@ -398,7 +468,16 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
         def _best_quarter(p, candidates):
             """Pick the quarter from *candidates* with the most remaining capacity;
-            use country-conflict count as tiebreaker."""
+            use country-conflict count as tiebreaker.
+
+            A same-tier count was tried as an intermediate tiebreaker, to spread
+            the placement tiers over the quarters the way Phase 1/1b now does.
+            It does not work here: capacity almost always decides before any
+            tiebreaker is reached, so across the real input the tier imbalance was
+            unchanged (12 units either way) while country conflicts rose (36 -> 38
+            first-round, 18 -> 21 quarter spread).  See check_placement_balance_quarters
+            for what this phase consequently still leaves on the table.
+            """
             return min(candidates, key=lambda q: (-quarter_remaining[q], _country_cost(p, q)))
 
         # delta=3 (4th place): other quarter of the SAME half as pos-1.
@@ -653,12 +732,47 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         if needs_bye:
             bye_half_excess = max(0, (byes_in_half_now[h] + 1) - byes_in_half_now[1 - h] - 1)
 
-        # Ladder: half net load (feasibility) > quarter tops+byes (feasibility) >
-        # bye half balance > score_bracket (a few thousand at most under the live
-        # weights).  So bye balance never overrides a feasibility constraint and
-        # cannot push the draw onto the quarter_capacity_degrade path, but always
-        # outranks the country/matchup tiebreakers.
+        # Ladder, highest first:
+        #   half_excess         x 100000  net half load           (feasibility)
+        #   combined_excess     x  10000  quarter tops+byes       (feasibility)
+        #   bye_half_excess     x   5000  byes even over halves
+        #   tier_quarter (2500)           tiers even within a half   -- see
+        #                                 assignment_quality_cost, evaluated on
+        #                                 the finished state rather than here
+        #   score_bracket + score_round_two          quality tiebreakers
+        # score_bracket peaks at 250 across a full 33-player/64-slot draw's Phase
+        # 1/1b calls (the few-thousand values only occur on a finished, degraded
+        # bracket, which no phase-1 candidate ever is).  So neither distribution
+        # rule can be bought off with a country/matchup tiebreak, and neither can
+        # override a feasibility constraint or push a placeable layout onto the
+        # quarter_capacity_degrade path.
         return combined_excess * 10000 + half_excess * 100000 + bye_half_excess * 5000
+
+    # ---------------------------------------------------------------------------
+    # Rank 4 of the ladder, and the round-two tiebreaker.  Both are functions of a
+    # FINISHED assignment rather than per-step marginals, so unlike the three terms
+    # above they are evaluated once on the completed trial state instead of being
+    # accumulated placement by placement.  The accumulation trick exists so that a
+    # bad final split is paid for whatever the placement order; these two see the
+    # final split directly, which is both exact and cheaper.
+    # ---------------------------------------------------------------------------
+    def assignment_quality_cost(trial_matches):
+        """Tier-quarter balance + round-two matchup quality for a finished state."""
+        # Only charge for a tier every member of which is already on the board.
+        # A partially placed tier's counts are a moving target: in a 33-player /
+        # 64-slot draw the 3rd places arrive as 9 bye recipients here and 2
+        # residual players in Phase 2, so a "repair" of the 9 is chasing a number
+        # Phase 2 is about to change -- and Phase 1c would happily pay a real
+        # round-two violation for it.  Round two needs no such guard: it is
+        # already fully determined (see score_round_two).
+        tier_units = sum(
+            v[-1] for v in check_placement_balance_quarters(trial_matches, number_of_matches)
+            if sum(v[1]) == tier_totals.get(v[0], 0)
+        )
+        return (
+            tier_units * TIER_QUARTER_BALANCE_WEIGHT
+            + score_round_two(trial_matches, weights=round_two_weights, bounds=bracket_bounds)
+        )
 
     def _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye):
         """Commit one placement onto a trial state (mirrors the real commit)."""
@@ -696,7 +810,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 return None
             total += placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
             _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
-        total += score_bracket(slots_to_matches(trial_state), number_of_matches, weights=bracket_weights)
+        trial_matches = slots_to_matches(trial_state)
+        total += score_bracket(trial_matches, number_of_matches, weights=bracket_weights)
+        total += assignment_quality_cost(trial_matches)
         return total
 
     def greedy_assignment(participants, pool, allowed_slots):
@@ -722,7 +838,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 step_tops = dict(trial_tops)
                 cost = placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
                 _apply_placement(participant, slot, step_state, step_locked, step_tops, needs_bye)
-                cost += score_bracket(slots_to_matches(step_state), number_of_matches, weights=bracket_weights)
+                step_matches = slots_to_matches(step_state)
+                cost += score_bracket(step_matches, number_of_matches, weights=bracket_weights)
+                cost += assignment_quality_cost(step_matches)
                 if best is None or cost < best[0]:
                     best = (cost, slot)
             if best is None:
@@ -1109,6 +1227,121 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         group_no = getattr(participant, "group_no", None)
         if group_no is not None:
             group_opposite_quarter_used.setdefault(group_no, slot_quarter(chosen))
+
+    # ---------------------------------------------------------------------------
+    # Phase 1c: repair pass over everything Phase 1/1b locked in.
+    #
+    # Both distribution objectives are properties of the FINISHED layout, but
+    # Phase 1/1b can only ever optimise one batch at a time: an uneven tier spread
+    # emerges ACROSS hierarchy levels (the runners-up of a 64-slot draw are split
+    # between two levels, placed by different place_batch calls), and a chunk of
+    # ~16 participants into 16 slots is far past joint_batch_max_evaluations, so it
+    # falls to a hill-climb seeded by a cost-greedy pass that commits each player
+    # before its round-two opposite even exists.  This pass is the only one with a
+    # global view of the result.
+    #
+    # It swaps two bye recipients, which is FEASIBILITY-NEUTRAL by construction and
+    # so cannot undo anything Phase 1/1b established: both slots are (player, BYE)
+    # matches before and after, so every per-quarter and per-half bye count is
+    # unchanged, and forbidding a swap that would move a group winner to a
+    # different quarter keeps the group anchors -- and with them the tops-per-
+    # quarter and net-half-load balances -- fixed too.  That is the same
+    # capacity-neutrality argument that makes rebalance_bottom_tier_quarters safe
+    # to run after capacity is settled.
+    #
+    # Deterministic first-improvement, consuming NO randomness: drawing from the
+    # shared RNG stream here would shift every downstream random outcome, so any
+    # change in a drawn bracket stays attributable to the rules rather than to the
+    # pass having run.  Also like rebalance_bottom_tier_quarters.
+    # ---------------------------------------------------------------------------
+    def repair_bye_placements():
+        """Swap placed bye recipients while it strictly improves the layout."""
+        candidates = sorted(
+            s for s in locked_slots
+            if slot_state[s] not in (None, "BYE") and slot_state[opponent_slot(s)] == "BYE"
+        )
+        if len(candidates) < 2:
+            return
+
+        def state_cost(trial_matches):
+            return (
+                score_bracket(trial_matches, number_of_matches, weights=bracket_weights)
+                + assignment_quality_cost(trial_matches)
+            )
+
+        def separation_counts(trial_matches):
+            return (
+                len(check_half_group_separation(trial_matches, number_of_matches)),
+                len(check_quarter_group_separation(trial_matches, number_of_matches)),
+            )
+
+        current_matches = slots_to_matches(slot_state)
+        best_cost = state_cost(current_matches)
+        # Separations are a HARD gate, not part of the objective: at 2500 a tier
+        # unit outweighs both split weights, so a scored gate would let the pass
+        # buy a tier repair with a separation -- "darf eigentlich nicht verletzt
+        # werden, country und base lieber violaten".  Phase 1/1b can leave one
+        # behind, so the bar is "no worse", not "none".
+        best_separations = separation_counts(current_matches)
+
+        # Best-improvement rather than first-improvement: a sweep costs the same
+        # either way, and taking the first improving swap settles for whatever
+        # trade it stumbles on -- on a 33-player draw that meant paying a real
+        # round-two violation for a tier repair that a different pair delivered
+        # for free.  Each accepted swap strictly lowers the cost, so this
+        # terminates; the outer cap only bounds the work on a pathological
+        # plateau.
+        for _ in range(len(candidates)):
+            best_swap = None
+            for index, slot_a in enumerate(candidates):
+                for slot_b in candidates[index + 1:]:
+                    participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
+                    is_top = (
+                        participant_a.group_pos == top_group_pos
+                        or participant_b.group_pos == top_group_pos
+                    )
+                    if is_top and slot_quarter(slot_a) != slot_quarter(slot_b):
+                        continue
+
+                    slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
+                    trial_matches = slots_to_matches(slot_state)
+                    trial_cost = state_cost(trial_matches)
+                    # Separations are the more expensive check, so only pay for it
+                    # once a swap is actually in the running.
+                    if trial_cost < best_cost and (best_swap is None or trial_cost < best_swap[0]):
+                        trial_separations = separation_counts(trial_matches)
+                        if all(t <= b for t, b in zip(trial_separations, best_separations)):
+                            best_swap = (trial_cost, trial_separations, slot_a, slot_b)
+                    slot_state[slot_a], slot_state[slot_b] = participant_a, participant_b
+
+            if best_swap is None:
+                break
+
+            best_cost, best_separations, slot_a, slot_b = best_swap
+            participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
+            slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
+            for participant, slot in ((participant_b, slot_a), (participant_a, slot_b)):
+                if (participant.group_pos == top_group_pos
+                        and getattr(participant, "group_no", None) is not None):
+                    _update_group_top(participant.group_no, slot)
+            swapped_matches = slots_to_matches(slot_state)
+            snapshots.append(
+                Snapshot(
+                    "bye_swap",
+                    [slot_a, slot_b],
+                    None,
+                    [participant_a, participant_b],
+                    get_bracket_violations(swapped_matches),
+                    score_bracket(swapped_matches, number_of_matches, weights=bracket_weights),
+                    initial_groups=copy.deepcopy(swapped_matches),
+                )
+            )
+
+    if non_top_bye_recipients:
+        # Gated on Phase 1b having run.  Without it every bye recipient is a group
+        # winner, so the only legal swaps are winner-for-winner WITHIN one quarter
+        # -- no reachable gain, and skipping keeps the low-bye draws untouched.
+        repair_bye_placements()
 
     if non_top_bye_recipients:
         seeded_bye_matches = slots_to_matches(slot_state)

@@ -18,7 +18,12 @@ from checks.bracket_checker import (
     check_top_easy_first_round,
     check_no_bottom_vs_bottom,
     check_country_conflicts_first_round,
+    check_placement_balance_quarters,
+    check_round_two_matchups,
+    derive_round_two_matches,
     score_bracket,
+    score_round_two,
+    ROUND_TWO_DEFAULT_WEIGHTS,
 )
 
 # score_bracket's own defaults, spelled out so a partially-specified weights dict
@@ -363,3 +368,180 @@ def test_soft_matchup_terms_never_outweigh_a_separation():
     assert_ladder(live, 'config.ini')
     for term in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first'):
         assert live[term] > live['country_half'] > live['country_quarter'], term
+
+
+# ---------------------------------------------------------------------------
+# Round-two matchup quality (the pairings the byes already decide).
+# ---------------------------------------------------------------------------
+
+def test_round_two_pairs_only_bye_winners():
+    """Round-two match r is fed by first-round matches 2r-1 and 2r."""
+    matches = three_tier_matches([(1, 'BYE'), ('BYE', 3), (2, 3), (1, 'BYE')])
+    round_two = derive_round_two_matches(matches)
+    assert sorted(round_two) == [1, 2]
+    # Pair 1: both feeders were byes, so both winners are known.
+    assert [p.group_pos for p in round_two[1]] == [1, 3]
+    # Pair 2: match 3 is a real pairing, so that side stays open.
+    assert round_two[2][0] is None
+    assert round_two[2][1].group_pos == 1
+
+
+def test_round_two_undetermined_side_is_never_a_violation():
+    """A real first-round match leaves the next round open — nothing to grade."""
+    matches = three_tier_matches([(1, 'BYE'), (2, 2), (1, 'BYE'), (3, 3)])
+    violations = check_round_two_matchups(matches, bounds=(1, 3))
+    assert all(v == [] for v in violations.values())
+    assert score_round_two(matches, bounds=(1, 3)) == 0
+
+
+def test_round_two_bounds_override_prevents_a_tier_misfire():
+    """The decided round-two participants alone cannot reveal the bracket's tiers.
+
+    Here every decided round-two player is a winner or a runner-up, so a derived
+    range reads (1, 2) — two tiers — and the `bottom - top >= 2` guard switches
+    the rule off, silently relabelling the runner-up as an acceptable "bottom"
+    opponent.  The parent bracket knows better.
+    """
+    matches = three_tier_matches([(1, 'BYE'), ('BYE', 2), (3, 3), (3, 3)])
+    round_two = derive_round_two_matches(matches)
+    assert check_top_easy_first_round(round_two) == []
+    flagged = check_top_easy_first_round(round_two, bounds=(1, 3))
+    assert len(flagged) == 1
+    _match_idx, player, opponent = flagged[0]
+    assert (player.group_pos, opponent.group_pos) == (1, 2)
+
+
+def test_round_two_is_not_part_of_the_score():
+    """Frozen after Phase 1b, so scoring it would only break the phase-5 early exits.
+
+    Two brackets with identical round-one content and opposite round-two quality:
+    score_bracket cannot tell them apart, score_round_two must.
+    """
+    good = three_tier_matches([(1, 'BYE'), ('BYE', 3), (2, 'BYE'), ('BYE', 2)])
+    bad = three_tier_matches([(1, 'BYE'), ('BYE', 2), (3, 'BYE'), ('BYE', 2)])
+    assert score_bracket(good, 4) == score_bracket(bad, 4)
+    assert score_round_two(bad, bounds=(1, 3)) > score_round_two(good, bounds=(1, 3)) == 0
+
+
+def test_round_two_weights_sit_between_round_one_matchups_and_country():
+    """The 36..49 band, asserted against BOTH ladders.
+
+    Nothing under pytest calls initialize_config, so the suite only ever sees
+    score_bracket's defaults while the app only ever sees config.ini.  The band
+    works in both because bottom_vs_bottom (50) and country_first (35) happen to
+    carry the same value in each.
+    """
+    tier_weights = [
+        ROUND_TWO_DEFAULT_WEIGHTS[key] for key in (
+            'round_two_first_vs_first',
+            'round_two_top_easy_opponent',
+            'round_two_bottom_vs_bottom',
+        )
+    ]
+
+    def assert_band(weights, label):
+        round_one_floor = min(
+            weights['first_vs_first'], weights['top_easy_opponent'], weights['bottom_vs_bottom']
+        )
+        country_ceiling = max(
+            weights['country_first'], weights['country_half'], weights['country_quarter']
+        )
+        assert max(tier_weights) < round_one_floor, label
+        assert min(tier_weights) > country_ceiling, label
+        # The round-two country term ranks below round one's, not above.
+        assert (weights['country_half']
+                > ROUND_TWO_DEFAULT_WEIGHTS['round_two_country_first']
+                > weights['country_quarter']), label
+
+    assert_band(DEFAULT_WEIGHTS, 'defaults')
+
+    parser = configparser.ConfigParser()
+    parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
+    live = dict(DEFAULT_WEIGHTS)
+    for key, config_key in (
+        ('first_vs_first', 'first_vs_first_weight'),
+        ('top_easy_opponent', 'top_easy_opponent_weight'),
+        ('bottom_vs_bottom', 'bottom_vs_bottom_weight'),
+        ('country_first', 'country_first_weight'),
+        ('country_half', 'country_half_weight'),
+        ('country_quarter', 'country_quarter_weight'),
+    ):
+        live[key] = parser.getint('bracket_draw', config_key, fallback=live[key])
+    assert_band(live, 'config.ini')
+    # And config.ini must not have drifted away from the defaults it is checked against.
+    for key, value in ROUND_TWO_DEFAULT_WEIGHTS.items():
+        assert parser.getint('bracket_draw', f'{key}_weight', fallback=value) == value, key
+
+
+# ---------------------------------------------------------------------------
+# Placement tiers spread over the two quarters of each half.
+# ---------------------------------------------------------------------------
+
+TIER_BRACKET_MATCHES = 16
+
+
+def tier_bracket(quarter_positions):
+    """A 16-match bracket from {quarter: [group_pos, ...]}, four matches per quarter.
+
+    One participant per match, so no match is ever a real pairing: every round-one
+    matchup term stays at zero and the brackets differ ONLY in how the tiers are
+    spread across the quarters.
+    """
+    matches = {idx: [] for idx in range(1, TIER_BRACKET_MATCHES + 1)}
+    specs = []
+    start_number = 1
+    for quarter, positions in quarter_positions.items():
+        for offset, position in enumerate(positions):
+            specs.append((start_number, quarter * 4 + offset + 1, position))
+            start_number += 1
+    register_players([(sn, f'C{sn}') for sn, _m, _p in specs])
+    for sn, match_idx, position in specs:
+        matches[match_idx] = [tiered(sn, sn, position)]
+    return matches
+
+
+def test_tier_split_evenly_within_each_half_is_clean():
+    bracket = tier_bracket({0: [2, 2], 1: [2, 2]})
+    assert check_placement_balance_quarters(bracket, TIER_BRACKET_MATCHES) == []
+
+
+def test_tier_may_differ_by_one_within_a_half():
+    """An odd tier count cannot split evenly, so 2/1 must not be flagged."""
+    bracket = tier_bracket({0: [2, 2], 1: [2]})
+    assert check_placement_balance_quarters(bracket, TIER_BRACKET_MATCHES) == []
+
+
+def test_lopsided_tier_within_a_half_violates():
+    """The S M2 failure mode one level down: 3/1 inside a half."""
+    bracket = tier_bracket({0: [2, 2, 2], 1: [2]})
+    violations = check_placement_balance_quarters(bracket, TIER_BRACKET_MATCHES)
+    assert len(violations) == 1
+    assert violations[0] == (2, [3, 1, 0, 0], 1)
+
+
+def test_tier_confined_to_one_half_is_not_flagged():
+    """The whole point of comparing WITHIN a half rather than across all four.
+
+    The separation rules pin 2nd/3rd to the half opposite their group's anchor, so
+    an all-in-one-half split is structurally forced; only the quarter inside that
+    half is a free choice, and here it is balanced 2/2.  A global spread over all
+    four quarters would charge for this.
+    """
+    bracket = tier_bracket({2: [3, 3], 3: [3, 3]})
+    assert check_placement_balance_quarters(bracket, TIER_BRACKET_MATCHES) == []
+
+
+def test_tier_balance_is_not_part_of_the_score():
+    balanced = tier_bracket({0: [2, 2], 1: [2, 2]})
+    lopsided = tier_bracket({0: [2, 2, 2], 1: [2]})
+    assert check_placement_balance_quarters(lopsided, TIER_BRACKET_MATCHES)
+    assert not check_placement_balance_quarters(balanced, TIER_BRACKET_MATCHES)
+    assert (score_bracket(lopsided, TIER_BRACKET_MATCHES)
+            == score_bracket(balanced, TIER_BRACKET_MATCHES) == 0)
+
+
+def test_tier_balance_exempts_a_bracket_with_one_quarter_per_half():
+    """A 2-match bracket yields quarters 0/1 only, so each half IS one quarter."""
+    register_players([(i, f'C{i}') for i in range(1, 5)])
+    matches = {1: [tiered(1, 1, 2), tiered(2, 2, 2)], 2: [tiered(3, 3, 2), tiered(4, 4, 2)]}
+    assert check_placement_balance_quarters(matches, 2) == []

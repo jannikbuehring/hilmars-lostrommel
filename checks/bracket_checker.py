@@ -4,6 +4,18 @@ from typing import Dict, List
 from models.player import players_by_start_number
 
 
+# Weights for score_round_two.  See its docstring for why the three tier weights
+# must live in the 36..49 band and the country one below round one's.
+ROUND_TWO_DEFAULT_WEIGHTS = {
+    "round_two_first_vs_first": 45,
+    "round_two_top_easy_opponent": 42,
+    "round_two_bottom_vs_bottom": 38,
+    # 9 is the only value below country_half and above country_quarter in BOTH
+    # ladders (defaults 10/4, config.ini 20/8).
+    "round_two_country_first": 9,
+}
+
+
 def _match_half(match_index: int, number_of_matches: int) -> int:
     """Return 0 for first half, 1 for second half."""
     half = 0 if match_index <= (number_of_matches // 2) else 1
@@ -110,23 +122,24 @@ def check_quarter_group_separation(matches: Dict[int, List], number_of_matches: 
     return violations
 
 
-def check_no_first_vs_first(matches: Dict[int, List]):
-    """Check that no bracket-highest placements meet each other in round one."""
+def check_no_first_vs_first(matches: Dict[int, List], bounds=None):
+    """Check that no bracket-highest placements meet each other in round one.
+
+    *bounds* is an optional pre-computed ``(top, bottom)`` pair.  It exists for
+    :func:`check_round_two_matchups`, which evaluates a *virtual* round-two
+    pairing dict holding only the participants the byes already decided — too
+    few to derive the bracket's real tier range from.
+    """
     violations = []
 
     # Determine the top placement present in this bracket.
     # In the main bracket this will normally be 1, but in consolation it may be 2 or higher.
-    group_positions = []
-    for participants in matches.values():
-        for p in participants:
-            if p == "BYE" or p is None:
-                continue
-            if getattr(p, "group_pos", None) is not None:
-                group_positions.append(p.group_pos)
-    if not group_positions:
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
+    if bounds is None:
         return violations
 
-    bracket_top_position = min(group_positions)
+    bracket_top_position = bounds[0]
 
     for match_idx, participants in matches.items():
         if len(participants) < 2:
@@ -194,7 +207,7 @@ def _first_round_pair(participants):
     return a, b
 
 
-def check_top_easy_first_round(matches: Dict[int, List]):
+def check_top_easy_first_round(matches: Dict[int, List], bounds=None):
     """Bracket-top placements earned a BYE or a bottom-tier round-one opponent.
 
     open_questions.md: "Gruppenerste ... nach Möglichkeit Freilos oder gegen
@@ -211,8 +224,11 @@ def check_top_easy_first_round(matches: Dict[int, List]):
     Only applies with at least three placement tiers (bottom - top >= 2).  In a
     two-tier bracket — every doubles/mixed draw — "bottom" IS the runner-up, so
     the rule would collapse into a restatement of check_no_first_vs_first.
+
+    *bounds* overrides the derived tier range; see check_no_first_vs_first.
     """
-    bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
     if bounds is None:
         return []
     top, bottom = bounds
@@ -233,7 +249,7 @@ def check_top_easy_first_round(matches: Dict[int, List]):
     return violations
 
 
-def check_no_bottom_vs_bottom(matches: Dict[int, List]):
+def check_no_bottom_vs_bottom(matches: Dict[int, List], bounds=None):
     """Check that no two bottom-tier placements meet in round one.
 
     open_questions.md: "3. gegen 3. wäre nicht okay, 2. gegen 3. schon".  The
@@ -248,8 +264,11 @@ def check_no_bottom_vs_bottom(matches: Dict[int, List]):
     vielen freilosen dritter gegen dritter").  Same three-tier guard as
     check_top_easy_first_round, since a two-tier bracket's "bottom" is the
     runner-up and runner-up-vs-runner-up is the accepted fallback.
+
+    *bounds* overrides the derived tier range; see check_no_first_vs_first.
     """
-    bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
     if bounds is None:
         return []
     top, bottom = bounds
@@ -458,6 +477,163 @@ def check_base_conflicts_first_round(matches: Dict[int, List]):
     return violations
 
 
+def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches: int):
+    """Flag a placement tier piling into one quarter of a half.
+
+    open_questions.md: "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte
+    gleichmaessig auf die Haelften verteilen" — one level finer than the halves,
+    which is where the drawer already enforces it.
+
+    Compares the two quarters of the SAME half rather than all four, because a
+    participant's half is not a free choice: the separation rules pin 1st/4th to
+    the group's anchor half and 2nd/3rd to the opposite one, so an uneven
+    half-level split can be structurally forced.  Which quarter *within* that
+    half a participant takes is free, and that is exactly what this measures —
+    so the check never flags an imbalance the draw could not have avoided.
+
+    A difference of 1 is allowed (an odd tier count cannot split evenly).
+    Returns (group_pos, counts_per_quarter, violation_amount) per aggrieved tier,
+    mirroring the magnitude convention of the country balance checks.
+    """
+    num_quarters = len({_match_quarter(i, number_of_matches) for i in range(1, number_of_matches + 1)})
+    quarters_per_half = num_quarters // 2
+    if quarters_per_half < 2:
+        # One quarter per half: nothing is free to balance.
+        return []
+
+    counts = defaultdict(lambda: [0] * num_quarters)
+    for match_idx, participants in matches.items():
+        quarter = _match_quarter(match_idx, number_of_matches)
+        if quarter >= num_quarters:
+            continue
+        for p in participants:
+            if p == "BYE" or p is None:
+                continue
+            group_pos = getattr(p, "group_pos", None)
+            if group_pos is None:
+                continue
+            counts[group_pos][quarter] += 1
+
+    violations = []
+    for group_pos, quarter_counts in sorted(counts.items()):
+        violation_amount = 0
+        for half_start in range(0, num_quarters, quarters_per_half):
+            half_quarters = quarter_counts[half_start:half_start + quarters_per_half]
+            violation_amount += max(0, max(half_quarters) - min(half_quarters) - 1)
+        if violation_amount > 0:
+            violations.append((group_pos, list(quarter_counts), violation_amount))
+    return violations
+
+
+def _bye_advancer(participants):
+    """The participant that advances without playing, or None when undecided.
+
+    A match decides its winner in advance only when one side is a BYE; a real
+    pairing (or a still-incomplete match) leaves the next round open.
+    """
+    if len(participants) < 2:
+        return None
+    a, b = participants[0], participants[1]
+    if a == "BYE" and b is not None and b != "BYE":
+        return b
+    if b == "BYE" and a is not None and a != "BYE":
+        return a
+    return None
+
+
+def derive_round_two_matches(matches: Dict[int, List]):
+    """Return the round-two pairings the byes already decide.
+
+    Round-two match *r* is fed by first-round matches ``2r-1`` and ``2r``.  A
+    side is filled only when its feeder was a bye, otherwise it stays None —
+    which :func:`_first_round_pair` already skips, so every round-one checker
+    works on the result unmodified.
+
+    This matters because with very many byes round one barely happens: the S M2
+    main draw (33 players, 64 slots, 31 byes) plays exactly one real first-round
+    match, so round two is the first round that actually decides anything and
+    the round-one matchup rules have nothing to grade there.
+    """
+    round_two = {}
+    for r in range(1, len(matches) // 2 + 1):
+        round_two[r] = [
+            _bye_advancer(matches.get(2 * r - 1, [])),
+            _bye_advancer(matches.get(2 * r, [])),
+        ]
+    return round_two
+
+
+def check_round_two_matchups(matches: Dict[int, List], bounds=None):
+    """Grade the round-two pairings by the same rules as round one.
+
+    open_questions.md: "Bei ganz vielen freilosen dritter gegen dritter, in der
+    Runde danach bevorzugt aber dritter gegen erster/zweiter".
+
+    Returns a dict keyed 'first_vs_first' / 'top_easy_opponent' /
+    'bottom_vs_bottom' / 'country_first', each holding the violations the
+    corresponding round-one checker reports for the virtual round-two dict.
+
+    *bounds* is the bracket's real ``(top, bottom)`` tier range and callers that
+    know it MUST pass it.  Deriving it from the round-two view alone mis-tiers
+    (a round two holding only winners and runners-up concludes bottom ==
+    runner-up, which both switches off the three-tier guard and relabels a
+    1-vs-2 as clean), and deriving it from a *partial* first round is no better:
+    while the drawer is still in Phase 1 only the winners are placed, so the
+    bracket reads as (top, top) and every tier-guarded rule silently switches
+    off exactly where it is needed.  draw_bracket takes the range from its input
+    class_subset instead.  Falling back to the first-round dict is correct only
+    for a finished bracket, which is what a report-only caller has.
+
+    Base conflicts are deliberately left out: base is the weakest round-one term
+    and there is no rule asking for it a round ahead.
+    """
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
+    round_two = derive_round_two_matches(matches)
+    return {
+        "first_vs_first": check_no_first_vs_first(round_two, bounds=bounds),
+        "top_easy_opponent": check_top_easy_first_round(round_two, bounds=bounds),
+        "bottom_vs_bottom": check_no_bottom_vs_bottom(round_two, bounds=bounds),
+        "country_first": check_country_conflicts_first_round(round_two),
+    }
+
+
+def score_round_two(matches: Dict[int, List], weights: Dict[str, int] = None, bounds=None):
+    """Return a weighted round-two matchup score; lower is better.
+
+    Deliberately NOT folded into :func:`score_bracket` — see the note there.
+    The drawer adds it to its own Phase 1/1b/1c objective, which is the only
+    place the round-two pairing can still be changed.
+
+    The three tier weights sit strictly BELOW every round-one matchup weight and
+    strictly ABOVE every country weight: a round-one pairing is real and
+    immediate, a round-two one only conditional, but a group winner drawn
+    against a runner-up a round later still matters more than country spread
+    ("1. gegen dritter oder freilos ist wichtiger als laenderverteilung", which
+    is about the matchup itself, not about when it happens).  The band 36..49 is
+    the only one satisfying that in BOTH weight ladders — bottom_vs_bottom (50)
+    and country_first (35) happen to be identical in score_bracket's defaults
+    and in config.ini, and nothing under pytest loads config.ini.  The country
+    term is instead ranked below round one's, between country_half and
+    country_quarter.
+    """
+    if weights is None:
+        weights = ROUND_TWO_DEFAULT_WEIGHTS
+
+    violations = check_round_two_matchups(matches, bounds=bounds)
+    score = 0
+    for violation_key, weight_key in (
+        ("first_vs_first", "round_two_first_vs_first"),
+        ("top_easy_opponent", "round_two_top_easy_opponent"),
+        ("bottom_vs_bottom", "round_two_bottom_vs_bottom"),
+        ("country_first", "round_two_country_first"),
+    ):
+        score += len(violations[violation_key]) * weights.get(
+            weight_key, ROUND_TWO_DEFAULT_WEIGHTS[weight_key]
+        )
+    return score
+
+
 def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
     """Return a weighted score for the bracket; lower is better."""
     if weights is None:
@@ -495,10 +671,21 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     quarter_country_magnitude = sum(v[-1] for v in quarter_country_violations)
     score += quarter_country_magnitude * weights.get("country_quarter", 4)
     score += len(check_base_conflicts_first_round(matches)) * weights.get("base_first", 20)
-    # check_bye_balance_halves is deliberately absent: the byes are locked into
-    # place by Phase 1/1b and never move again, so from Phase 2 on the term would
-    # be a constant no phase can improve -- and a bracket whose bye count cannot
-    # split evenly would then never reach score 0, defeating the early exits in
-    # all four phase-5 quarter loops.  The rule is enforced where it can be, by
-    # bracket_drawer's placement_penalty, and reported via get_bracket_violations.
+    # Three checks are deliberately absent here, for one shared reason: none of
+    # them can be improved by a phase that optimises this score, so each would be
+    # a constant -- and any bracket that cannot satisfy it would then never reach
+    # score 0, defeating the early exits in all four phase-5 quarter loops.  All
+    # three are enforced where they still can be, by bracket_drawer's Phase
+    # 1/1b/1c objective, and reported via get_bracket_violations so both viewers
+    # still surface them.
+    #   * check_bye_balance_halves -- the byes are locked into place by Phase 1/1b
+    #     and never move again.
+    #   * check_round_two_matchups -- every bye recipient sits opposite a BYE and
+    #     every remaining free slot's partner is free too, so from Phase 2 on a
+    #     placement can only leave a round-two side UNdecided, never change a
+    #     decided one.  score_round_two exists for the drawer to call directly.
+    #   * check_placement_balance_quarters -- the phase-5 Monte Carlo only permutes
+    #     players WITHIN one quarter, so it cannot move a tier count between
+    #     quarters at all; the quarters are settled by Phase 1/1b (bye recipients,
+    #     locked) and Phase 2's capacity buckets (not score-driven).
     return score
