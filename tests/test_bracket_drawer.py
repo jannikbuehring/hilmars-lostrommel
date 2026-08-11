@@ -770,10 +770,10 @@ def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
     """The repair pass swaps bye recipients, which must stay feasibility-neutral.
 
     Both slots are (player, BYE) matches before and after, so every per-quarter and
-    per-half bye count is invariant; a swap that would move a group winner to a
-    different quarter is refused so the group anchors -- and Phase 2's dependence
-    on them -- stay fixed.  Separations are a hard gate, since at 2500 a tier unit
-    would otherwise outweigh both split weights.
+    per-half bye count is invariant; group winners are not swap candidates at all,
+    so the group anchors -- and Phase 2's dependence on them -- stay fixed by
+    construction (see test_phase_1c_never_moves_a_group_winner).  Separations are a
+    hard gate, since at 2500 a tier unit would otherwise outweigh both split weights.
     """
     seeding_by_start_numbers.clear()
     try:
@@ -794,6 +794,56 @@ def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
             )
             # Every accepted swap must strictly improve, so none may repeat a state.
             assert len({tuple(s.groups) for s in swaps}) == len(swaps)
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_phase_1c_never_moves_a_group_winner():
+    """Phase 1 decides where the group winners sit; Phase 1c may not undo that.
+
+    The pass exists to repair the spread of the players Phase 1b placed, and it does
+    that by swapping bye recipients.  Only NON-top ones are candidates: a swap moves
+    both of its participants, so admitting a winner as either side would relocate it
+    and drag its group anchor -- and with it every separation rule and Phase 2
+    quarter choice that reads group_top_quarter -- along.
+
+    The 33-player S M2 layout alone would not catch a regression here (its winners
+    happen never to be the cheapest swap), so the layouts that did move a winner
+    under the old different-quarter rule are covered too: 13 and 6 groups x {1,2,3}.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for group_count in (11, 13, 6):
+            for rng_seed in range(4):
+                random.seed(rng_seed)
+                rows = build_tiered_rows(group_count, (1, 2, 3))
+                top_group_pos = min(r.group_pos for r in rows)
+                matches, snapshots = draw_bracket(rows)
+                case = f'{group_count} groups, rng_seed={rng_seed}'
+
+                for snapshot in (s for s in snapshots if s.action == 'bye_swap'):
+                    assert all(
+                        getattr(p, 'group_pos', None) != top_group_pos
+                        for p in snapshot.participants
+                    ), f'Phase 1c swapped a group winner ({case}).'
+
+                # Structural check on the result rather than the trace: a swap always
+                # changes a candidate's match, so every winner must still sit in the
+                # match Phase 1 gave it.
+                after_phase_1 = next(s for s in snapshots if s.action == 'top_seed_complete')
+
+                def winner_matches(match_dict):
+                    return {
+                        p.start_number_a: index
+                        for index, participants in match_dict.items()
+                        for p in participants
+                        if p not in (None, 'BYE') and p.group_pos == top_group_pos
+                    }
+
+                assert winner_matches(matches) == winner_matches(after_phase_1.initial_groups), (
+                    f'A group winner changed match after Phase 1 ({case}).'
+                )
+                seeding_by_start_numbers.clear()
     finally:
         seeding_by_start_numbers.clear()
 
