@@ -1240,14 +1240,16 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # before its round-two opposite even exists.  This pass is the only one with a
     # global view of the result.
     #
-    # It swaps two bye recipients, which is FEASIBILITY-NEUTRAL by construction and
-    # so cannot undo anything Phase 1/1b established: both slots are (player, BYE)
-    # matches before and after, so every per-quarter and per-half bye count is
-    # unchanged, and forbidding a swap that would move a group winner to a
-    # different quarter keeps the group anchors -- and with them the tops-per-
-    # quarter and net-half-load balances -- fixed too.  That is the same
-    # capacity-neutrality argument that makes rebalance_bottom_tier_quarters safe
-    # to run after capacity is settled.
+    # It swaps two NON-TOP bye recipients, which is FEASIBILITY-NEUTRAL by
+    # construction and so cannot undo anything Phase 1/1b established: both slots
+    # are (player, BYE) matches before and after, so every per-quarter and per-half
+    # bye count is unchanged, and a top-placed participant is not a candidate at all
+    # -- neither as the mover nor as its partner -- so the group anchors, and with
+    # them the tops-per-quarter and net-half-load balances and Phase 2's dependence
+    # on group_top_quarter, are invariant here by construction rather than by a
+    # boundary check.  Phase 1 decides where the group winners sit; they stay put.
+    # That is the same capacity-neutrality argument that makes
+    # rebalance_bottom_tier_quarters safe to run after capacity is settled.
     #
     # Deterministic first-improvement, consuming NO randomness: drawing from the
     # shared RNG stream here would shift every downstream random outcome, so any
@@ -1255,10 +1257,16 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # pass having run.  Also like rebalance_bottom_tier_quarters.
     # ---------------------------------------------------------------------------
     def repair_bye_placements():
-        """Swap placed bye recipients while it strictly improves the layout."""
+        """Swap placed non-top bye recipients while it strictly improves the layout."""
+        # Top-placed participants are filtered out HERE rather than skipped per pair
+        # inside the sweep: a swap moves both of its participants, so a group winner
+        # must not be a partner either, and dropping them up front shrinks the
+        # quadratic sweep instead of paying for them on every iteration.
         candidates = sorted(
             s for s in locked_slots
-            if slot_state[s] not in (None, "BYE") and slot_state[opponent_slot(s)] == "BYE"
+            if slot_state[s] not in (None, "BYE")
+            and slot_state[s].group_pos != top_group_pos
+            and slot_state[opponent_slot(s)] == "BYE"
         )
         if len(candidates) < 2:
             return
@@ -1296,13 +1304,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             for index, slot_a in enumerate(candidates):
                 for slot_b in candidates[index + 1:]:
                     participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
-                    is_top = (
-                        participant_a.group_pos == top_group_pos
-                        or participant_b.group_pos == top_group_pos
-                    )
-                    if is_top and slot_quarter(slot_a) != slot_quarter(slot_b):
-                        continue
-
                     slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
                     trial_matches = slots_to_matches(slot_state)
                     trial_cost = state_cost(trial_matches)
@@ -1320,10 +1321,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             best_cost, best_separations, slot_a, slot_b = best_swap
             participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
             slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
-            for participant, slot in ((participant_b, slot_a), (participant_a, slot_b)):
-                if (participant.group_pos == top_group_pos
-                        and getattr(participant, "group_no", None) is not None):
-                    _update_group_top(participant.group_no, slot)
+            # No group_top_quarter/_half resync: neither participant is top-placed,
+            # so the anchors cannot have moved.
             swapped_matches = slots_to_matches(slot_state)
             snapshots.append(
                 Snapshot(
@@ -1339,8 +1338,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     if non_top_bye_recipients:
         # Gated on Phase 1b having run.  Without it every bye recipient is a group
-        # winner, so the only legal swaps are winner-for-winner WITHIN one quarter
-        # -- no reachable gain, and skipping keeps the low-bye draws untouched.
+        # winner, so the candidate set below would come out empty anyway; the gate
+        # just skips the work and keeps the low-bye draws untouched.
         repair_bye_placements()
 
     if non_top_bye_recipients:
