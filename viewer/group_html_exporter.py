@@ -194,27 +194,30 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
   border-top: 1px solid #333; font-size: 12px; color: #777;
 }
 
+/* One card per row: scrolling down is preferable to columns being cut off. */
 .groups {
   max-width: 1400px; margin: 0 auto; padding: 20px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 18px;
+  display: grid; grid-template-columns: 1fr; gap: 22px;
 }
-.group-card { border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; background: #242424; }
+.group-card { border: 1px solid #3a3a3a; border-radius: 6px; overflow-x: auto; background: #242424; }
 .group-label {
   font-size: 14px; font-weight: bold; letter-spacing: 0.5px;
   background: #333; padding: 7px 12px; border-bottom: 1px solid #3a3a3a;
 }
 /* One shared grid template for the header and every slot row, so the columns
-   line up down the whole card whatever the values are. */
+   line up down the whole card whatever the values are. The two text-heavy
+   columns are fr tracks, whose implicit auto minimum means they never shrink
+   below their content: a very long value widens the row (and the card scrolls)
+   instead of being truncated. */
 .row {
-  display: grid; grid-template-columns: 26px 46px 1fr 62px 130px 52px;
-  gap: 8px; align-items: center; padding: 6px 12px; font-size: 13px;
+  display: grid; grid-template-columns: 34px 60px 3fr 110px 2fr 70px;
+  gap: 22px; align-items: center; padding: 7px 16px; font-size: 13px;
   border-top: 1px solid #2f2f2f; white-space: nowrap;
 }
 .row:first-of-type { border-top: none; }
 .row.head { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; background: #2a2a2a; }
 .row .pos { color: #888; }
 .row .seed, .row .qttr { color: #bbb; }
-.row .names, .row .country, .row .base { overflow: hidden; text-overflow: ellipsis; }
 .row.empty { color: #666; font-style: italic; }
 .row.changed { animation: flash 1.1s ease-out; }
 @keyframes flash {
