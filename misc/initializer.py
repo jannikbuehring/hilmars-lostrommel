@@ -170,8 +170,9 @@ def initialize_data():
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
+                    draw_start = time.perf_counter()
                     group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "original_data": class_subset}
+                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start, "original_data": class_subset}
 
                 competition_classes_list = list(singles_competition_classes)
                 spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"
@@ -193,8 +194,9 @@ def initialize_data():
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
+                    draw_start = time.perf_counter()
                     group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots}
+                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start}
 
                 competition_classes_list = list(doubles_competition_classes)
                 spinner.text = f"Successfully created doubles groups for competition classes {competition_classes_list}"
@@ -217,8 +219,9 @@ def initialize_data():
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
+                    draw_start = time.perf_counter()
                     group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots}
+                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start}
 
                 competition_classes_list = list(mixed_competition_classes)
                 spinner.text = f"Successfully created mixed groups for competition classes {competition_classes_list}"
@@ -454,10 +457,13 @@ def initialize_data():
             return
 
     ########################################################################################
-    with yaspin(text="Exporting brackets to HTML...", color="cyan") as spinner:
+    with yaspin(text="Exporting groups and brackets to HTML...", color="cyan") as spinner:
         try:
             from viewer.bracket_html_exporter import export_bracket_html
-            output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+            from viewer.group_html_exporter import export_group_html
+            bracket_output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+            group_output_dir = config["files"].get("group_html_output_dir", "output/groups")
+            group_max_snapshots = int(config["group_draw"].get("html_max_snapshots", 20000))
             # Read the total once, before the export loop, so every exported file
             # reports the same run duration and none of them include the cost of
             # writing the HTML itself.
@@ -467,11 +473,24 @@ def initialize_data():
                 'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
                 'random_seed': config["settings"].get("random_seed") or None,
             }
+            for competition, group_dict in groups.items():
+                for competition_class, group_data in group_dict.items():
+                    export_group_html(
+                        competition,
+                        competition_class,
+                        group_data["group"],
+                        group_data["snapshots"],
+                        group_output_dir,
+                        run_meta=run_meta,
+                        max_snapshots=group_max_snapshots,
+                        draw_seconds=group_data.get("draw_seconds"),
+                    )
+
             for competition, brackets in bracket_payload.items():
                 for competition_class, bracket in brackets.items():
-                    export_bracket_html(competition, competition_class, bracket, output_dir, run_meta=run_meta)
+                    export_bracket_html(competition, competition_class, bracket, bracket_output_dir, run_meta=run_meta)
 
-            spinner.text = "Successfully exported brackets to HTML"
+            spinner.text = "Successfully exported groups and brackets to HTML"
             spinner.ok()
 
         except Exception as e:

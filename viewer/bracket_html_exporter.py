@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 
 from misc.version import APP_NAME, __version__
-from viewer.bracket_viewer import participant_display_fields
+from viewer.viewer_shared import participant_display_fields
 
 
 def _match_quarter(match_idx, number_of_matches):

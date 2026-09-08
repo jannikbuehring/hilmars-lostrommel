@@ -31,6 +31,10 @@ Group winners are placed first, each seeding batch assigned as a whole rather th
 
 Every run writes `output/output.csv` — one semicolon-delimited file covering all competitions, with one row per group member and one row per **bracket slot** (`draw_number` is the Rasterzahl of the KO field, `1..bracket_size`). The `_A`/`_B` columns are the two players of a doubles/mixed pair, not the two sides of a match. Column reference: `output/output_explainer.md` (German) and [ARCHITECTURE.md § Input/output formats](ARCHITECTURE.md#4-inputoutput-formats-data_io).
 
+# Group viewer
+
+Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. From the Groups menu, groups can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — all groups as cards, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+
 # Bracket viewer
 
 Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. From the Bracket menu, brackets can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — an SVG bracket tree with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets without terminal scroll/cutoff. Each exported file ends with a provenance footer recording the app version that produced it, how long that specific bracket took to draw, the total run time, the random seed, and a timestamp. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
