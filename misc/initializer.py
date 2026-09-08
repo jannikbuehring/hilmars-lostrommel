@@ -21,8 +21,6 @@ from misc.version import __version__
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
 
-export_data = []
-
 singles_groups = {}
 doubles_groups = {}
 mixed_groups = {}
@@ -426,32 +424,34 @@ def initialize_data():
         'M': mixed_brackets,
     }
 
-    #with yaspin(text="Preparing data for export...", color="cyan") as spinner:
-    #    try:
-    #        groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
-    #        export_data.extend(prepare_export_from_group_draw(groups))
-    #        export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
+    export_data = []
 
-    #         spinner.text = "Export successfully prepared"
-    #         spinner.ok()
+    with yaspin(text="Preparing data for export...", color="cyan") as spinner:
+        try:
+            groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
+            export_data.extend(prepare_export_from_group_draw(groups))
+            export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
 
-    #     except Exception as e:
-    #         spinner.fail()
-    #         logging.error("An error occurred: %s", e)
-    #         return
+            spinner.text = f"Export successfully prepared ({len(export_data)} rows)"
+            spinner.ok()
 
-    # ########################################################################################
-    # with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
-    #     try:
-    #         write_to_csv(export_data)
+        except Exception as e:
+            spinner.fail()
+            logging.error("An error occurred: %s", e)
+            return
 
-    #         spinner.text = "Successfully created output file"
-    #         spinner.ok()
+    ########################################################################################
+    with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
+        try:
+            output_file_path = write_to_csv(export_data)
 
-    #     except Exception as e:
-    #         spinner.fail()
-    #         logging.error("An error occurred: %s", e)
-    #         return
+            spinner.text = f"Successfully created output file {output_file_path}"
+            spinner.ok()
+
+        except Exception as e:
+            spinner.fail()
+            logging.error("An error occurred: %s", e)
+            return
 
     ########################################################################################
     with yaspin(text="Exporting brackets to HTML...", color="cyan") as spinner:
