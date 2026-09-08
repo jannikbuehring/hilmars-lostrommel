@@ -1,28 +1,14 @@
 """Module for viewing brackets in either interactive or table mode."""
 import os
-import webbrowser
-from pathlib import Path
 import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
-from models.player import players_by_start_number
+from viewer.viewer_shared import clear_screen, open_in_browser, participant_display_fields
+from viewer.bracket_html_exporter import bracket_html_path, export_bracket_html
 from misc.config import config
 
 _GREEN = "\033[92m"
 _RESET = "\033[0m"
-
-
-def clear_screen():
-    """Clear the terminal screen in a cross-platform way."""
-    os.system("cls" if os.name == "nt" else "clear")
-
-
-def _open_in_browser(path):
-    """Open an exported HTML file in the default browser (best-effort)."""
-    try:
-        webbrowser.open(Path(path).resolve().as_uri())
-    except Exception as exc:  # pragma: no cover - depends on desktop environment
-        print(f"Could not open {path} automatically: {exc}")
 
 
 def show_bracket(competition, competition_class, bracket):
@@ -54,20 +40,17 @@ def show_bracket(competition, competition_class, bracket):
     if action == "Back":
         return
     if action == "View HTML":
-        # Imported lazily to avoid a circular import (bracket_html_exporter reuses
-        # participant_display_fields from this module).
-        from viewer.bracket_html_exporter import bracket_html_path, export_bracket_html
         output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
         # Brackets are pre-exported during initialization; open the existing file.
         path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
         if os.path.exists(path):
-            _open_in_browser(path)
+            open_in_browser(path)
         else:
             # Fallback: export on demand if the pre-exported file is missing.
             paths = export_bracket_html(competition, competition_class, single, output_dir)
             if paths:
                 for p in paths:
-                    _open_in_browser(p)
+                    open_in_browser(p)
             else:
                 print("No bracket matches available to display.")
         return
@@ -159,51 +142,6 @@ def show_bracket_tables(competition, competition_class, bracket):
         show_bracket_table(bracket['main']['matches'], title="Main Bracket")
     if bracket.get('consolation') and bracket['consolation'].get('matches'):
         show_bracket_table(bracket['consolation']['matches'], title="Consolation Bracket")
-
-
-def participant_display_fields(p):
-    """Extract structured display data for a participant.
-
-    Returns None for an empty slot, the string "BYE" for a bye, the string
-    "ERR" if extraction failed, or a dict:
-      {"seeding": int|None, "group_no": int|None, "group_pos": int|None,
-       "names": [{"first_name", "last_name", "start_number", "country", "base"}, ...]}
-    "names" has one entry for a single player, two for a team. If a player
-    can't be resolved via players_by_start_number, its entry is instead
-    {"unknown": start_number}.
-    Consumed by both format_participant_display (terminal) and the HTML
-    exporter, so both renderers stay in sync with a single source of truth.
-    """
-    if p is None:
-        return None
-    if p == "BYE":
-        return "BYE"
-
-    try:
-        names = []
-        for start_number in (p.start_number_a, getattr(p, 'start_number_b', None)):
-            if start_number is None:
-                continue
-            pl = players_by_start_number.get(start_number)
-            if pl is None:
-                names.append({"unknown": start_number})
-            else:
-                names.append({
-                    "first_name": pl.first_name,
-                    "last_name": pl.last_name,
-                    "start_number": pl.start_number,
-                    "country": pl.country,
-                    "base": pl.base,
-                })
-
-        return {
-            "seeding": getattr(p, 'seeding', None),
-            "group_no": getattr(p, 'group_no', None),
-            "group_pos": getattr(p, 'group_pos', None),
-            "names": names,
-        }
-    except Exception:
-        return "ERR"
 
 
 def format_participant_display(p):

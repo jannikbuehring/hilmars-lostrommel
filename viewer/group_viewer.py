@@ -3,18 +3,33 @@ import os
 import inquirer
 from tabulate import tabulate
 from viewer.view_config import table_format
+from viewer.viewer_shared import clear_screen, open_in_browser
+from viewer.group_html_exporter import export_group_html, group_html_path
 from models.player import players_by_start_number
 from misc.config import config
 from draw.group_drawer import EmptySlot
 
-def clear_screen():
-    """Clear the terminal screen in a cross-platform way."""
-    os.system("cls" if os.name == "nt" else "clear")
-
 
 def show_groups(competition, competition_class, groups, snapshots):
-    """Display groups in either interactive or table mode."""
-    mode = config["settings"]["mode"]
+    """Choose how to view a class's groups: terminal (table/interactive) or HTML."""
+    action = inquirer.list_input("Group view", choices=["View", "View HTML", "Back"])
+    if action == "Back":
+        return
+    if action == "View HTML":
+        output_dir = config["files"].get("group_html_output_dir", "output/groups")
+        # Groups are pre-exported during initialization; open the existing file.
+        path = group_html_path(competition, competition_class, output_dir)
+        if not os.path.exists(path):
+            # Fallback: export on demand if the pre-exported file is missing.
+            path = export_group_html(
+                competition, competition_class, groups, snapshots, output_dir)
+        if path:
+            open_in_browser(path)
+        else:
+            print("No group draw available to display.")
+        return
+
+    mode = config["settings"].get("mode", "table")
     if mode == 'interactive':
         show_snapshot_viewer(competition, competition_class, snapshots)
     else:
