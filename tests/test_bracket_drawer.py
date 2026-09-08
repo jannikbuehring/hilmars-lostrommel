@@ -533,7 +533,7 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
 # ---------------------------------------------------------------------------
 
 def build_tiered_rows(number_of_groups, positions, competition_class='M1', first_start_number=201,
-                      short_groups=()):
+                      short_groups=(), country_for=None):
     """Register fresh players and return rows for number_of_groups x positions.
 
     Unique countries and bases per player so the country/base terms cannot
@@ -541,28 +541,38 @@ def build_tiered_rows(number_of_groups, positions, competition_class='M1', first
 
     *short_groups* lists group numbers that omit the LAST position, i.e. an uneven
     class where not every group sent a qualifier for that tier.
+
+    *country_for* optionally overrides that: a ``(group_no, group_pos) -> country
+    or None`` callable, so a test can give two participants the SAME country and
+    make the country terms actually bite.  Returning None keeps the unique default.
     """
     group_positions = {
         group_no: (positions[:-1] if group_no in short_groups else positions)
         for group_no in range(1, number_of_groups + 1)
     }
-    total = sum(len(p) for p in group_positions.values())
-    for sn in range(first_start_number, first_start_number + total):
-        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 2000 - sn)
+    # Countries are decided per (group_no, group_pos), so resolve the layout before
+    # registering the players -- start numbers are handed out in that same order.
+    layout = [
+        (group_no, group_pos)
+        for group_no in range(1, number_of_groups + 1)
+        for group_pos in group_positions[group_no]
+    ]
+    for offset, (group_no, group_pos) in enumerate(layout):
+        sn = first_start_number + offset
+        country = country_for(group_no, group_pos) if country_for is not None else None
+        Player(sn, f'Last{sn}', f'First{sn}', country or f'C{sn}', f'Base{sn}', 'F', 2000 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
     rows = []
-    start_numbers = list(range(first_start_number, first_start_number + total))
     seed = 300
-    for group_no in range(1, number_of_groups + 1):
-        for group_pos in group_positions[group_no]:
-            sn = start_numbers.pop(0)
-            seeding_by_start_numbers[str(sn)] = seed
-            rows.append(
-                DrawDataRow('S', competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, '')
-            )
-            seed -= 1
+    for offset, (group_no, group_pos) in enumerate(layout):
+        sn = first_start_number + offset
+        seeding_by_start_numbers[str(sn)] = seed
+        rows.append(
+            DrawDataRow('S', competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, '')
+        )
+        seed -= 1
     return rows
 
 
@@ -675,6 +685,66 @@ def test_byes_split_evenly_across_halves_in_uneven_class():
             # never be what pushes a placeable layout onto the degrade path.
             assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
                 f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 26-player layout.'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def winner_country_halves(matches, top_group_pos=1):
+    """{country: [count_half0, count_half1]} for the top placement tier only."""
+    number_of_matches = len(matches)
+    counts = {}
+    for match_idx, participants in matches.items():
+        half = 0 if match_idx <= (number_of_matches // 2) else 1
+        for participant in participants:
+            if participant in (None, 'BYE') or participant.group_pos != top_group_pos:
+                continue
+            country = players_by_start_number[participant.start_number_a].country
+            counts.setdefault(country, [0, 0])[half] += 1
+    return counts
+
+
+def test_group_winners_are_country_balanced_across_the_halves():
+    """The live S M2 main layout and its real winner countries: 11 groups x pos
+    {1,2,3} = 33 players, 64 slots, 31 byes, with GER on four group winners, CRO
+    and SLO on two each.
+
+    Phase 1's last winner batch places 3 winners into an 8-slot hierarchy level
+    with the byes standing 4/4, so EVERY assignment ends on the same legal 6/5
+    split.  bye_half_excess was accumulated per placement, though, so it charged
+    5000 whenever the first two movers went to the same half -- on nothing but
+    participant order.  Here the country-clean assignment needs exactly that: SLO
+    is 0/1 and GER 1/2 going into the batch, so both of the first two movers have
+    to take the upper half.  At 250x country_half (20) the phantom cost decided
+    the batch and the two Slovenian winners ended up together, in 10 of the 20
+    seeds below.
+
+    The 2nd/3rd tiers keep unique countries, so what is asserted here is the
+    winners' spread alone -- which is the thing no aggregate country check can
+    see once the lower tiers arrive and cancel it out.
+    """
+    winner_countries = {1: 'GER', 5: 'GER', 7: 'GER', 9: 'GER',
+                        2: 'CRO', 6: 'CRO',
+                        4: 'SLO', 10: 'SLO',
+                        8: 'ENG', 11: 'CZE', 3: 'ISR'}
+
+    def country_for(group_no, group_pos):
+        return winner_countries.get(group_no) if group_pos == 1 else None
+
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(20):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(11, (1, 2, 3), country_for=country_for)
+            assert len(rows) == 33
+            matches, _snapshots = draw_bracket(rows)
+
+            counts = winner_country_halves(matches)
+            assert sum(sum(v) for v in counts.values()) == 11
+            lopsided = {c: v for c, v in counts.items() if abs(v[0] - v[1]) > 1}
+            assert not lopsided, (
+                f'Group winners of one country piled into a half '
+                f'(rng_seed={rng_seed}): {lopsided} of {counts}'
+            )
     finally:
         seeding_by_start_numbers.clear()
 
