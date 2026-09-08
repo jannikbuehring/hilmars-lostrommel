@@ -33,7 +33,7 @@ Every run writes `output/output.csv` — one semicolon-delimited file covering a
 
 # Group viewer
 
-Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. From the Groups menu, groups can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — all groups as cards, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. From the Groups menu, groups can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — one group card per row so no column is ever cut off, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
 
 # Bracket viewer
 
