@@ -36,10 +36,27 @@ import copy
 # explicit distribution rules > quality tiebreakers), not a matter of taste, and
 # a value above 5000 would silently outrank the feasibility terms and push
 # placeable layouts onto the quarter_capacity_degrade path.  It sits 2x below
-# bye_half_excess (byes are both a rule and a feasibility input, tier spread is
-# quality only) and an order of magnitude above the score_bracket values actually
+# BYE_HALF_BALANCE_WEIGHT (byes are both a rule and a feasibility input, tier
+# spread is quality only) and an order of magnitude above the score_bracket values
 # seen during Phase 1/1b (measured ceiling 250 on a 33-player/64-slot draw).
 TIER_QUARTER_BALANCE_WEIGHT = 2500
+
+# Rank 3 of the same ladder: "Freilose ... gleichmaessig auf die Haelften
+# verteilen".  Same value the per-step form used, but charged ONCE on the finished
+# assignment (see assignment_quality_cost) instead of accumulated per placement.
+#
+# The per-step form was unsound as an objective.  It charged a marginal excess on
+# the RUNNING PREFIX, and its justification only ever proved the sufficient
+# direction -- a final split with a gap >= 2 does charge at least one unit whatever
+# the order.  The converse fails: a perfectly legal final split is also charged
+# whenever the iteration happens to visit one half twice in a row.  On the S M2
+# main draw (33 players / 64 slots) the three leftover group winners enter Phase
+# 1's last batch with the byes at 4/4, so every assignment ends 6/5 -- clean -- yet
+# the orders h0,h1,* and h1,h0,* scored 0 while h0,h0,h1 scored 5000, on nothing
+# but participant order.  That phantom 5000 outranked country_half (20) by 250x and
+# was the sole reason two Slovenian group winners shared a half: the country-clean
+# assignment needed both of its first two placements in the upper half.
+BYE_HALF_BALANCE_WEIGHT = 5000
 
 
 def _max_matching(items, allowed):
@@ -723,22 +740,19 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # winner (top_reverse_weight 1) placed together with its bye is exactly
         # net-neutral (tw - 1 == 0), so a half holding 4 winners + 4 byes and one
         # holding 2 winners + 2 byes both score 0 there; combined_excess is blind
-        # too, since that same split can be a perfect 4/4/4/4 per quarter.  Same
-        # "allow up to 1 ahead" shape as the terms above, so an odd bye count stays
-        # penalty-free, and because evaluate_assignment accumulates the per-step
-        # cost, any final split with a gap >= 2 charges at least one unit whatever
-        # the placement order.
-        bye_half_excess = 0
-        if needs_bye:
-            bye_half_excess = max(0, (byes_in_half_now[h] + 1) - byes_in_half_now[1 - h] - 1)
+        # too, since that same split can be a perfect 4/4/4/4 per quarter.  That
+        # rule is enforced in assignment_quality_cost, on the FINISHED assignment
+        # -- it used to be accumulated here as a per-step marginal, which charged
+        # legal layouts for the order they happened to be built in.  See
+        # BYE_HALF_BALANCE_WEIGHT.
 
         # Ladder, highest first:
         #   half_excess         x 100000  net half load           (feasibility)
         #   combined_excess     x  10000  quarter tops+byes       (feasibility)
-        #   bye_half_excess     x   5000  byes even over halves
-        #   tier_quarter (2500)           tiers even within a half   -- see
-        #                                 assignment_quality_cost, evaluated on
-        #                                 the finished state rather than here
+        #   bye_half     (5000)           byes even over halves
+        #   tier_quarter (2500)           tiers even within a half
+        #                                 -- both in assignment_quality_cost,
+        #                                 evaluated on the finished state, not here
         #   score_bracket + score_round_two          quality tiebreakers
         # score_bracket peaks at 250 across a full 33-player/64-slot draw's Phase
         # 1/1b calls (the few-thousand values only occur on a finished, degraded
@@ -746,18 +760,24 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # rule can be bought off with a country/matchup tiebreak, and neither can
         # override a feasibility constraint or push a placeable layout onto the
         # quarter_capacity_degrade path.
-        return combined_excess * 10000 + half_excess * 100000 + bye_half_excess * 5000
+        return combined_excess * 10000 + half_excess * 100000
 
     # ---------------------------------------------------------------------------
-    # Rank 4 of the ladder, and the round-two tiebreaker.  Both are functions of a
-    # FINISHED assignment rather than per-step marginals, so unlike the three terms
-    # above they are evaluated once on the completed trial state instead of being
-    # accumulated placement by placement.  The accumulation trick exists so that a
-    # bad final split is paid for whatever the placement order; these two see the
-    # final split directly, which is both exact and cheaper.
+    # Ranks 3 and 4 of the ladder, plus the round-two tiebreaker.  All three are
+    # functions of a FINISHED assignment rather than per-step marginals, so unlike
+    # the two feasibility terms above they are evaluated once on the completed
+    # trial state instead of being accumulated placement by placement.
+    #
+    # The two feasibility terms have to stay per-step: they gate whether the REST
+    # of the draw can still be filled, so they must be charged as the capacity is
+    # consumed.  These three only grade the result, and measuring the result
+    # directly is both exact and cheaper -- accumulating a marginal is at best a
+    # lower bound on it, and for bye_half_excess it was not even that (a legal
+    # final split could be charged for the order it was built in, which is what
+    # BYE_HALF_BALANCE_WEIGHT documents).
     # ---------------------------------------------------------------------------
     def assignment_quality_cost(trial_matches):
-        """Tier-quarter balance + round-two matchup quality for a finished state."""
+        """Bye-half + tier-quarter balance + round-two quality for a finished state."""
         # Only charge for a tier every member of which is already on the board.
         # A partially placed tier's counts are a moving target: in a 33-player /
         # 64-slot draw the 3rd places arrive as 9 bye recipients here and 2
@@ -769,8 +789,15 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             v[-1] for v in check_placement_balance_quarters(trial_matches, number_of_matches)
             if sum(v[1]) == tier_totals.get(v[0], 0)
         )
+        # No "fully placed" guard for the byes: unlike a tier, every bye is written
+        # the moment its recipient is committed (opponent_slot), so a partial state
+        # holds a prefix of the byes and never a number a later phase revises.
+        bye_half_units = sum(
+            v[-1] for v in check_bye_balance_halves(trial_matches, number_of_matches)
+        )
         return (
-            tier_units * TIER_QUARTER_BALANCE_WEIGHT
+            bye_half_units * BYE_HALF_BALANCE_WEIGHT
+            + tier_units * TIER_QUARTER_BALANCE_WEIGHT
             + score_round_two(trial_matches, weights=round_two_weights, bounds=bracket_bounds)
         )
 

@@ -377,8 +377,9 @@ def check_bye_balance_halves(matches: Dict[int, List], number_of_matches: int):
     convention of the country balance checks.
 
     Deliberately NOT part of :func:`score_bracket` — see the note there.  The
-    drawer enforces the rule while it places the byes (Phase 1/1b
-    ``placement_penalty``); this checker exists so the viewers can report it.
+    drawer calls this function directly from its Phase 1/1b/1c objective
+    (``assignment_quality_cost``), which is where the rule is enforced; this
+    checker also exists so the viewers can report it.
     """
     counts = [0, 0]
     for match_idx, participants in matches.items():
@@ -679,7 +680,8 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     # 1/1b/1c objective, and reported via get_bracket_violations so both viewers
     # still surface them.
     #   * check_bye_balance_halves -- the byes are locked into place by Phase 1/1b
-    #     and never move again.
+    #     and never move again.  bracket_drawer scores it directly in
+    #     assignment_quality_cost, where they are still being placed.
     #   * check_round_two_matchups -- every bye recipient sits opposite a BYE and
     #     every remaining free slot's partner is free too, so from Phase 2 on a
     #     placement can only leave a round-two side UNdecided, never change a
