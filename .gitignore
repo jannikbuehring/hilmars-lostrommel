@@ -172,3 +172,9 @@ input/draw_input_2025.csv
 output/output.csv
 output/brackets
 output/groups
+input/players_2026.csv
+input/draw_input_2026.csv
+.gitignore
+config/config_backup.ini
+config/config_brackets.ini
+input/draw_input_2026_ER_E.csv

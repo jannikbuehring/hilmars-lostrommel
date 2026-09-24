@@ -3,7 +3,8 @@
     "deny": [
       "Read(input/players.csv)",
       "Read(input/players_2025.csv)",
-      "Read(additional_data)"
+      "Read(additional_data)",
+      "Read(input/players_2026.csv)"
     ]
   }
 }
