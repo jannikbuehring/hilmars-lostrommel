@@ -25,6 +25,8 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Fixed
 
 - Surrounding whitespace in input fields is now trimmed. Before, `"GER "` counted as a separate country and `"F "` caused a false wrong-competition error
+- The group draw now returns the best grouping found in each attempt instead of the last one. Before, accepting worse swaps to escape a local minimum could end the attempt on a worse grouping than one it had already found. Escapes are also limited again: the budget now resets only when a new best grouping is found
+- The group draw history no longer shows outdated violations after a worse swap was accepted
 
 ### Security
 
