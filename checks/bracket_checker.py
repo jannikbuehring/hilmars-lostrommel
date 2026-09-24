@@ -32,13 +32,22 @@ def _match_quarter(match_index: int, number_of_matches: int) -> int:
     return min(3, (match_index - 1) // matches_per_quarter)
 
 
-def check_half_group_separation(matches: Dict[int, List], number_of_matches: int):
+def check_half_group_separation(matches: Dict[int, List], number_of_matches: int, bounds=None):
     """
-    Ensure that for each group the 1st/4th positions are placed in one half
-    and 2nd/3rd in the other half. Returns list of violations as tuples:
+    Ensure that for each group the bracket's top and top+3 positions are placed
+    in one half and top+1/top+2 in the other half. Positions are relative to the
+    bracket, like check_no_first_vs_first: a main draw runs 1..4, a consolation
+    4..6.  *bounds* is an optional pre-computed ``(top, bottom)`` pair for
+    partial states.  Returns list of violations as tuples:
       (group_no, details)
     """
     violations = []
+
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        return violations
+    top = bounds[0]
 
     # collect group_pos halves
     group_pos_halves = defaultdict(lambda: {"14": set(), "23": set()})
@@ -51,23 +60,28 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
                 pos = p.group_pos
             except Exception:
                 continue
+            if pos is None:
+                continue
             h = _match_half(match_idx, number_of_matches)
-            if pos in (1, 4):
+            delta = pos - top
+            if delta in (0, 3):
                 group_pos_halves[group_no]["14"].add(h)
-            if pos in (2, 3):
+            if delta in (1, 2):
                 group_pos_halves[group_no]["23"].add(h)
 
+    anchor_label = f"{top}/{top + 3}"
+    opposite_label = f"{top + 1}/{top + 2}"
     for group_no, halves in group_pos_halves.items():
         h14 = halves["14"]
         h23 = halves["23"]
         # If any of the sets spans both halves -> violation
         if len(h14) > 1:
-            violations.append((group_no, "positions 1/4 split across halves"))
+            violations.append((group_no, f"positions {anchor_label} split across halves"))
         if len(h23) > 1:
-            violations.append((group_no, "positions 2/3 split across halves"))
+            violations.append((group_no, f"positions {opposite_label} split across halves"))
         # They must be in different halves
         if h14 & h23:
-            violations.append((group_no, "positions 1/4 and 2/3 share a half"))
+            violations.append((group_no, f"positions {anchor_label} and {opposite_label} share a half"))
 
     return violations
 
