@@ -25,10 +25,12 @@ Surrounding whitespace is trimmed from every input field (so `"GER "` is read as
 - Doubles and mixed entries have a partner, singles entries don't, and nobody is paired with themselves
 - Every mixed pair is one man and one woman
 - All group-stage rows of a class give the same, non-empty `#groups`
+- Every group-stage row has a seeding
+- A class has at least as many group-stage entries as `#groups` (so no group is empty)
 
 # Group draw
 
-Highest seeds are spread one-per-group first, then a **Monte Carlo / simulated-annealing-style local search** (random swaps, escape-from-local-minimum, multi-seed restarts) optimizes the remaining placements to minimize country-distribution, shared-training-base, and QTTR-rating imbalances. Details: [ARCHITECTURE.md § Algorithms](ARCHITECTURE.md#5-algorithms-draw).
+Highest seeds are spread one-per-group first, then a **Monte Carlo / simulated-annealing-style local search** (random swaps, escape-from-local-minimum, multi-seed restarts) optimizes the remaining placements to minimize country-distribution, shared-training-base, and QTTR-rating imbalances. If the group draw of one class fails, that class is reported as a warning and left out, and the other classes are still drawn and exported. Details: [ARCHITECTURE.md § Algorithms](ARCHITECTURE.md#5-algorithms-draw).
 
 # Bracket draw
 

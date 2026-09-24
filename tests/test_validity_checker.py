@@ -13,6 +13,8 @@ from checks.validity_checker import (
     find_invalid_pairs,
     find_invalid_mixed_pairs,
     find_inconsistent_group_counts,
+    find_missing_group_seedings,
+    find_too_few_group_entries,
     find_draw_data_errors,
 )
 
@@ -23,9 +25,9 @@ def make_row(competition_class, start_number_a, start_number_b=''):
     return DrawDataRow('S', competition_class, '', '', '', '', True, False, start_number_a, start_number_b)
 
 
-def group_row(competition, competition_class, start_number_a, start_number_b='', amount_of_groups='2'):
+def group_row(competition, competition_class, start_number_a, start_number_b='', amount_of_groups='2', seeding='100'):
     """A group-stage row (no group_no/group_pos, no bracket flags)."""
-    return DrawDataRow(competition, competition_class, '', amount_of_groups, '', '', False, False, start_number_a, start_number_b)
+    return DrawDataRow(competition, competition_class, seeding, amount_of_groups, '', '', False, False, start_number_a, start_number_b)
 
 
 def bracket_row(competition, competition_class, group_no, group_pos, start_number_a, start_number_b='', main_round=True, consolation_round=False):
@@ -248,6 +250,38 @@ def test_find_inconsistent_group_counts():
     assert 'M2 has group-stage rows without #groups' in errors[1]
 
 
+def test_find_missing_group_seedings():
+    draw_data = [
+        group_row('S', 'M1', 1),
+        group_row('S', 'M1', 2, seeding=''),
+        bracket_row('S', 'M1', '1', '1', 3),  # bracket rows carry no seeding
+    ]
+
+    errors = find_missing_group_seedings(draw_data)
+
+    assert errors == ['S M1 entry 2 has no seeding']
+
+
+def test_find_too_few_group_entries():
+    draw_data = [
+        # 3 entries for 4 groups: one group would be empty
+        *[group_row('S', 'M1', sn, amount_of_groups='4') for sn in (1, 2, 3)],
+        # 4 entries for 4 groups: one per group is allowed
+        *[group_row('S', 'M2', sn, amount_of_groups='4') for sn in (4, 5, 6, 7)],
+        group_row('S', 'W1', 8, amount_of_groups='0'),
+        # inconsistent #groups is left to find_inconsistent_group_counts
+        group_row('S', 'W2', 9, amount_of_groups='2'),
+        group_row('S', 'W2', 10, amount_of_groups='5'),
+        bracket_row('S', 'W3', '1', '1', 11),
+    ]
+
+    errors = find_too_few_group_entries(draw_data)
+
+    assert len(errors) == 2
+    assert 'M1 has 3 group-stage entries for 4 groups' in errors[0]
+    assert 'W1 has #groups=0' in errors[1]
+
+
 def test_find_draw_data_errors_accepts_valid_input():
     Player(1, 'Alice', 'Alpha', 'GER', 'Base1', 'F', 1200)
     Player(2, 'Bob', 'Bravo', 'SWE', 'Base2', 'M', 1100)
@@ -257,8 +291,8 @@ def test_find_draw_data_errors_accepts_valid_input():
     draw_data = [
         group_row('S', 'M1', 2),
         group_row('S', 'M1', 3),
-        group_row('D', 'M1', 2, 3),
-        group_row('M', 'X1', 1, 2),
+        group_row('D', 'M1', 2, 3, amount_of_groups='1'),
+        group_row('M', 'X1', 1, 2, amount_of_groups='1'),
         bracket_row('S', 'W1', '1', '1', 1),
     ]
 

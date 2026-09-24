@@ -167,6 +167,34 @@ def find_inconsistent_group_counts(draw_data) -> list:
     return errors
 
 
+def find_missing_group_seedings(draw_data) -> list:
+    """Check that every group-stage row has a seeding, which the group draw sorts by."""
+    return [
+        f"{_entry_label(row)} has no seeding"
+        for row in draw_data
+        if row.group_pos is None and row.seeding is None
+    ]
+
+
+def find_too_few_group_entries(draw_data) -> list:
+    """Check that #groups is at least 1 and no larger than the number of group-stage entries of its class."""
+    entries = defaultdict(list)
+    for row in draw_data:
+        if row.group_pos is None:
+            entries[(row.competition, row.competition_class)].append(row)
+    errors = []
+    for (competition, competition_class), rows in sorted(entries.items()):
+        values = {row.amount_of_groups for row in rows}
+        if len(values) != 1 or None in values:
+            continue  # reported by find_inconsistent_group_counts
+        amount_of_groups = values.pop()
+        if amount_of_groups < 1:
+            errors.append(f"{competition} {competition_class} has #groups={amount_of_groups}; it must be at least 1")
+        elif len(rows) < amount_of_groups:
+            errors.append(f"{competition} {competition_class} has {len(rows)} group-stage entries for {amount_of_groups} groups; at least one group would be empty")
+    return errors
+
+
 def find_draw_data_errors(draw_data) -> list:
     """Run all structural draw data checks. Requires players_by_start_number to be populated and all referenced players to exist."""
     return (
@@ -177,4 +205,6 @@ def find_draw_data_errors(draw_data) -> list:
         + find_invalid_pairs(draw_data)
         + find_invalid_mixed_pairs(draw_data)
         + find_inconsistent_group_counts(draw_data)
+        + find_missing_group_seedings(draw_data)
+        + find_too_few_group_entries(draw_data)
     )

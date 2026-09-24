@@ -15,6 +15,8 @@ and [keeps a changelog](https://keepachangelog.com).
   - doubles/mixed entries without a partner, singles entries with one, and self-pairs
   - mixed pairs that are not one man and one woman
   - missing or inconsistent `#groups` within a class
+  - group-stage entries without a seeding
+  - classes with fewer group-stage entries than groups, or `#groups` below 1
 
 ### Changed
 
@@ -27,6 +29,8 @@ and [keeps a changelog](https://keepachangelog.com).
 - Surrounding whitespace in input fields is now trimmed. Before, `"GER "` counted as a separate country and `"F "` caused a false wrong-competition error
 - The group draw now returns the best grouping found in each attempt instead of the last one. Before, accepting worse swaps to escape a local minimum could end the attempt on a worse grouping than one it had already found. Escapes are also limited again: the budget now resets only when a new best grouping is found
 - The group draw history no longer shows outdated violations after a worse swap was accepted
+- A class with no more group-stage entries than groups no longer crashes the group draw
+- A failing group draw of one class no longer aborts the whole run. The class is reported as a warning and left out, and all other classes are still drawn and exported
 
 ### Security
 

@@ -68,3 +68,19 @@ def test_returns_best_visited_state_not_final_state(crowded_class, escape_heavy_
     scores = [s.violation_score for s in snapshots]
     assert scores[-1] == min(scores)
     assert _replay(snapshots) == {g: [p.start_number_a for p in m] for g, m in groups.items()}
+
+
+def test_one_entry_per_group_does_not_crash(escape_heavy_config):
+    """Entries == groups leaves a single seeding batch, which the swap loop never touches."""
+    for sn in range(1, 5):
+        Player(sn, f'First{sn}', f'Last{sn}', 'GER', 'Base1', 'M', 2000 - sn * 10)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+    rows = [DrawDataRow('S', 'M1', 300 - sn, 4, '', '', False, False, sn, '') for sn in range(1, 5)]
+    config["group_draw"]["max_seed_retries"] = "5"
+
+    groups, snapshots = draw_groups_monte_carlo(rows, 4)
+
+    assert {g: [p.start_number_a for p in m] for g, m in groups.items()} == {1: [1], 2: [2], 3: [3], 4: [4]}
+    assert len(snapshots) == 1  # only the initial placement, no swaps
+    seeding_by_start_numbers.clear()
