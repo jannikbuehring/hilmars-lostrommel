@@ -103,7 +103,11 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
         no_improvement_count = 0
         escape_attempts = 0
 
-        for _ in range(max_iterations):
+        # With a single batch (entries <= groups) there is nothing to swap, since the
+        # first batch is never touched: keep the deterministic placement as is.
+        swappable = len(batches) > 1
+
+        for _ in range(max_iterations if swappable else 0):
             # Choose a batch randomly, never swap first batch
             batch_idx = random.randint(1, len(batches) - 1)
             batch = batches[batch_idx]
@@ -171,8 +175,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
             best_score = current_violation_score
             best_groups = copy.deepcopy(groups)
             best_snapshots = list(snapshots)
-        if best_score == 0:
-            break  # Early exit if perfect solution found
+        if best_score == 0 or not swappable:
+            break  # Early exit if perfect solution found, or if every retry would give the same result
 
     if best_score > 0:
         print(f"Warning: Could not achieve perfect group draw after {max_seed_retries} seed attempts. Best score: {best_score}")

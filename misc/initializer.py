@@ -33,6 +33,7 @@ def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export."""
     pipeline_start = time.perf_counter()
     bracket_failures = []
+    group_failures = []
 
     def draw_bracket_with_snapshot_fallback(class_subset, competition, competition_class, bracket_kind):
         """Draw one bracket, returning (matches, snapshots, elapsed_seconds).
@@ -66,6 +67,31 @@ def initialize_data():
             # Keep matches empty so failed brackets are not exported as real draws.
             # Snapshots are preserved for interactive debugging.
             return {}, snapshots, time.perf_counter() - start
+
+    def draw_groups_with_fallback(class_subset, competition, competition_class):
+        """Draw the groups of one class, returning (group, snapshots, elapsed_seconds), or None on failure.
+
+        A failure is recorded in group_failures instead of aborting the run, so the
+        other classes are still drawn and exported.
+        """
+        start = time.perf_counter()
+        try:
+            group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+            return group, snapshots, time.perf_counter() - start
+        except Exception as exc:
+            group_failures.append(f"{competition} {competition_class}: {exc}")
+            logging.error("Group draw failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
+            return None
+
+    def report_group_section(spinner, label, failures_start, competition_classes):
+        """Finish a group draw spinner, as a warning if any class of this section failed."""
+        section_failures = group_failures[failures_start:]
+        if section_failures:
+            spinner.text = f"{label} group draw completed with {len(section_failures)} failure(s): {section_failures}"
+            spinner.ok("WARN")
+        else:
+            spinner.text = f"Successfully created {label.lower()} groups for competition classes {list(competition_classes)}"
+            spinner.ok()
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
@@ -176,16 +202,17 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
+                failures_start = len(group_failures)
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
                 for competition_class in singles_competition_classes:
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
-                    draw_start = time.perf_counter()
-                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start, "original_data": class_subset}
+                    result = draw_groups_with_fallback(class_subset, 'S', competition_class)
+                    if result is None:
+                        continue
+                    group, snapshots, draw_seconds = result
+                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds, "original_data": class_subset}
 
-                competition_classes_list = list(singles_competition_classes)
-                spinner.text = f"Successfully created singles groups for competition classes {competition_classes_list}"
-                spinner.ok()
+                report_group_section(spinner, "Singles", failures_start, singles_competition_classes)
 
         except Exception as e:
             spinner.fail()
@@ -200,16 +227,17 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
+                failures_start = len(group_failures)
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
-                    draw_start = time.perf_counter()
-                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start}
+                    result = draw_groups_with_fallback(class_subset, 'D', competition_class)
+                    if result is None:
+                        continue
+                    group, snapshots, draw_seconds = result
+                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds}
 
-                competition_classes_list = list(doubles_competition_classes)
-                spinner.text = f"Successfully created doubles groups for competition classes {competition_classes_list}"
-                spinner.ok()
+                report_group_section(spinner, "Doubles", failures_start, doubles_competition_classes)
 
         except Exception as e:
             spinner.fail()
@@ -225,16 +253,17 @@ def initialize_data():
                 spinner.fail("INFO")
             else:
                 # Create data subsets for each distinct competition class
+                failures_start = len(group_failures)
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
-                    draw_start = time.perf_counter()
-                    group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
-                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": time.perf_counter() - draw_start}
+                    result = draw_groups_with_fallback(class_subset, 'M', competition_class)
+                    if result is None:
+                        continue
+                    group, snapshots, draw_seconds = result
+                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds}
 
-                competition_classes_list = list(mixed_competition_classes)
-                spinner.text = f"Successfully created mixed groups for competition classes {competition_classes_list}"
-                spinner.ok()
+                report_group_section(spinner, "Mixed", failures_start, mixed_competition_classes)
 
         except Exception as e:
             spinner.fail()
