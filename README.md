@@ -13,11 +13,18 @@ Prerequisites (place in `input/`):
 
 Run `python hilmars_lostrommel.py` (or the pre-built executable in `builds/`), then use the interactive menu to browse Players / Groups / Bracket results.
 
-Before drawing, validity checks run against the input data:
+Surrounding whitespace is trimmed from every input field (so `"GER "` is read as `GER`). Before drawing, validity checks run against the input data. Every check aborts the run, except the "entered in at least one competition" check, which only warns:
 - No player has the same start number twice
 - Every player referenced in the draw data exists
-- Every imported player is entered in at least one competition
+- Every imported player is entered in at least one competition (warning only)
 - Players only compete in matching-gender competitions
+- A row with a group result (`group_pos`) is flagged for exactly one of main round / consolation; a group-stage row is flagged for neither
+- `group_no` and `group_pos` are either both set or both blank
+- No player appears twice in the same class and stage (neither as a single entry nor across two teams)
+- No `group_pos` occurs twice in the same group
+- Doubles and mixed entries have a partner, singles entries don't, and nobody is paired with themselves
+- Every mixed pair is one man and one woman
+- All group-stage rows of a class give the same, non-empty `#groups`
 
 # Group draw
 
