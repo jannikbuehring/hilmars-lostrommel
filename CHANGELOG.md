@@ -7,6 +7,15 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- New input validation checks for the draw data that abort the run before drawing. They reject:
+  - bracket entries flagged for both or neither of main round / consolation
+  - `group_no` given without `group_pos` (or the other way round)
+  - the same player twice in a class
+  - a duplicate `group_pos` within a group
+  - doubles/mixed entries without a partner, singles entries with one, and self-pairs
+  - mixed pairs that are not one man and one woman
+  - missing or inconsistent `#groups` within a class
+
 ### Changed
 
 ### Deprecated
@@ -14,6 +23,8 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Removed
 
 ### Fixed
+
+- Surrounding whitespace in input fields is now trimmed. Before, `"GER "` counted as a separate country and `"F "` caused a false wrong-competition error
 
 ### Security
 

@@ -18,7 +18,7 @@ from draw.bracket_drawer import draw_bracket
 from misc.config import config
 from misc.version import __version__
 
-from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition
+from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition, find_draw_data_errors
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
 
 singles_groups = {}
@@ -146,6 +146,15 @@ def initialize_data():
                 spinner.fail()
                 print("")
                 for e in errors:
+                    print("   ", e)
+                return
+
+            draw_data_errors = find_draw_data_errors(draw_data)
+            if draw_data_errors:
+                spinner.text = "Draw data integrity problems detected"
+                spinner.fail()
+                print("")
+                for e in draw_data_errors:
                     print("   ", e)
                 return
 
