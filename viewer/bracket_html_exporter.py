@@ -184,6 +184,7 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .controls button:disabled { opacity: 0.4; cursor: default; }
 .controls input[type=number] { width: 70px; background: #1e1e1e; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 5px; }
 .class-title { font-size: 15px; font-weight: bold; color: #eee; margin-right: 8px; }
+.quality-notice { font-size: 13px; font-weight: bold; color: #fff; background: #a32; border-radius: 4px; padding: 4px 8px; margin-right: 8px; }
 .meta { margin-left: auto; font-size: 13px; color: #aaa; text-align: right; }
 .meta .violations { font-size: 12px; color: #e0a; }
 .export-meta {
@@ -514,7 +515,24 @@ def _render_footer(heading, draw_seconds, run_meta):
     return f'<footer class="export-meta">{html.escape(" · ".join(str(p) for p in parts))}</footer>'
 
 
-def _render_html_document(title, heading, payload, list_markup, footer_markup):
+def _quality_notice(quality):
+    """Operator warning for a degraded or rule-breaking bracket, or None.
+
+    *quality* is `bracket_drawer.bracket_quality`'s dict, stored in the bracket
+    dict by the initializer; the viewer's fallback re-export may not carry it.
+    """
+    if not quality or quality.get("failed"):
+        return None
+    parts = []
+    if quality.get("degraded"):
+        parts.append("Best-effort layout (degraded)")
+    hard_count = sum(len(v) for v in quality.get("hard", {}).values())
+    if hard_count:
+        parts.append(f"{hard_count} hard-rule violation{'s' if hard_count != 1 else ''}")
+    return " · ".join(parts) or None
+
+
+def _render_html_document(title, heading, payload, list_markup, footer_markup, notice=None):
     # Escape "</script" so embedded participant data (names/bases from CSV input)
     # can never prematurely close the <script> tag it's embedded in.
     payload_json = json.dumps(payload, default=str).replace("</script", "<\\/script")
@@ -529,6 +547,7 @@ def _render_html_document(title, heading, payload, list_markup, footer_markup):
 <body>
 <div class="controls">
   <span class="class-title">{html.escape(heading)}</span>
+  {f'<span class="quality-notice">{html.escape(notice)}</span>' if notice else ''}
   <button id="btn-prev">&larr; Prev</button>
   <button id="btn-next">Next &rarr;</button>
   <button id="btn-first">Show first snapshot</button>
@@ -598,8 +617,11 @@ def export_bracket_html(competition, competition_class, bracket, output_dir, run
             "generated_at": (run_meta or {}).get('generated_at'),
             "random_seed": (run_meta or {}).get('random_seed'),
         }
+        notice = _quality_notice(selected.get('quality'))
+        if notice:
+            payload["meta"]["quality"] = notice
         footer_markup = _render_footer(heading, draw_seconds, run_meta)
-        document = _render_html_document(title, heading, payload, list_markup, footer_markup)
+        document = _render_html_document(title, heading, payload, list_markup, footer_markup, notice=notice)
 
         path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
         with open(path, "w", encoding="utf-8") as f:

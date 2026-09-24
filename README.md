@@ -40,6 +40,10 @@ Group winners are placed first, each seeding batch assigned as a whole rather th
 
 Every run writes `output/output.csv` — one semicolon-delimited file covering all competitions, with one row per group member and one row per **bracket slot** (`draw_number` is the Rasterzahl of the KO field, `1..bracket_size`). The `_A`/`_B` columns are the two players of a doubles/mixed pair, not the two sides of a match. Column reference: `output/output_explainer.md` (German) and [ARCHITECTURE.md § Input/output formats](ARCHITECTURE.md#4-inputoutput-formats-data_io).
 
+Next to it, every run writes a **draw report** (`output/<output name>_report.csv`) with one row per group class and per bracket and a `status` of `ok`, `violations`, `degraded` or `failed`. A bracket that could only be drawn as a best-effort layout (`degraded`), or that breaks a hard rule (group separation in the halves or quarters, or two group winners meeting in round one), is also listed in **red on the terminal** and marked at the top of its HTML page. Check the report before posting a draw.
+
+At the start of every run, the previous run's output CSV, report and HTML files are moved to `output/previous/`. If the run then fails, there is no output that could be mistaken for a current one, and the terminal shows a red "The draw did NOT complete" banner. If `output.csv` is open in Excel, the run stops right away and asks you to close it.
+
 # Group viewer
 
 Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. From the Groups menu, groups can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — one group card per row so no column is ever cut off, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).

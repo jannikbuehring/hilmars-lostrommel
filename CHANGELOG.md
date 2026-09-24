@@ -17,8 +17,13 @@ and [keeps a changelog](https://keepachangelog.com).
   - missing or inconsistent `#groups` within a class
   - group-stage entries without a seeding
   - classes with fewer group-stage entries than groups, or `#groups` below 1
+- A draw report next to the output CSV (`<output name>_report.csv`) with one row per group class and per bracket and a status of `ok`, `violations`, `degraded` or `failed`
+- Brackets that fell back to a best-effort layout, or that break a hard rule (group separation in the halves or quarters, two group winners meeting in round one), are now listed in red on the terminal and marked at the top of their HTML page. Before, they were reported as "Successfully created"
 
 ### Changed
+
+- At the start of every run, the previous run's output CSV, report and HTML files are moved to a `previous` folder next to the output CSV
+- The output CSV is written to a temporary file first and then renamed, so a crash never leaves a half-written file
 
 ### Deprecated
 
@@ -32,6 +37,9 @@ and [keeps a changelog](https://keepachangelog.com).
 - The group draw history no longer shows outdated violations after a worse swap was accepted
 - A class with no more group-stage entries than groups no longer crashes the group draw
 - A failing group draw of one class no longer aborts the whole run. The class is reported as a warning and left out, and all other classes are still drawn and exported
+- A run that fails part-way no longer leaves the previous run's output CSV and HTML in place looking current. The terminal now shows a red banner when the draw did not complete, and "View HTML" for a bracket whose draw failed no longer opens the previous run's page
+- An output file that is open in Excel is now detected before drawing, instead of making the run fail after the whole draw
+- One failing HTML export no longer skips the HTML of all later classes
 
 ### Security
 

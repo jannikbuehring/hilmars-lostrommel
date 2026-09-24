@@ -83,6 +83,46 @@ def _max_matching(items, allowed):
         _augment(item, set())
     return match
 
+
+# The rules a finished bracket must not break ("darf eigentlich nicht verletzt
+# werden").  Every other key of get_bracket_violations is a quality goal.
+HARD_BRACKET_RULES = ("half_group_separation", "quarter_group_separation", "first_vs_first")
+
+
+def _describe_hard_violation(rule, violation):
+    """One readable line for a HARD_BRACKET_RULES violation tuple."""
+    if rule == "first_vs_first":
+        match_idx, a, b = violation
+
+        def who(p):
+            return f"#{p.start_number_a} (group {p.group_no}, pos {p.group_pos})"
+        return f"match {match_idx}: {who(a)} vs {who(b)}"
+    group_no, text = violation
+    return f"group {group_no}: {text}"
+
+
+def bracket_quality(snapshots):
+    """Summarise a finished draw_bracket result for the operator.
+
+    Every return path of draw_bracket appends a snapshot of exactly the state it
+    returns as its LAST snapshot, so the final violations are read from there
+    instead of being re-checked.  Returns
+    {"degraded": bool, "hard": {rule: [description]}, "soft_count": int}; "hard"
+    only carries rules that are actually violated, one readable line per violation.
+    """
+    degraded = any(s.action == "quarter_capacity_degrade" for s in snapshots)
+    violations = (snapshots[-1].violations or {}) if snapshots else {}
+    hard = {
+        rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
+        for rule in HARD_BRACKET_RULES if violations.get(rule)
+    }
+    soft_count = sum(
+        len(value) for key, value in violations.items()
+        if key not in HARD_BRACKET_RULES and isinstance(value, list)
+    )
+    return {"degraded": degraded, "hard": hard, "soft_count": soft_count}
+
+
 def draw_bracket(class_subset: list[DrawDataRow]):
     """
     Build a single-elimination bracket from seeded participants.

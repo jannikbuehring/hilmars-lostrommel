@@ -10,16 +10,26 @@ from datetime import datetime
 from yaspin import yaspin
 
 from data_io.input_reader import read_players, read_draw_data
-from data_io.output_writer import write_to_csv, prepare_export_from_group_draw, prepare_export_from_bracket_draw
+from data_io.output_writer import (
+    write_to_csv,
+    write_report_csv,
+    prepare_report,
+    prepare_export_from_group_draw,
+    prepare_export_from_bracket_draw,
+    archive_previous_outputs,
+)
 
 from draw.group_drawer import draw_groups_monte_carlo
-from draw.bracket_drawer import draw_bracket
+from draw.bracket_drawer import draw_bracket, bracket_quality
 
 from misc.config import config
 from misc.version import __version__
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition, find_draw_data_errors
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
+
+_RED = "\033[91m"
+_RESET = "\033[0m"
 
 singles_groups = {}
 doubles_groups = {}
@@ -30,21 +40,40 @@ doubles_brackets = {}
 mixed_brackets = {}
 
 def initialize_data():
-    """Initialize data by reading players and draw data, performing draws, and preparing export."""
+    """Initialize data by reading players and draw data, performing draws, and preparing export.
+
+    Returns True when the pipeline ran to its end (possibly with warnings), False
+    when a stage aborted it -- then no current output.csv / HTML exist, because
+    stage 0 moved the previous run's files to `previous/`.
+    """
     pipeline_start = time.perf_counter()
+    # (competition, class, message) per failed group class / bracket.
     bracket_failures = []
     group_failures = []
+    # Red lines printed under a bracket section's spinner: failures, degrades
+    # and hard-rule violations.
+    bracket_problems = []
 
     def draw_bracket_with_snapshot_fallback(class_subset, competition, competition_class, bracket_kind):
-        """Draw one bracket, returning (matches, snapshots, elapsed_seconds).
+        """Draw one bracket and return its section dict.
 
+        The dict carries `matches`, `snapshots`, `draw_seconds` and `quality`
+        (`bracket_drawer.bracket_quality`, or `{"failed": True, "message": ...}`).
         The elapsed time is reported on the failure path too, so a bracket that
         exhausted its attempts still shows how long that search took.
         """
+        label = f"{competition} {competition_class} {bracket_kind}"
         start = time.perf_counter()
         try:
             matches, snapshots = draw_bracket(class_subset=class_subset)
-            return matches, snapshots, time.perf_counter() - start
+            quality = bracket_quality(snapshots)
+            if quality["degraded"]:
+                bracket_problems.append(f"{label}: DEGRADED (best-effort layout, separations were only soft goals)")
+            for rule, violations in quality["hard"].items():
+                for violation in violations:
+                    bracket_problems.append(f"{label}: {rule}: {violation}")
+            return {'matches': matches, 'snapshots': snapshots,
+                    'draw_seconds': time.perf_counter() - start, 'quality': quality}
         except Exception as exc:
             snapshots = getattr(exc, "snapshots", [])
             failure_snapshot = getattr(exc, "failure_snapshot", snapshots[-1] if snapshots else None)
@@ -54,9 +83,8 @@ def initialize_data():
                 if isinstance(failure_info, dict):
                     failure_message = failure_info.get("message", failure_message)
 
-            bracket_failures.append(
-                f"{competition} {competition_class} {bracket_kind}: {failure_message}"
-            )
+            bracket_failures.append((competition, competition_class, failure_message))
+            bracket_problems.append(f"{label}: FAILED: {failure_message}")
             logging.error(
                 "Bracket draw failed for %s %s %s: %s",
                 competition,
@@ -66,7 +94,9 @@ def initialize_data():
             )
             # Keep matches empty so failed brackets are not exported as real draws.
             # Snapshots are preserved for interactive debugging.
-            return {}, snapshots, time.perf_counter() - start
+            return {'matches': {}, 'snapshots': snapshots,
+                    'draw_seconds': time.perf_counter() - start,
+                    'quality': {"failed": True, "message": failure_message}}
 
     def draw_groups_with_fallback(class_subset, competition, competition_class):
         """Draw the groups of one class, returning (group, snapshots, elapsed_seconds), or None on failure.
@@ -79,19 +109,48 @@ def initialize_data():
             group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
             return group, snapshots, time.perf_counter() - start
         except Exception as exc:
-            group_failures.append(f"{competition} {competition_class}: {exc}")
+            group_failures.append((competition, competition_class, str(exc)))
             logging.error("Group draw failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
             return None
 
     def report_group_section(spinner, label, failures_start, competition_classes):
         """Finish a group draw spinner, as a warning if any class of this section failed."""
-        section_failures = group_failures[failures_start:]
+        section_failures = [f"{c} {cls}: {msg}" for c, cls, msg in group_failures[failures_start:]]
         if section_failures:
             spinner.text = f"{label} group draw completed with {len(section_failures)} failure(s): {section_failures}"
             spinner.ok("WARN")
         else:
             spinner.text = f"Successfully created {label.lower()} groups for competition classes {list(competition_classes)}"
             spinner.ok()
+
+    def report_bracket_section(spinner, label, problems_start, competition_classes):
+        """Finish a bracket draw spinner; WARN and list every failed, degraded or
+        rule-breaking bracket of this section in red below it."""
+        section_problems = bracket_problems[problems_start:]
+        if section_problems:
+            spinner.text = f"{label} brackets: {len(section_problems)} problem(s), see below"
+            spinner.ok("WARN")
+            for problem in section_problems:
+                print(f"{_RED}    {problem}{_RESET}")
+        else:
+            spinner.text = f"Successfully created {label.lower()} bracket for competition classes {list(competition_classes)}"
+            spinner.ok()
+
+    ########################################################################################
+    with yaspin(text="Moving previous outputs to 'previous'...", color="cyan") as spinner:
+        try:
+            moved = archive_previous_outputs()
+            spinner.text = f"Moved {len(moved)} file(s) of the previous run to 'previous'"
+            spinner.ok()
+        except PermissionError as exc:
+            spinner.text = f"Cannot move {exc.filename} - close it (e.g. in Excel) and restart"
+            spinner.fail()
+            return False
+        except Exception:
+            spinner.fail()
+            logging.error("Exception occurred:\n%s", traceback.format_exc())
+            return False
+
     ########################################################################################
     with yaspin(text="Reading player data...", color="cyan") as spinner:
         try:
@@ -102,12 +161,12 @@ def initialize_data():
         except FileNotFoundError:
             spinner.text = "Players file not found"
             spinner.fail()
-            return
+            return False
 
         except Exception:
             spinner.fail()
             logging.error("Exception occurred:\n%s", traceback.format_exc())
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Reading draw data...", color="cyan") as spinner:
@@ -137,12 +196,12 @@ def initialize_data():
         except FileNotFoundError:
             spinner.text = "Draw input file not found"
             spinner.fail()
-            return
+            return False
 
         except Exception:
             spinner.fail()
             logging.error("Exception occurred:\n%s", traceback.format_exc())
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Performing data validity checks...", color="cyan") as spinner:
@@ -152,14 +211,14 @@ def initialize_data():
                 spinner.text = "There were multiple player entries found"
                 spinner.fail()
                 print(f">>>> Multiple player entries for start number(s): {wrongful_player_data}")
-                return
+                return False
 
             missing_players = find_missing_players(draw_data)
             if missing_players:
                 spinner.text = "The draw data contains references to players that are missing from the import"
                 spinner.fail()
                 print(f">>>> Missing player(s): {missing_players}")
-                return
+                return False
 
             players_not_in_draw_data = find_players_not_in_draw_data(draw_data)
             if players_not_in_draw_data:
@@ -173,7 +232,7 @@ def initialize_data():
                 print("")
                 for e in errors:
                     print("   ", e)
-                return
+                return False
 
             draw_data_errors = find_draw_data_errors(draw_data)
             if draw_data_errors:
@@ -182,7 +241,7 @@ def initialize_data():
                 print("")
                 for e in draw_data_errors:
                     print("   ", e)
-                return
+                return False
 
             spinner.text = "The imported data seems valid"
             spinner.ok()
@@ -191,7 +250,7 @@ def initialize_data():
         except Exception:
             spinner.fail()
             logging.error("Exception occurred:\n%s", traceback.format_exc())
-            return
+            return False
 
 
     ########################################################################################
@@ -217,7 +276,7 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Drawing doubles groups...", color="cyan") as spinner:
@@ -242,7 +301,7 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
-            return
+            return False
 
 
     ########################################################################################
@@ -268,7 +327,7 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             print("An error occurred:", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Validating group draws...", color="cyan") as spinner:
@@ -281,7 +340,12 @@ def initialize_data():
                     team_country_violations = check_team_country_distribution(group_data["group"]) if group_type in ('D', 'M') else []
                     qttr_violations = get_qttr_violations(group_data["group"]) if group_type == 'S' else []
 
-                    if country_violations or base_violations or team_country_violations or qttr_violations:
+                    # Carried into the draw report next to the bracket rows.
+                    group_data["violation_count"] = (
+                        len(country_violations) + len(base_violations)
+                        + len(team_country_violations) + len(qttr_violations)
+                    )
+                    if group_data["violation_count"]:
                         invalid_groups.append((group_type, competition_class, group_data["group"]))
 
                     if country_violations:
@@ -311,7 +375,7 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             print("An error occurred during group validation:", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Drawing singles bracket...", color="cyan") as spinner:
@@ -320,7 +384,7 @@ def initialize_data():
                 spinner.text = "No singles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
-                section_failures_start = len(bracket_failures)
+                problems_start = len(bracket_problems)
                 # Create data subsets for each distinct competition class
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_bracket_draw_data))
                 for competition_class in singles_competition_classes:
@@ -328,39 +392,27 @@ def initialize_data():
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=main_round_participants,
-                        competition='S',
-                        competition_class=competition_class,
-                        bracket_kind='main',
-                    )
-                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=consolation_round_participants,
-                        competition='S',
-                        competition_class=competition_class,
-                        bracket_kind='consolation',
-                    )
                     singles_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
+                        'main': draw_bracket_with_snapshot_fallback(
+                            class_subset=main_round_participants,
+                            competition='S',
+                            competition_class=competition_class,
+                            bracket_kind='main',
+                        ),
+                        'consolation': draw_bracket_with_snapshot_fallback(
+                            class_subset=consolation_round_participants,
+                            competition='S',
+                            competition_class=competition_class,
+                            bracket_kind='consolation',
+                        ),
                     }
 
-                competition_classes_list = list(singles_competition_classes)
-                section_failures = len(bracket_failures) - section_failures_start
-                if section_failures:
-                    spinner.text = (
-                        f"Singles bracket draw completed with {section_failures} failure(s). "
-                        f"Use interactive bracket viewer snapshots for details."
-                    )
-                    spinner.ok("WARN")
-                else:
-                    spinner.text = f"Successfully created singles bracket for competition classes {competition_classes_list}"
-                    spinner.ok()
+                report_bracket_section(spinner, "Singles", problems_start, singles_competition_classes)
 
         except Exception as e:
             spinner.fail()
             logging.error("An error occurred: %s", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Drawing doubles bracket...", color="cyan") as spinner:
@@ -369,46 +421,35 @@ def initialize_data():
                 spinner.text = "No doubles bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
-                section_failures_start = len(bracket_failures)
+                problems_start = len(bracket_problems)
+                # Create data subsets for each distinct competition class
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
                     class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
-                    
-                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=main_round_participants,
-                        competition='D',
-                        competition_class=competition_class,
-                        bracket_kind='main',
-                    )
-                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=consolation_round_participants,
-                        competition='D',
-                        competition_class=competition_class,
-                        bracket_kind='consolation',
-                    )
+
                     doubles_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
+                        'main': draw_bracket_with_snapshot_fallback(
+                            class_subset=main_round_participants,
+                            competition='D',
+                            competition_class=competition_class,
+                            bracket_kind='main',
+                        ),
+                        'consolation': draw_bracket_with_snapshot_fallback(
+                            class_subset=consolation_round_participants,
+                            competition='D',
+                            competition_class=competition_class,
+                            bracket_kind='consolation',
+                        ),
                     }
 
-                competition_classes_list = list(doubles_competition_classes)
-                section_failures = len(bracket_failures) - section_failures_start
-                if section_failures:
-                    spinner.text = (
-                        f"Doubles bracket draw completed with {section_failures} failure(s). "
-                        f"Use interactive bracket viewer snapshots for details."
-                    )
-                    spinner.ok("WARN")
-                else:
-                    spinner.text = f"Successfully created doubles bracket for competition classes {competition_classes_list}"
-                    spinner.ok()
+                report_bracket_section(spinner, "Doubles", problems_start, doubles_competition_classes)
 
         except Exception as e:
             spinner.fail()
             logging.error("An error occurred: %s", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Drawing mixed bracket...", color="cyan") as spinner:
@@ -417,46 +458,35 @@ def initialize_data():
                 spinner.text = "No mixed bracket draw data found - no bracket created"
                 spinner.fail("INFO")
             else:
-                section_failures_start = len(bracket_failures)
+                problems_start = len(bracket_problems)
+                # Create data subsets for each distinct competition class
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
                     class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
                     main_round_participants = [data for data in class_subset if data.main_round == True]
                     consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
 
-                    main_bracket, main_snapshots, main_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=main_round_participants,
-                        competition='M',
-                        competition_class=competition_class,
-                        bracket_kind='main',
-                    )
-                    consolation_bracket, consolation_snapshots, consolation_seconds = draw_bracket_with_snapshot_fallback(
-                        class_subset=consolation_round_participants,
-                        competition='M',
-                        competition_class=competition_class,
-                        bracket_kind='consolation',
-                    )
                     mixed_brackets[competition_class] = {
-                        'main': {'matches': main_bracket, 'snapshots': main_snapshots, 'draw_seconds': main_seconds},
-                        'consolation': {'matches': consolation_bracket, 'snapshots': consolation_snapshots, 'draw_seconds': consolation_seconds}
+                        'main': draw_bracket_with_snapshot_fallback(
+                            class_subset=main_round_participants,
+                            competition='M',
+                            competition_class=competition_class,
+                            bracket_kind='main',
+                        ),
+                        'consolation': draw_bracket_with_snapshot_fallback(
+                            class_subset=consolation_round_participants,
+                            competition='M',
+                            competition_class=competition_class,
+                            bracket_kind='consolation',
+                        ),
                     }
 
-                competition_classes_list = list(mixed_competition_classes)
-                section_failures = len(bracket_failures) - section_failures_start
-                if section_failures:
-                    spinner.text = (
-                        f"Mixed bracket draw completed with {section_failures} failure(s). "
-                        f"Use interactive bracket viewer snapshots for details."
-                    )
-                    spinner.ok("WARN")
-                else:
-                    spinner.text = f"Successfully created mixed bracket for competition classes {competition_classes_list}"
-                    spinner.ok()
+                report_bracket_section(spinner, "Mixed", problems_start, mixed_competition_classes)
 
         except Exception as e:
             spinner.fail()
             logging.error("An error occurred: %s", e)
-            return
+            return False
 
     ########################################################################################
     bracket_payload = {
@@ -479,40 +509,52 @@ def initialize_data():
         except Exception as e:
             spinner.fail()
             logging.error("An error occurred: %s", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Exporting draws to file...", color="cyan") as spinner:
         try:
             output_file_path = write_to_csv(export_data)
+            report_path = write_report_csv(prepare_report(groups, group_failures, bracket_payload))
 
-            spinner.text = f"Successfully created output file {output_file_path}"
+            spinner.text = f"Successfully created output file {output_file_path} and draw report {report_path}"
             spinner.ok()
+
+        except PermissionError as exc:
+            spinner.text = f"Cannot write {exc.filename} - close it (e.g. in Excel) and restart"
+            spinner.fail()
+            return False
 
         except Exception as e:
             spinner.fail()
             logging.error("An error occurred: %s", e)
-            return
+            return False
 
     ########################################################################################
     with yaspin(text="Exporting groups and brackets to HTML...", color="cyan") as spinner:
+        from viewer.bracket_html_exporter import export_bracket_html
+        from viewer.group_html_exporter import export_group_html
+        bracket_output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+        group_output_dir = config["files"].get("group_html_output_dir", "output/groups")
+        html_failures = []
         try:
-            from viewer.bracket_html_exporter import export_bracket_html
-            from viewer.group_html_exporter import export_group_html
-            bracket_output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
-            group_output_dir = config["files"].get("group_html_output_dir", "output/groups")
             group_max_snapshots = int(config["group_draw"].get("html_max_snapshots", 20000))
-            # Read the total once, before the export loop, so every exported file
-            # reports the same run duration and none of them include the cost of
-            # writing the HTML itself.
-            run_meta = {
-                'version': __version__,
-                'total_seconds': time.perf_counter() - pipeline_start,
-                'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                'random_seed': config["settings"].get("random_seed") or None,
-            }
-            for competition, group_dict in groups.items():
-                for competition_class, group_data in group_dict.items():
+        except ValueError:
+            group_max_snapshots = 20000
+        # Read the total once, before the export loop, so every exported file
+        # reports the same run duration and none of them include the cost of
+        # writing the HTML itself.
+        run_meta = {
+            'version': __version__,
+            'total_seconds': time.perf_counter() - pipeline_start,
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'random_seed': config["settings"].get("random_seed") or None,
+        }
+        # Each class is exported on its own, so one failing file does not skip
+        # every later one.
+        for competition, group_dict in groups.items():
+            for competition_class, group_data in group_dict.items():
+                try:
                     export_group_html(
                         competition,
                         competition_class,
@@ -523,15 +565,23 @@ def initialize_data():
                         max_snapshots=group_max_snapshots,
                         draw_seconds=group_data.get("draw_seconds"),
                     )
+                except Exception:
+                    html_failures.append(f"{competition} {competition_class} groups")
+                    logging.error("Group HTML export failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
 
-            for competition, brackets in bracket_payload.items():
-                for competition_class, bracket in brackets.items():
+        for competition, brackets in bracket_payload.items():
+            for competition_class, bracket in brackets.items():
+                try:
                     export_bracket_html(competition, competition_class, bracket, bracket_output_dir, run_meta=run_meta)
+                except Exception:
+                    html_failures.append(f"{competition} {competition_class} brackets")
+                    logging.error("Bracket HTML export failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
 
+        if html_failures:
+            spinner.text = f"HTML export completed with {len(html_failures)} failure(s): {html_failures}"
+            spinner.ok("WARN")
+        else:
             spinner.text = "Successfully exported groups and brackets to HTML"
             spinner.ok()
 
-        except Exception as e:
-            spinner.fail()
-            logging.error("An error occurred: %s", e)
-            return
+    return True

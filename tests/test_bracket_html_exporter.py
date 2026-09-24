@@ -77,6 +77,29 @@ def test_export_writes_html_with_valid_embedded_json(eight_players, tmp_path):
     assert original_start_numbers <= exported_start_numbers
 
 
+def test_degraded_bracket_shows_a_quality_notice(eight_players, tmp_path):
+    """Review finding C2: a degraded or rule-breaking bracket is marked on the page."""
+    _, matches, snapshots = _draw_eight_player_bracket()
+    quality = {"degraded": True, "hard": {"half_group_separation": ["a", "b"]}, "soft_count": 0}
+    bracket = {"main": {"matches": matches, "snapshots": snapshots, "quality": quality}}
+
+    html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
+
+    notice = "Best-effort layout (degraded) · 2 hard-rule violations"
+    assert f'<span class="quality-notice">{notice}</span>' in html
+    assert json.loads(DATA_SCRIPT_RE.search(html).group(1))["meta"]["quality"] == notice
+
+
+def test_clean_bracket_has_no_quality_notice(eight_players, tmp_path):
+    _, matches, snapshots = _draw_eight_player_bracket()
+    bracket = {"main": {"matches": matches, "snapshots": snapshots,
+                        "quality": {"degraded": False, "hard": {}, "soft_count": 2}}}
+
+    html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
+
+    assert 'class="quality-notice"' not in html
+
+
 def test_export_skips_missing_bracket_types(eight_players, tmp_path):
     _, matches, snapshots = _draw_eight_player_bracket()
     bracket = {"main": {"matches": matches, "snapshots": snapshots}}
