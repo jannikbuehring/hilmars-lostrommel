@@ -179,3 +179,6 @@ config/config_backup.ini
 config/config_brackets.ini
 input/draw_input_2026_ER_E.csv
 config/config_groups.ini
+output/output_2026_ER_E.csv
+output/previous/
+output/*_report.csv

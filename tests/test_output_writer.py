@@ -1,5 +1,6 @@
 """Tests for data_io/output_writer.py."""
 import csv
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,8 +10,13 @@ from draw.bracket_drawer import draw_bracket
 from misc.config import config
 from data_io.output_writer import (
     HEADERS,
+    REPORT_HEADERS,
+    archive_previous_outputs,
     prepare_export_from_bracket_draw,
     prepare_export_from_group_draw,
+    prepare_report,
+    report_file_path,
+    write_report_csv,
     write_to_csv,
 )
 
@@ -158,3 +164,108 @@ def test_write_to_csv_emits_the_documented_header_and_rows(eight_players, output
 
     assert len(rows) == len(matches) * 2
     assert [int(row[HEADERS.index("draw_number")]) for row in rows] == list(range(1, len(rows) + 1))
+
+    assert not (output_file_path.parent / "output.csv.tmp").exists()
+
+
+def test_failed_write_keeps_no_partial_file(output_file_path):
+    """A row that cannot be written must not leave a half-written CSV behind."""
+    bad = SimpleNamespace(**{h: '' for h in HEADERS}, unexpected='x')
+
+    with pytest.raises(ValueError):
+        write_to_csv([bad])
+
+    assert not output_file_path.exists()
+    assert not (output_file_path.parent / "output.csv.tmp").exists()
+
+
+def test_report_has_one_row_per_draw_with_status(output_file_path):
+    groups = {'S': {'M1': {}, 'M3': {'violation_count': 2}}, 'D': {}, 'M': {}}
+    group_failures = [('D', 'W1', 'boom')]
+    brackets = {'S': {'M2': {
+        'main': {'quality': {'degraded': False, 'hard': {}, 'soft_count': 3}},
+        'consolation': {'quality': {
+            'degraded': True,
+            'hard': {'half_group_separation': ['g1: positions 4/7 and 5/6 share a half']},
+            'soft_count': 1,
+        }},
+    }, 'W1': {
+        'main': {'quality': {'failed': True, 'message': 'no slot'}},
+        'consolation': {'quality': {'degraded': False, 'hard': {'first_vs_first': ['x', 'y']}, 'soft_count': 0}},
+    }}}
+
+    rows = prepare_report(groups, group_failures, brackets)
+    by_key = {(r['S_D_M'], r['class'], r['draw']): r for r in rows}
+
+    assert by_key[('S', 'M1', 'groups')]['status'] == 'ok'
+    assert by_key[('S', 'M3', 'groups')]['status'] == 'violations'
+    assert by_key[('S', 'M3', 'groups')]['other_violations'] == 2
+    assert by_key[('D', 'W1', 'groups')]['status'] == 'failed'
+    assert by_key[('D', 'W1', 'groups')]['details'] == 'boom'
+    assert by_key[('S', 'M2', 'main')]['status'] == 'ok'
+    assert by_key[('S', 'M2', 'main')]['other_violations'] == 3
+    consolation = by_key[('S', 'M2', 'consolation')]
+    assert consolation['status'] == 'degraded'
+    assert consolation['half_group_separation'] == 1
+    assert 'positions 4/7 and 5/6' in consolation['details']
+    assert by_key[('S', 'W1', 'main')]['status'] == 'failed'
+    assert by_key[('S', 'W1', 'consolation')]['status'] == 'violations'
+    assert by_key[('S', 'W1', 'consolation')]['first_vs_first'] == 2
+
+    written = write_report_csv(rows)
+
+    assert written == str(output_file_path.parent / "output_report.csv") == report_file_path()
+    with open(written, newline="", encoding="utf-8-sig") as file:
+        reader = csv.reader(file, delimiter=';')
+        assert next(reader) == REPORT_HEADERS
+        assert len(list(reader)) == len(rows)
+
+
+@pytest.fixture
+def output_dirs(output_file_path, tmp_path):
+    """Output CSV plus bracket/group HTML directories under one tmp output dir."""
+    out = output_file_path.parent
+    config["files"]["bracket_html_output_dir"] = str(out / "brackets")
+    config["files"]["group_html_output_dir"] = str(out / "groups")
+    (out / "brackets").mkdir(parents=True)
+    (out / "groups").mkdir(parents=True)
+    return out
+
+
+def test_archive_moves_previous_outputs(output_dirs, output_file_path):
+    out = output_dirs
+    output_file_path.write_text("old csv")
+    (out / "output_report.csv").write_text("old report")
+    (out / "brackets" / "S_M1_main_bracket.html").write_text("old bracket")
+    (out / "groups" / "S_M1_groups.html").write_text("old groups")
+    (out / "brackets" / "notes.html").write_text("not ours")
+    (out / "example_output.csv").write_text("reference file")
+    (out / "previous").mkdir()
+    (out / "previous" / "stale.csv").write_text("from two runs ago")
+
+    moved = archive_previous_outputs()
+
+    assert len(moved) == 4
+    assert not output_file_path.exists()
+    assert not (out / "brackets" / "S_M1_main_bracket.html").exists()
+    assert (out / "previous" / "output.csv").read_text() == "old csv"
+    assert (out / "previous" / "output_report.csv").read_text() == "old report"
+    assert (out / "previous" / "brackets" / "S_M1_main_bracket.html").read_text() == "old bracket"
+    assert (out / "previous" / "groups" / "S_M1_groups.html").read_text() == "old groups"
+    # The run before the previous one is dropped; unrelated files stay put.
+    assert not (out / "previous" / "stale.csv").exists()
+    assert (out / "brackets" / "notes.html").exists()
+    assert (out / "example_output.csv").exists()
+
+
+def test_archive_propagates_a_locked_file(output_dirs, output_file_path, monkeypatch):
+    """A file open in Excel must stop the run before drawing, not after."""
+    output_file_path.write_text("old csv")
+
+    def locked(src, dst):
+        raise PermissionError(13, "Permission denied", src)
+
+    monkeypatch.setattr("data_io.output_writer.os.replace", locked)
+
+    with pytest.raises(PermissionError):
+        archive_previous_outputs()

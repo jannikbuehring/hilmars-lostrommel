@@ -40,6 +40,10 @@ def show_bracket(competition, competition_class, bracket):
     if action == "Back":
         return
     if action == "View HTML":
+        if not bracket[bracket_type].get('matches'):
+            # A failed draw keeps only its snapshots; no HTML was written for it.
+            print("The draw of this bracket failed - no HTML was written. Use 'View' to step through its snapshots.")
+            return
         output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
         # Brackets are pre-exported during initialization; open the existing file.
         path = bracket_html_path(competition, competition_class, bracket_type, output_dir)

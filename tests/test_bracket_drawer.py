@@ -5,7 +5,7 @@ import pytest
 
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
-from draw.bracket_drawer import draw_bracket, TIER_QUARTER_BALANCE_WEIGHT
+from draw.bracket_drawer import draw_bracket, bracket_quality, HARD_BRACKET_RULES, TIER_QUARTER_BALANCE_WEIGHT
 from checks.bracket_checker import (
     check_bye_balance_halves,
     check_half_group_separation,
@@ -370,6 +370,35 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     # The graceful-degradation path was taken and a final bracket produced.
     assert any(s.action == 'quarter_capacity_degrade' for s in snapshots)
     assert snapshots[-1].action == 'final'
+
+    # Review finding C2: the degrade and the broken separations are surfaced.
+    quality = bracket_quality(snapshots)
+    assert quality['degraded']
+    assert quality['hard'], 'Two 2nd places of one group cannot both be separated from each other.'
+    assert set(quality['hard']) <= set(HARD_BRACKET_RULES)
+
+
+def test_bracket_quality_reads_the_returned_state(eight_players):
+    """bracket_quality relies on draw_bracket's last snapshot being the returned
+    state; a clean structured draw must report nothing."""
+    rows = []
+    for index, sn in enumerate(range(1, 9)):
+        seeding_by_start_numbers[str(sn)] = 300 - index
+        rows.append(DrawDataRow('S', 'M1', 300 - index, 2, 1 if index < 4 else 2, index % 4 + 1, True, False, sn, ''))
+
+    random.seed(0)
+    matches, snapshots = draw_bracket(rows)
+
+    def keys(match_map):
+        return {
+            idx: [p if p in (None, 'BYE') else p.start_number_a for p in participants]
+            for idx, participants in match_map.items()
+        }
+
+    assert keys(snapshots[-1].initial_groups) == keys(matches)
+    quality = bracket_quality(snapshots)
+    assert not quality['degraded']
+    assert quality['hard'] == {}
 
 
 def _quarter_of(match_idx, number_of_matches):
