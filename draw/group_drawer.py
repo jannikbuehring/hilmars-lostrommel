@@ -62,8 +62,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
             qttr_violations = violations["qttr"]
             qttr_violation_weight = int(config["group_draw"]["qttr_violation_weight"])
             return (
-                len(country_violations) * country_violation_weight
-                + len(team_country_violations) * team_country_violation_weight
+                sum(v[4] for v in country_violations) * country_violation_weight
+                + sum(v[5] for v in team_country_violations) * team_country_violation_weight
                 + len(base_violations) * base_violation_weight
                 + len(qttr_violations) * qttr_violation_weight
             )

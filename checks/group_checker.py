@@ -2,10 +2,21 @@
 from collections import defaultdict
 from models.player import players_by_start_number
 
+def _distribution_severity(counts):
+	"""
+	Number of entries outside the ideal band [floor(n/G), ceil(n/G)] summed over all groups.
+	Used to weight violations by how uneven a distribution is, not just whether it is uneven.
+	"""
+	total = sum(counts)
+	lo = total // len(counts)
+	hi = -(-total // len(counts))
+	return sum(max(0, c - hi) + max(0, lo - c) for c in counts)
+
 def check_country_distribution(competition, groups):
 	"""
 	For each country, ensure the difference between the group with the most and least participants is at most 1.
-	Returns a list of (competition_class, country, max_count, min_count, group_counts) for violations.
+	Returns a list of (country, max_count, min_count, group_counts, severity) for violations.
+	severity is the number of players outside the ideal per-group band (at least 1).
 	"""
 	violations = []
 	all_group_nos = set(groups.keys())
@@ -34,7 +45,8 @@ def check_country_distribution(competition, groups):
 		if not counts:
 			continue
 		if max(counts) - min(counts) > allowed_diff:
-			violations.append((country, max(counts), min(counts), dict((g, group_counts.get(g, 0)) for g in all_group_nos)))
+			severity = max(1, _distribution_severity(counts))
+			violations.append((country, max(counts), min(counts), dict((g, group_counts.get(g, 0)) for g in all_group_nos), severity))
 	return violations
 
 def check_base_uniqueness(groups):
@@ -98,7 +110,8 @@ def get_qttr_violations(groups):
 def check_team_country_distribution(groups):
 	"""
 	For doubles/mixed: Checks that full-country teams (e.g. <Germany, Germany>) and half-country teams (e.g. <Germany, Other>) are evenly distributed across groups.
-	Returns a list of violations: (competition_class, team_type, country, min_count, max_count, group_counts)
+	Returns a list of violations: (team_type, country, min_count, max_count, group_counts, severity)
+	severity is the number of teams outside the ideal per-group band (at least 1).
 	"""
 	violations = []
 
@@ -135,7 +148,8 @@ def check_team_country_distribution(groups):
 			min_count = min(counts)
 			max_count = max(counts)
 			if max_count > min_count + 1:
-				violations.append(("full-country", country, min_count, max_count, dict(group_counts)))
+				severity = max(1, _distribution_severity(counts))
+				violations.append(("full-country", country, min_count, max_count, dict(group_counts), severity))
 	# Check for violations in half-country teams
 	for country, group_counts in half_country_counts.items():
 		counts = [group_counts.get(group_no, 0) for group_no in groups.keys()]
@@ -143,5 +157,6 @@ def check_team_country_distribution(groups):
 			min_count = min(counts)
 			max_count = max(counts)
 			if max_count > min_count + 1:
-				violations.append(("half-country", country, min_count, max_count, dict(group_counts)))
+				severity = max(1, _distribution_severity(counts))
+				violations.append(("half-country", country, min_count, max_count, dict(group_counts), severity))
 	return violations
