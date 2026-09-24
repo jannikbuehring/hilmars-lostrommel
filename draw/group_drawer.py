@@ -94,6 +94,12 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
         current_violation_score = calculate_violation_score(current_violations)
         snapshots.append(Snapshot(None, None, None, None, current_violations, current_violation_score, initial_groups=copy.deepcopy(groups)))
 
+        # Best state visited in this seed; escapes may walk away from it, so it is
+        # what gets returned (and snapshots are cut back to it for the replay).
+        seed_best_score = current_violation_score
+        seed_best_groups = {g: list(m) for g, m in groups.items()}
+        seed_best_len = len(snapshots)
+
         no_improvement_count = 0
         escape_attempts = 0
 
@@ -126,7 +132,11 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
                 current_violation_score = new_violation_score
                 current_violations = new_violations
                 no_improvement_count = 0
-                escape_attempts = 0  # Only reset on improvement!
+                if current_violation_score < seed_best_score:
+                    seed_best_score = current_violation_score
+                    seed_best_groups = {g: list(m) for g, m in groups.items()}
+                    seed_best_len = len(snapshots)
+                    escape_attempts = 0  # Only reset on a new best, not on climbing back
                 if current_violation_score == 0:
                     break
             elif new_violation_score == current_violation_score:
@@ -140,11 +150,17 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
                     escape_attempts += 1
                     # Accept the bad swap, but don't reset no_improvement_count
                     current_violation_score = new_violation_score
+                    current_violations = new_violations
                 else:
                     # Revert swap
                     groups[g1][idx1], groups[g2][idx2] = p1, p2
                     snapshot_delta("revert", [g1, g2], idx1, [p1, p2], current_violations, current_violation_score)
                     no_improvement_count += 1
+
+        # Return the best state of this seed, not wherever the walk ended
+        groups = seed_best_groups
+        current_violation_score = seed_best_score
+        del snapshots[seed_best_len:]
 
         # Remove EmptySlot placeholders from groups
         for group_no in groups:

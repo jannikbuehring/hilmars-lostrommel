@@ -86,11 +86,11 @@ Both readers in `data_io/input_reader.py` expect **semicolon-delimited** UTF-8 C
    - `get_qttr_violations` — singles only; unrated (no-QTTR) players spread evenly (max ≤ min+1).
    - `check_team_country_distribution` — doubles/mixed only; full-country and half-country teams spread evenly (max ≤ min+1) per country.
 5. **Swap loop** (`max_iterations`, default 20000): picks a random non-first batch (batch 0, the highest seeds, is never touched — it stays exactly as placed in step 3), swaps two groups' occupants at that batch index, rescoring:
-   - Improvement → keep, reset stagnation counters, break early on score 0.
+   - Improvement → keep, reset the stagnation counter, break early on score 0. Only a new best score for this seed also resets the escape budget; climbing back to a level already reached does not, so `max_escape_attempts` really bounds the escapes between two new bests.
    - Equal → keep (sideways move).
    - Worse → normally revert; but once stuck for `max_no_improvement_iterations` with escape budget remaining (`max_escape_attempts`), accept the bad swap anyway as a perturbation to escape a local minimum.
    - Every swap/revert appends a `Snapshot(action='swap'|'revert', ...)`.
-6. `EmptySlot`s are stripped before returning `(best_groups, best_snapshots)`. If no perfect solution is found after all seed retries, a warning is printed.
+6. Each seed returns the **best state it visited**, not where the walk ended (an escape can leave it above its minimum). The snapshot list is cut back to the step that reached that state, so replaying it in the viewers still lands on the returned groups. `EmptySlot`s are stripped, and the best of all seeds is returned as `(best_groups, best_snapshots)`. If no perfect solution is found after all seed retries, a warning is printed.
 
 ### Bracket draw — `draw/bracket_drawer.py::draw_bracket(class_subset)`
 
