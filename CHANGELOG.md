@@ -27,6 +27,7 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Fixed
 
 - Surrounding whitespace in input fields is now trimmed. Before, `"GER "` counted as a separate country and `"F "` caused a false wrong-competition error
+- Consolation brackets now keep a group winner and the 2nd and 3rd placed of its group in opposite halves, and report it when they are not. Before, the check only looked at absolute group positions 1 to 4. In a consolation bracket (positions 4, 5, 6) the rule was never checked, and a repair step moved 5th and 6th placed players into their group winner's half
 - The group draw now returns the best grouping found in each attempt instead of the last one. Before, accepting worse swaps to escape a local minimum could end the attempt on a worse grouping than one it had already found. Escapes are also limited again: the budget now resets only when a new best grouping is found
 - The group draw history no longer shows outdated violations after a worse swap was accepted
 - A class with no more group-stage entries than groups no longer crashes the group draw

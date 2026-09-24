@@ -18,6 +18,7 @@ from checks.bracket_checker import (
     check_top_easy_first_round,
     check_no_bottom_vs_bottom,
     check_country_conflicts_first_round,
+    check_half_group_separation,
     check_placement_balance_quarters,
     check_round_two_matchups,
     derive_round_two_matches,
@@ -279,6 +280,69 @@ def test_relative_tiers_in_consolation():
     top_violations = check_top_easy_first_round(matches)
     assert [v[0] for v in top_violations] == [2]          # 4-vs-6 clean, 4-vs-5 not
     assert [v[0] for v in check_no_bottom_vs_bottom(matches)] == [3]
+
+
+# ---------------------------------------------------------------------------
+# Half separation: relative to the bracket's top position, like the tiers above.
+# ---------------------------------------------------------------------------
+
+def group_layout_matches(placements, shift=0):
+    """Build an 8-match bracket from {match_idx: [(group_no, group_pos), ...]}.
+
+    *shift* moves every group_pos by the same amount, so shift=3 turns a main
+    layout (1/2/3) into the identical consolation layout (4/5/6).
+    """
+    matches = {idx: [] for idx in range(1, 9)}
+    start_number = 1
+    for match_idx, sides in placements.items():
+        for group_no, group_pos in sides:
+            matches[match_idx].append(tiered(start_number, group_no, group_pos + shift))
+            start_number += 1
+    return matches
+
+
+# Group 1's winner (match 1) and runner-up (match 2) share the upper half.
+WINNER_AND_RUNNER_UP_SAME_HALF = {
+    1: [(1, 1), (2, 3)],
+    2: [(1, 2), (2, 2)],
+    6: [(1, 3), (2, 1)],
+}
+
+
+def test_half_separation_flags_runner_up_in_winners_half():
+    matches = group_layout_matches(WINNER_AND_RUNNER_UP_SAME_HALF)
+    violations = check_half_group_separation(matches, len(matches))
+    assert (1, "positions 1/4 and 2/3 share a half") in violations
+
+
+def test_half_separation_is_relative_in_consolation():
+    """The same layout shifted to 4/5/6 must report the same violations."""
+    main = group_layout_matches(WINNER_AND_RUNNER_UP_SAME_HALF)
+    consolation = group_layout_matches(WINNER_AND_RUNNER_UP_SAME_HALF, shift=3)
+    main_violations = check_half_group_separation(main, len(main))
+    consolation_violations = check_half_group_separation(consolation, len(consolation))
+    assert [g for g, _ in consolation_violations] == [g for g, _ in main_violations]
+    assert (1, "positions 4/7 and 5/6 share a half") in consolation_violations
+    assert score_bracket(consolation, len(consolation), DEFAULT_WEIGHTS) == \
+        score_bracket(main, len(main), DEFAULT_WEIGHTS)
+
+
+def test_half_separation_clean_consolation_layout():
+    matches = group_layout_matches({1: [(1, 1), (2, 3)], 2: [(2, 2)], 6: [(1, 2), (2, 1)], 8: [(1, 3)]}, shift=3)
+    assert check_half_group_separation(matches, len(matches)) == []
+
+
+def test_half_separation_bounds_override():
+    """A partial state without the winners must not re-anchor on the runners-up."""
+    matches = {idx: [] for idx in range(1, 9)}
+    matches[1] = [tiered(1, 1, 5)]
+    matches[6] = [tiered(2, 1, 6)]
+    # Derived from the matches, 5 reads as the top and 6 as its runner-up: clean.
+    assert check_half_group_separation(matches, len(matches)) == []
+    # With the real top (4), 5 and 6 both belong opposite the winner: split.
+    assert check_half_group_separation(matches, len(matches), bounds=(4, 6)) == [
+        (1, "positions 5/6 split across halves"),
+    ]
 
 
 def test_same_country_round_one_flagged():

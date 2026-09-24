@@ -178,7 +178,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         round_two = check_round_two_matchups(current_matches, bounds=bracket_bounds)
         return {
             "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches),
-            "half_group_separation": check_half_group_separation(current_matches, number_of_matches),
+            "half_group_separation": check_half_group_separation(current_matches, number_of_matches, bounds=bracket_bounds),
             "first_vs_first": check_no_first_vs_first(current_matches),
             "top_easy_opponent": check_top_easy_first_round(current_matches),
             "bottom_vs_bottom": check_no_bottom_vs_bottom(current_matches),
@@ -1306,7 +1306,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
         def separation_counts(trial_matches):
             return (
-                len(check_half_group_separation(trial_matches, number_of_matches)),
+                len(check_half_group_separation(trial_matches, number_of_matches, bounds=bracket_bounds)),
                 len(check_quarter_group_separation(trial_matches, number_of_matches)),
             )
 
