@@ -11,6 +11,7 @@ from models.player import players_by_start_number
 from models.snapshot import Snapshot
 from checks.bracket_checker import (
     score_bracket,
+    score_bracket_tiers,
     check_half_group_separation,
     check_quarter_group_separation,
     check_no_first_vs_first,
@@ -1442,9 +1443,33 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     def _fill_residual_soft(residual_players):
         """Best-effort fill of all free slots when hard quarter buckets overflow.
 
-        Monte Carlo over every remaining free slot, keeping the lowest
-        score_bracket result.  Half/quarter separation are already heavily
-        weighted in the score, so this still favours them without ever failing.
+        The degrade is usually caused upstream: Phase 1/1b left a quarter or half
+        without room for a player the separation rules send there (e.g. a quarter
+        filled with "player vs BYE" matches, or an 8/6 bye split across the
+        halves).  So the fill cannot just shuffle the leftover players -- random
+        reshuffles of 30+ free slots never converge, and no placement of the
+        leftovers alone can repair a full quarter.
+
+        Instead: start from the best of a few random fills, then hill-climb
+        (sideways moves accepted, best state kept) with three move types that
+        never touch a group winner, which stays in its seeded slot:
+
+        * swap two first-round matches without a winner -- moves whole
+          "player vs BYE" pairs between quarters and halves;
+        * move a BYE to another player-vs-player match, only when the new
+          recipient has the same group position as the old one, so each tier
+          keeps its number of byes;
+        * swap two non-winner players, same group position only when exactly
+          one of them faces a BYE (same reason).
+
+        The objective is compared as a tuple, most important first: the hard
+        tier (separations, first-vs-first); byes in seeding order within a tier
+        ("Hoechstes Seeding bekommt zuerst Freilose" -- the two bye-moving moves
+        may break it, but only to remove a hard violation); Phase 1/1b/1c's own
+        assignment_quality_cost (byes even over the halves, tiers even over the
+        quarters of a half, round-two quality), because the moves shift exactly
+        what those phases balanced; then score_bracket_tiers' matchup and
+        distribution tiers.
         """
         free_slots_all = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
 
@@ -1452,7 +1477,42 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             trial_state = dict(slot_state)
             for slot, participant in zip(free_slots_all, order):
                 trial_state[slot] = participant
-            return slots_to_matches(trial_state)
+            return trial_state
+
+        def _is_top(value):
+            return value not in (None, "BYE") and value.group_pos == top_group_pos
+
+        def _bye_seeding_inversions(trial_state):
+            """Count (without bye, with bye) pairs of one tier where the player
+            without the bye has the higher seeding ("Hoechstes Seeding bekommt
+            zuerst Freilose")."""
+            by_tier = {}
+            for s in range(1, bracket_size + 1):
+                p = trial_state[s]
+                if p in (None, "BYE") or _is_top(p):
+                    continue
+                with_bye = trial_state[opponent_slot(s)] == "BYE"
+                by_tier.setdefault(p.group_pos, ([], []))[0 if with_bye else 1].append(p.seeding)
+            return sum(
+                1
+                for with_bye, without_bye in by_tier.values()
+                for r in with_bye
+                for n in without_bye
+                if n > r
+            )
+
+        def _key(trial_state):
+            trial_matches = slots_to_matches(trial_state)
+            hard, matchup, distribution = score_bracket_tiers(
+                trial_matches, number_of_matches, weights=bracket_weights, bounds=bracket_bounds
+            )
+            return (
+                hard,
+                _bye_seeding_inversions(trial_state),
+                assignment_quality_cost(trial_matches),
+                matchup,
+                distribution,
+            )
 
         start_matches = slots_to_matches(slot_state)
         snapshots.append(
@@ -1469,32 +1529,127 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
         best_order = list(residual_players)
         random.shuffle(best_order)
-        best_matches = _fill_order(best_order)
-        best_score = score_bracket(best_matches, number_of_matches, weights=bracket_weights)
-        snapshot_interval = max(1, max_attempts // 10)
-
-        for attempt in range(max_attempts):
+        best_key = _key(_fill_order(best_order))
+        for _ in range(min(200, max_attempts)):
             trial_order = list(residual_players)
             random.shuffle(trial_order)
-            m_try = _fill_order(trial_order)
-            score = score_bracket(m_try, number_of_matches, weights=bracket_weights)
-            if score < best_score:
-                best_score = score
-                best_matches = copy.deepcopy(m_try)
-                snapshots.append(
-                    Snapshot(
-                        "improvement",
-                        [attempt],
-                        None,
-                        None,
-                        get_bracket_violations(m_try),
-                        score,
-                        initial_groups=copy.deepcopy(m_try),
+            trial_key = _key(_fill_order(trial_order))
+            if trial_key < best_key:
+                best_key, best_order = trial_key, trial_order
+
+        state = _fill_order(best_order)
+        best_state = dict(state)
+        current_key = best_key
+        winner_free_matches = [
+            m for m in range(1, number_of_matches + 1)
+            if not _is_top(state[2 * m - 1]) and not _is_top(state[2 * m])
+        ]
+        player_slots = [s for s in range(1, bracket_size + 1) if state[s] != "BYE" and not _is_top(state[s])]
+        # 4x the phase-5 budget: a move costs one scoring pass, which is small next
+        # to Phase 1 on the brackets that degrade, and the S M3 draws (150 players,
+        # 256 slots) only reach zero hard violations with it.
+        search_iterations = 4 * max_attempts
+        snapshot_interval = max(1, search_iterations // 10)
+
+        def _random_move():
+            """Apply one random move to `state`; return (changed slots, previous
+            values) for the undo, or None when the drawn move is not allowed."""
+            move = random.random()
+            if move < 0.25:
+                # Bye relocation.  Recipients are non-winners (the winners' byes
+                # stay with their seeded slot).
+                bye_slots = [
+                    s for s in range(1, bracket_size + 1)
+                    if state[s] == "BYE" and not _is_top(state[opponent_slot(s)])
+                ]
+                if not bye_slots:
+                    return None
+                bye_slot = random.choice(bye_slots)
+                recipient = state[opponent_slot(bye_slot)]
+                targets = [
+                    s for s in player_slots
+                    if s != opponent_slot(bye_slot)
+                    and state[opponent_slot(s)] not in (None, "BYE")
+                    and state[opponent_slot(s)].group_pos == recipient.group_pos
+                ]
+                if not targets:
+                    return None
+                target = random.choice(targets)
+                changed = [bye_slot, target]
+                previous = [state[s] for s in changed]
+                # The player at the target takes the BYE's place opposite the old
+                # recipient, and the target slot becomes the BYE.
+                state[bye_slot], state[target] = previous[1], "BYE"
+            elif move < 0.6 and len(winner_free_matches) >= 2:
+                match_a, match_b = random.sample(winner_free_matches, 2)
+                changed = [2 * match_a - 1, 2 * match_a, 2 * match_b - 1, 2 * match_b]
+                previous = [state[s] for s in changed]
+                for s, value in zip(changed, previous[2:] + previous[:2]):
+                    state[s] = value
+            else:
+                slot_a, slot_b = random.sample(player_slots, 2)
+                bye_a = state[opponent_slot(slot_a)] == "BYE"
+                bye_b = state[opponent_slot(slot_b)] == "BYE"
+                if bye_a != bye_b and state[slot_a].group_pos != state[slot_b].group_pos:
+                    return None
+                changed = [slot_a, slot_b]
+                previous = [state[s] for s in changed]
+                state[slot_a], state[slot_b] = previous[1], previous[0]
+            return changed, previous
+
+        # A hill climb on a lexicographic key plateaus: once the hard tier is
+        # stuck, every move that would pass through a worse lower tier is
+        # rejected.  After `stall_limit` attempts without a new best, restart
+        # from the best state with a few unconditional moves -- but only while
+        # hard violations remain, since that is what the fill is for.
+        stall_limit = max(100, search_iterations // 80)
+        kick_moves = 4
+        since_best = 0
+
+        for attempt in range(search_iterations):
+            if best_key == (0, 0, 0, 0, 0):
+                break
+            if since_best >= stall_limit and best_key[0] > 0:
+                since_best = 0
+                state = dict(best_state)
+                player_slots = [s for s in range(1, bracket_size + 1) if state[s] != "BYE" and not _is_top(state[s])]
+                for _ in range(kick_moves):
+                    if _random_move() is not None:
+                        player_slots = [
+                            s for s in range(1, bracket_size + 1) if state[s] != "BYE" and not _is_top(state[s])
+                        ]
+                current_key = _key(state)
+
+            since_best += 1
+            applied = _random_move()
+            if applied is None:
+                continue
+            changed, previous = applied
+
+            trial_key = _key(state)
+            m_try = slots_to_matches(state)
+            if trial_key <= current_key:
+                current_key = trial_key
+                player_slots = [s for s in range(1, bracket_size + 1) if state[s] != "BYE" and not _is_top(state[s])]
+                if trial_key < best_key:
+                    since_best = 0
+                    best_key, best_state = trial_key, dict(state)
+                    snapshots.append(
+                        Snapshot(
+                            "improvement",
+                            [attempt],
+                            None,
+                            None,
+                            get_bracket_violations(m_try),
+                            score_bracket(m_try, number_of_matches, weights=bracket_weights),
+                            initial_groups=copy.deepcopy(m_try),
+                        )
                     )
-                )
-                if best_score == 0:
-                    break
-            elif attempt % snapshot_interval == 0:
+                    continue
+            else:
+                for s, value in zip(changed, previous):
+                    state[s] = value
+            if attempt % snapshot_interval == 0:
                 snapshots.append(
                     Snapshot(
                         "progress",
@@ -1502,11 +1657,12 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                         None,
                         None,
                         get_bracket_violations(m_try),
-                        score,
+                        score_bracket(m_try, number_of_matches, weights=bracket_weights),
                         initial_groups=copy.deepcopy(m_try),
                     )
                 )
 
+        best_matches = slots_to_matches(best_state)
         snapshots.append(
             Snapshot(
                 "final",
@@ -1514,7 +1670,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 None,
                 None,
                 get_bracket_violations(best_matches),
-                best_score,
+                score_bracket(best_matches, number_of_matches, weights=bracket_weights),
                 initial_groups=copy.deepcopy(best_matches),
             )
         )
@@ -1627,6 +1783,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     )
 
     best_score = first_full_score
+    # Compared as score_bracket_tiers tuples, not the summed score: a weighted
+    # sum would trade one winner-vs-runner-up for a few same-country pairings.
+    best_key = score_bracket_tiers(first_full_matches, number_of_matches, weights=bracket_weights)
     best_matches = copy.deepcopy(first_full_matches)
     best_pools = {q: list(current_pools[q]) for q in range(4)}
 
@@ -1658,9 +1817,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             trial_pools = dict(best_pools)
             trial_pools[active_q] = trial_pool
             m_try = build_matches_from_quarter_pools(trial_pools)
-            score = score_bracket(m_try, number_of_matches, weights=bracket_weights)
+            trial_key = score_bracket_tiers(m_try, number_of_matches, weights=bracket_weights)
+            score = sum(trial_key)
 
-            if score < best_score:
+            if trial_key < best_key:
+                best_key = trial_key
                 best_score = score
                 best_pools = {q: list(trial_pools[q]) for q in range(4)}
                 best_matches = copy.deepcopy(m_try)

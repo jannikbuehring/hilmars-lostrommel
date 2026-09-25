@@ -23,6 +23,7 @@ from checks.bracket_checker import (
     check_round_two_matchups,
     derive_round_two_matches,
     score_bracket,
+    score_bracket_tiers,
     score_round_two,
     ROUND_TWO_DEFAULT_WEIGHTS,
 )
@@ -402,37 +403,60 @@ def test_new_weights_outrank_country_distribution():
         assert weights[term] > weights['country_half'] > weights['country_quarter']
 
 
-def test_soft_matchup_terms_never_outweigh_a_separation():
-    """Two placement violations must stay cheaper than one half/quarter split.
+def test_live_ladder_keeps_the_in_tier_order():
+    """The live config.ini ranks the matchup terms above the country spread.
 
-    _fill_residual_soft optimises score_bracket alone over every free slot, so if
-    this inverted it would manufacture a separation violation to fix a matchup one
-    ("Darf eigentlich nicht verletzt werden, country und base lieber violaten").
-    Checked against both ladders: the defaults here, and the live config.ini.
+    Across tiers the order is fixed by score_bracket_tiers; this only guards the
+    order the weights still decide.
     """
-    def assert_ladder(weights, label):
-        structural = min(weights['half_split'], weights['quarter_split'])
-        assert 2 * weights['top_easy_opponent'] < structural, label
-        assert weights['top_easy_opponent'] < structural, label
-
-    assert_ladder(DEFAULT_WEIGHTS, 'defaults')
-
     parser = configparser.ConfigParser()
     parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
     live = dict(DEFAULT_WEIGHTS)
-    for key, config_key in (
-        ('quarter_split', 'quarter_split_weight'),
-        ('half_split', 'half_split_weight'),
-        ('top_easy_opponent', 'top_easy_opponent_weight'),
-        ('bottom_vs_bottom', 'bottom_vs_bottom_weight'),
-        ('country_first', 'country_first_weight'),
-        ('country_half', 'country_half_weight'),
-        ('country_quarter', 'country_quarter_weight'),
-    ):
-        live[key] = parser.getint('bracket_draw', config_key, fallback=live[key])
-    assert_ladder(live, 'config.ini')
-    for term in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first'):
-        assert live[term] > live['country_half'] > live['country_quarter'], term
+    for key in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first', 'country_half', 'country_quarter'):
+        live[key] = parser.getint('bracket_draw', f'{key}_weight', fallback=live[key])
+    assert live['top_easy_opponent'] > live['bottom_vs_bottom']
+    assert live['country_first'] > live['country_half'] > live['country_quarter']
+
+
+def _h4_brackets():
+    """Review finding H4: the same 8 players, 2 winners / 3 runners-up / 3 thirds.
+
+    X: a winner faces a runner-up (1 top_easy), no same-country pairing.
+    Y: both winners face a 3rd, but 3 pairings are same-country.
+    """
+    register_players([
+        (1, 'GER'), (2, 'SWE'),                # winners
+        (3, 'DEN'), (4, 'AUT'), (5, 'FRA'),    # runners-up
+        (6, 'GER'), (7, 'SWE'), (8, 'DEN'),    # thirds
+    ])
+    w1, w2 = tiered(1, 1, 1), tiered(2, 2, 1)
+    r1, r2, r3 = tiered(3, 3, 2), tiered(4, 4, 2), tiered(5, 5, 2)
+    t1, t2, t3 = tiered(6, 6, 3), tiered(7, 7, 3), tiered(8, 8, 3)
+    x = {1: [w1, r1], 2: [w2, t1], 3: [r2, t2], 4: [r3, t3]}
+    y = {1: [w1, t1], 2: [w2, t2], 3: [r1, t3], 4: [r2, r3]}
+    return x, y
+
+
+def test_matchup_tier_outranks_same_country_pairings():
+    """H4: one winner-vs-runner-up must rank worse than any number of same-country
+    pairings, although the summed weights (70 vs 3 x 35) say the opposite."""
+    x, y = _h4_brackets()
+    assert len(check_top_easy_first_round(x)) == 1
+    assert len(check_country_conflicts_first_round(y)) == 3
+    assert len(check_top_easy_first_round(y)) == 0
+
+    x_tiers = score_bracket_tiers(x, 4, DEFAULT_WEIGHTS)
+    y_tiers = score_bracket_tiers(y, 4, DEFAULT_WEIGHTS)
+    assert x_tiers[0] == y_tiers[0] == 0
+    assert x_tiers > y_tiers
+    # The weighted sum alone ranks them the other way round -- which is the bug.
+    assert score_bracket(x, 4, DEFAULT_WEIGHTS) < score_bracket(y, 4, DEFAULT_WEIGHTS)
+
+
+def test_score_bracket_is_the_sum_of_its_tiers():
+    x, y = _h4_brackets()
+    for matches in (x, y):
+        assert score_bracket(matches, 4, DEFAULT_WEIGHTS) == sum(score_bracket_tiers(matches, 4, DEFAULT_WEIGHTS))
 
 
 # ---------------------------------------------------------------------------

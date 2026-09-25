@@ -649,52 +649,75 @@ def score_round_two(matches: Dict[int, List], weights: Dict[str, int] = None, bo
     return score
 
 
-def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
-    """Return a weighted score for the bracket; lower is better."""
-    if weights is None:
-        weights = {
-            "quarter_split": 200,
-            "half_split": 150,
-            "first_vs_first": 100,
-            "top_easy_opponent": 70,
-            "bottom_vs_bottom": 50,
-            "country_first": 35,
-            "country_half": 10,
-            "country_quarter": 4,
-            "base_first": 20,
-        }
+DEFAULT_BRACKET_WEIGHTS = {
+    "quarter_split": 200,
+    "half_split": 150,
+    "first_vs_first": 100,
+    "top_easy_opponent": 70,
+    "bottom_vs_bottom": 50,
+    "country_first": 35,
+    "country_half": 10,
+    "country_quarter": 4,
+    "base_first": 20,
+}
 
-    score = 0
-    score += len(check_quarter_group_separation(matches, number_of_matches)) * weights.get("quarter_split", 200)
-    score += len(check_half_group_separation(matches, number_of_matches)) * weights.get("half_split", 150)
-    score += len(check_no_first_vs_first(matches)) * weights.get("first_vs_first", 100)
-    # Round-one matchup quality, all three deliberately ranked ABOVE the country
-    # weights below ("1. gegen dritter oder freilos ist wichtiger als
-    # länderverteilung") and below the structural separation weights above.  Keep
-    # 2 * top_easy_opponent under min(half_split, quarter_split) so the soft
-    # degrade path in _fill_residual_soft can never trade away a separation.
-    score += len(check_top_easy_first_round(matches)) * weights.get("top_easy_opponent", 70)
-    score += len(check_no_bottom_vs_bottom(matches)) * weights.get("bottom_vs_bottom", 50)
-    score += len(check_country_conflicts_first_round(matches)) * weights.get("country_first", 35)
-    country_violations = check_country_balance_halves(matches, number_of_matches)
-    # country_violations entries are (country, c0, c1, violation_amount)
-    country_violation_magnitude = sum(v[3] for v in country_violations) if country_violations else 0
-    score += country_violation_magnitude * weights.get("country_half", 10)
-    # Quarter-level country spread, deliberately weighted below country_half so
-    # balancing the halves stays the more important objective.
-    quarter_country_violations = check_country_balance_quarters(matches, number_of_matches)
-    quarter_country_magnitude = sum(v[-1] for v in quarter_country_violations)
-    score += quarter_country_magnitude * weights.get("country_quarter", 4)
-    score += len(check_base_conflicts_first_round(matches)) * weights.get("base_first", 20)
-    # Three checks are deliberately absent here, for one shared reason: none of
-    # them can be improved by a phase that optimises this score, so each would be
-    # a constant -- and any bracket that cannot satisfy it would then never reach
+
+def score_bracket_tiers(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None, bounds=None):
+    """Return the bracket score split into ``(hard, matchup, distribution)``.
+
+    Compare the tuples, not their sum: a weighted sum is not a priority order
+    (review finding H4).  One winner-vs-runner-up (70) used to lose to three
+    same-country pairings (105), and three of them (210) outweighed one quarter
+    separation (200).  As a tuple each tier outranks everything below it
+    whatever the counts, and the weights only trade off terms WITHIN a tier:
+
+    * hard -- half/quarter separation and first-vs-first ("darf eigentlich
+      nicht verletzt werden").
+    * matchup -- a group winner earned a bye or a lowest-placed opponent, and two
+      lowest-placed players should not meet ("1. gegen dritter oder freilos ist
+      wichtiger als laenderverteilung").
+    * distribution -- same-country and same-base pairings and the country spread
+      over the halves and quarters.
+
+    *bounds* is the bracket's ``(top, bottom)`` tier range for the half check;
+    it is only needed for a partial state.
+    """
+    if weights is None:
+        weights = DEFAULT_BRACKET_WEIGHTS
+
+    def w(key):
+        return weights.get(key, DEFAULT_BRACKET_WEIGHTS[key])
+
+    hard = (
+        len(check_quarter_group_separation(matches, number_of_matches)) * w("quarter_split")
+        + len(check_half_group_separation(matches, number_of_matches, bounds=bounds)) * w("half_split")
+        + len(check_no_first_vs_first(matches)) * w("first_vs_first")
+    )
+    matchup = (
+        len(check_top_easy_first_round(matches)) * w("top_easy_opponent")
+        + len(check_no_bottom_vs_bottom(matches)) * w("bottom_vs_bottom")
+    )
+    # country_balance entries are (country, c0, c1, violation_amount); both
+    # spreads are scored by magnitude.  The quarter spread is deliberately
+    # weighted below country_half so balancing the halves stays more important.
+    country_half_magnitude = sum(v[3] for v in check_country_balance_halves(matches, number_of_matches))
+    country_quarter_magnitude = sum(v[-1] for v in check_country_balance_quarters(matches, number_of_matches))
+    distribution = (
+        len(check_country_conflicts_first_round(matches)) * w("country_first")
+        + country_half_magnitude * w("country_half")
+        + country_quarter_magnitude * w("country_quarter")
+        + len(check_base_conflicts_first_round(matches)) * w("base_first")
+    )
+    # Three checks are deliberately absent from the tiers, for one shared reason:
+    # none of them can be improved by the phase-5 Monte Carlo, so each would be a
+    # constant -- and any bracket that cannot satisfy it would then never reach
     # score 0, defeating the early exits in all four phase-5 quarter loops.  All
     # three are enforced where they still can be, by bracket_drawer's Phase
-    # 1/1b/1c objective, and reported via get_bracket_violations so both viewers
-    # still surface them.
-    #   * check_bye_balance_halves -- the byes are locked into place by Phase 1/1b
-    #     and never move again.  bracket_drawer scores it directly in
+    # 1/1b/1c objective (and the bye balance also by the degrade fill, which is
+    # the one later phase that moves byes), and reported via
+    # get_bracket_violations so both viewers still surface them.
+    #   * check_bye_balance_halves -- outside the degrade fill the byes are locked
+    #     into place by Phase 1/1b.  bracket_drawer scores it directly in
     #     assignment_quality_cost, where they are still being placed.
     #   * check_round_two_matchups -- every bye recipient sits opposite a BYE and
     #     every remaining free slot's partner is free too, so from Phase 2 on a
@@ -704,4 +727,16 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     #     players WITHIN one quarter, so it cannot move a tier count between
     #     quarters at all; the quarters are settled by Phase 1/1b (bye recipients,
     #     locked) and Phase 2's capacity buckets (not score-driven).
-    return score
+    return hard, matchup, distribution
+
+
+def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
+    """Return a weighted score for the bracket; lower is better.
+
+    The sum of :func:`score_bracket_tiers`.  It stays an integer because
+    Phase 1/1b/1c add it as a tiebreaker to their own penalty ladder, and the
+    snapshots and viewers show it.  The phase-5 Monte Carlo and the degrade fill
+    compare the tiers instead.
+    """
+    return sum(score_bracket_tiers(matches, number_of_matches, weights))
+
