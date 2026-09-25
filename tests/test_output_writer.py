@@ -212,6 +212,16 @@ def test_report_has_one_row_per_draw_with_status(output_file_path):
     assert by_key[('S', 'W1', 'consolation')]['status'] == 'violations'
     assert by_key[('S', 'W1', 'consolation')]['first_vs_first'] == 2
 
+
+    forced_only = {'S': {'W3': {'consolation': {'quality': {
+        'degraded': False, 'hard': {},
+        'forced': {'first_vs_first_forced': ['a', 'b', 'c', 'd']}, 'soft_count': 0,
+    }}}}}
+    forced_row = prepare_report({}, [], forced_only)[0]
+    assert forced_row['status'] == 'ok'
+    assert forced_row['first_vs_first'] == 0
+    assert forced_row['details'] == '4 unavoidable first_vs_first'
+
     written = write_report_csv(rows)
 
     assert written == str(output_file_path.parent / "output_report.csv") == report_file_path()

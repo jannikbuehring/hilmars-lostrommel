@@ -529,6 +529,12 @@ def _quality_notice(quality):
     hard_count = sum(len(v) for v in quality.get("hard", {}).values())
     if hard_count:
         parts.append(f"{hard_count} hard-rule violation{'s' if hard_count != 1 else ''}")
+    forced_count = len(quality.get("forced", {}).get("first_vs_first_forced", []))
+    if forced_count:
+        parts.append(
+            f"{forced_count} unavoidable first-vs-first "
+            f"match{'es' if forced_count != 1 else ''} (more group winners than matches)"
+        )
     return " · ".join(parts) or None
 
 

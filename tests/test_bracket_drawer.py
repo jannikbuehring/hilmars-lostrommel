@@ -15,6 +15,7 @@ from checks.bracket_checker import (
     check_placement_balance_quarters,
     check_round_two_matchups,
     score_bracket,
+    score_bracket_tiers,
     score_round_two,
 )
 from misc.config import config
@@ -1102,5 +1103,40 @@ def test_bottom_players_not_paired_when_avoidable():
             violations = check_no_bottom_vs_bottom(matches)
             assert not violations, \
                 f'Avoidable lowest-vs-lowest pairing (rng_seed={rng_seed}): {[v[0] for v in violations]}'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+@pytest.mark.parametrize('number_of_groups, positions, short_groups, expected_forced', [
+    # 8 groups of 3, top two advance: the consolation holds only the 8 thirds.
+    (8, (3,), (), 4),
+    # 10 thirds + 6 fourths in 16 slots: two thirds must meet.
+    (10, (3, 4), (7, 8, 9, 10), 2),
+])
+def test_unavoidable_first_vs_first_is_forced_not_hard(number_of_groups, positions, short_groups, expected_forced):
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(5):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(number_of_groups, positions, competition_class='W3', short_groups=short_groups)
+            matches, snapshots = draw_bracket(rows)
+            quality = bracket_quality(snapshots)
+            # Only first-vs-first is asserted: the uneven 3rd/4th layout can
+            # still break half separation on some seeds, independently of this.
+            assert 'first_vs_first' not in quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
+            assert len(quality['forced']['first_vs_first_forced']) == expected_forced
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_all_thirds_consolation_scores_clean():
+    """8 groups of 3, top two advance: the consolation's 4 third-vs-third
+    matches are forced, so nothing is hard and the hard tier reaches 0."""
+    seeding_by_start_numbers.clear()
+    try:
+        random.seed(0)
+        matches, snapshots = draw_bracket(build_tiered_rows(8, (3,), competition_class='W4'))
+        assert bracket_quality(snapshots)['hard'] == {}
+        assert score_bracket_tiers(matches, len(matches))[0] == 0
     finally:
         seeding_by_start_numbers.clear()

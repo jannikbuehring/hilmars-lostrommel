@@ -14,6 +14,7 @@ and [keeps a changelog](https://keepachangelog.com).
 - Brackets are now compared by rule tier instead of by one weighted sum: hard rules (half/quarter group separation, winner vs winner) first, then the winner/bottom-tier matchups, then country and base. A higher tier always wins, however large the numbers below it; the weights only trade off rules within one tier.
 - The best-effort fill for over-tight brackets ("degraded") is now a local search that can also move "player vs BYE" matches and byes within a placement tier, instead of random reshuffles. Group winners never move. A bye moves to a lower-seeded player of the same tier only when that removes a hard-rule violation.
 - Because the degrade fill now uses the random generator differently, the same seed draws different brackets than before, also in later classes.
+- Winner-vs-winner matches that the bracket cannot avoid (more top-placed players than matches, e.g. a consolation of only group thirds) are no longer hard-rule violations. They are shown as "unavoidable first-vs-first" in the HTML page, the report details and the new `first_vs_first_forced` / `round2_first_vs_first_forced` entries. Only matches above that minimum count as violations.
 
 ### Deprecated
 
