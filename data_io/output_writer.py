@@ -219,7 +219,8 @@ def prepare_report(groups, group_failures, bracket_payload):
                 else:
                     status = "ok"
                 details = " | ".join(
-                    f"{rule}: {violation}" for rule, violations in hard.items() for violation in violations
+                    [f"{rule}: {violation}" for rule, violations in hard.items() for violation in violations]
+                    + [f"bye_order: {line}" for line in quality.get("bye_order", [])]
                 )
                 # Unavoidable pairings (more winners than matches) keep the status
                 # "ok" but are still worth a line for the operator.

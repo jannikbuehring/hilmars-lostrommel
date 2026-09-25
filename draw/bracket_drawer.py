@@ -21,6 +21,7 @@ from checks.bracket_checker import (
     check_country_balance_halves,
     check_country_balance_quarters,
     check_bye_balance_halves,
+    check_bye_seeding_order,
     check_base_conflicts_first_round,
     check_placement_balance_quarters,
     check_round_two_matchups,
@@ -62,6 +63,10 @@ TIER_QUARTER_BALANCE_WEIGHT = 2500
 # was the sole reason two Slovenian group winners shared a half: the country-clean
 # assignment needed both of its first two placements in the upper half.
 BYE_HALF_BALANCE_WEIGHT = 5000
+
+# winner_country_lookahead enumerates 2^k half choices for the k group winners
+# still to be placed; 12 keeps one enumeration at a few thousand leaves.
+WINNER_LOOKAHEAD_MAX_PENDING = 12
 
 
 def _max_matching(items, allowed):
@@ -116,12 +121,17 @@ def bracket_quality(snapshots):
     returns as its LAST snapshot, so the final violations are read from there
     instead of being re-checked.  Returns
     {"degraded": bool, "hard": {rule: [description]}, "forced": {rule: [description]},
-    "soft_count": int}; "hard" and "forced" only carry rules that actually have
-    entries, one readable line each.  "forced" pairings are unavoidable and so
-    count neither as hard nor as soft violations.
+    "bye_order": [description], "soft_count": int}; "hard" and "forced" only carry
+    rules that actually have entries, one readable line each.  "forced" pairings
+    are unavoidable and so count neither as hard nor as soft violations.
+
+    "degraded" means the draw took the quarter_capacity_degrade path AND its fill
+    did not repair it: a hard violation is left, or byes were handed out of
+    seeding order ("bye_order") to get rid of one.  A fill that ends clean is a
+    regular bracket.
     """
-    degraded = any(s.action == "quarter_capacity_degrade" for s in snapshots)
     violations = (snapshots[-1].violations or {}) if snapshots else {}
+    final_matches = (snapshots[-1].initial_groups or {}) if snapshots else {}
     hard = {
         rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
         for rule in HARD_BRACKET_RULES if violations.get(rule)
@@ -134,7 +144,19 @@ def bracket_quality(snapshots):
         len(value) for key, value in violations.items()
         if key not in HARD_BRACKET_RULES and key not in FORCED_BRACKET_RULES and isinstance(value, list)
     )
-    return {"degraded": degraded, "hard": hard, "forced": forced, "soft_count": soft_count}
+    group_positions = [
+        p.group_pos for participants in final_matches.values() for p in participants
+        if p not in (None, "BYE") and p.group_pos is not None
+    ]
+    bye_order = [
+        f"pos {group_pos}: #{without_bye.start_number_a} (seeding {without_bye.seeding}) has no bye, "
+        f"#{with_bye.start_number_a} (seeding {with_bye.seeding}) has one"
+        for group_pos, without_bye, with_bye in (
+            check_bye_seeding_order(final_matches, min(group_positions)) if group_positions else []
+        )
+    ]
+    degraded = any(s.action == "quarter_capacity_degrade" for s in snapshots) and bool(hard or bye_order)
+    return {"degraded": degraded, "hard": hard, "forced": forced, "bye_order": bye_order, "soft_count": soft_count}
 
 
 def draw_bracket(class_subset: list[DrawDataRow]):
@@ -349,6 +371,15 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # raw winner counts wrongly assumes every group demands the same 2 opposite
     # slots, which breaks for uneven groups (e.g. a consolation group missing its
     # 3rd).  See top_reverse_weight below.
+    #
+    # A non-winner bye recipient counts TWICE: its BYE sits opposite it, so it
+    # takes two slots of the half its group anchor sends it to.  Who gets a bye
+    # is fixed by seeding before anything is placed, so this is known up front --
+    # counting it as one slot let Phase 1 put 8 winners into one half of the S M1
+    # consolation draw (15 groups of 4th/5th/6th, 8 byes for the 5th places),
+    # leaving the other half short of room and the draw on the degrade path.
+    bye_recipients = class_subset[:byes]
+    bye_recipient_ids = {id(p) for p in bye_recipients}
     group_opp_load: dict = {}
     group_same_load: dict = {}
     for _p in class_subset:
@@ -356,21 +387,21 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         if _g is None or _p.group_pos is None:
             continue
         _delta = _p.group_pos - top_group_pos
+        _slots = 2 if id(_p) in bye_recipient_ids else 1
         if _delta in (1, 2):
-            group_opp_load[_g] = group_opp_load.get(_g, 0) + 1
+            group_opp_load[_g] = group_opp_load.get(_g, 0) + _slots
         elif _delta == 3:
-            group_same_load[_g] = group_same_load.get(_g, 0) + 1
+            group_same_load[_g] = group_same_load.get(_g, 0) + _slots
 
     def top_reverse_weight(group_no):
         """Net load a group's winner places on its OWN half: opposite demand minus
-        same-half demand minus the winner's own slot.  A full group (2nd + 3rd in
-        the opposite half) yields 1 — so this collapses to the plain winner count
-        for symmetric brackets — while a group missing its 3rd yields 0."""
+        same-half demand minus the winner's own slot, the byes of its non-winners
+        included (see above).  A full group without such byes (2nd + 3rd in the
+        opposite half) yields 1 — so this collapses to the plain winner count for
+        symmetric brackets — while a group missing its 3rd yields 0."""
         if group_no is None:
             return 1
         return group_opp_load.get(group_no, 0) - group_same_load.get(group_no, 0) - 1
-    bye_recipients = class_subset[:byes]
-    bye_recipient_ids = {id(p) for p in bye_recipients}
     slot_state = empty_slot_state()
     locked_slots = set()
     hierarchy_groups = bye_hierarchy(bracket_size)
@@ -760,58 +791,24 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             for q in range(num_quarters)
         }
         min_combined = min(combined_in_q.values())
-        # Half balance is on the *net load* (winner reverse-weights minus byes), not
-        # raw tops — the PRIMARY capacity constraint.  A group winner forces its
-        # 2nd/3rd (delta 1/2) into the OPPOSITE half and its 4th (delta 3) into the
-        # SAME half, so its net pressure on its own half is top_reverse_weight(g)
-        # (= 1 for a full group); a bye consumes a slot with no opposite demand, so
-        # each bye a half holds requires one extra unit of winner load to stay
-        # feasible (winners and byes co-locate).  Balancing raw tops would treat a
-        # 3-2 and a 2-3 split as equal even when only one is fillable, and would
-        # over-count a winner from an uneven group (e.g. a consolation group missing
-        # its 3rd, whose weight is 0).
-        half_load_now = {0: 0, 1: 0}
-        for _gno, _gq in trial_tops.items():
-            half_load_now[_gq // quarters_per_half] += top_reverse_weight(_gno)
-        byes_in_half_now = {
-            h: sum(1 for s in trial_locked if trial_state[s] == "BYE" and slot_half(s) == h)
-            for h in range(2)
-        }
-        half_net_now = {h: half_load_now[h] - byes_in_half_now[h] for h in range(2)}
 
         q = slot_quarter(slot)
         future = combined_in_q[q] + 1 + (1 if needs_bye else 0)
         # Allow up to 1 above the current minimum without penalty.
         combined_excess = max(0, future - min_combined - 1)
 
-        h = q // quarters_per_half
-        # A winner adds its reverse-weight; a bye recipient (winner, or the Phase
-        # 1b non-winners that also go through here) subtracts one for its bye.
-        is_top = participant.group_pos == top_group_pos
-        tw = top_reverse_weight(getattr(participant, "group_no", None)) if is_top else 0
-        future_h_net = half_net_now[h] + tw - (1 if needs_bye else 0)
-        # Penalise if this half's net load would be more than 1 ahead of the opposite.
-        half_excess = max(0, future_h_net - half_net_now[1 - h] - 1)
-
-        # The byes must ALSO be even across the halves on their own
-        # ("Freilose ... gleichmaessig auf die Haelften verteilen").  Neither term
-        # above can see that: half_excess balances the NET load, and a full group's
-        # winner (top_reverse_weight 1) placed together with its bye is exactly
-        # net-neutral (tw - 1 == 0), so a half holding 4 winners + 4 byes and one
-        # holding 2 winners + 2 byes both score 0 there; combined_excess is blind
-        # too, since that same split can be a perfect 4/4/4/4 per quarter.  That
-        # rule is enforced in assignment_quality_cost, on the FINISHED assignment
-        # -- it used to be accumulated here as a per-step marginal, which charged
-        # legal layouts for the order they happened to be built in.  See
-        # BYE_HALF_BALANCE_WEIGHT.
-
+        # The half balance (half_load_cost) and the byes' own balance across the
+        # halves ("Freilose ... gleichmaessig auf die Haelften verteilen",
+        # assignment_quality_cost) are both charged on the FINISHED assignment, not
+        # here: accumulated as per-step marginals they charged legal layouts for
+        # the order they happened to be built in.  See BYE_HALF_BALANCE_WEIGHT.
+        #
         # Ladder, highest first:
-        #   half_excess         x 100000  net half load           (feasibility)
+        #   half_load_cost      x 100000  net half load           (feasibility)
         #   combined_excess     x  10000  quarter tops+byes       (feasibility)
         #   bye_half     (5000)           byes even over halves
         #   tier_quarter (2500)           tiers even within a half
-        #                                 -- both in assignment_quality_cost,
-        #                                 evaluated on the finished state, not here
+        #                                 -- both in assignment_quality_cost
         #   score_bracket + score_round_two          quality tiebreakers
         # score_bracket peaks at 250 across a full 33-player/64-slot draw's Phase
         # 1/1b calls (the few-thousand values only occur on a finished, degraded
@@ -819,7 +816,39 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # rule can be bought off with a country/matchup tiebreak, and neither can
         # override a feasibility constraint or push a placeable layout onto the
         # quarter_capacity_degrade path.
-        return combined_excess * 10000 + half_excess * 100000
+        return combined_excess * 10000
+
+    # Net load of each group winner on its own half once placed: its reverse
+    # weight, minus one for its own BYE.  Non-winner byes are already inside the
+    # reverse weight (see group_opp_load), so they add nothing here.
+    top_net_load = {
+        id(p): top_reverse_weight(getattr(p, "group_no", None)) - (1 if id(p) in bye_recipient_ids else 0)
+        for p in top_participants
+    }
+
+    def half_load_cost(trial_tops):
+        """Rank 1 of the ladder: the net half load, on a finished batch.
+
+        A group winner forces its 2nd/3rd (delta 1/2) into the OPPOSITE half and
+        its 4th (delta 3) into the SAME half, so the two halves only both fill up
+        when the winners' net loads (top_net_load) cancel out.  Balancing raw
+        winner counts would treat a 3-2 and a 2-3 split as equal even when only one
+        is fillable, and would over-count a winner from an uneven group.
+
+        Charged only for the imbalance the winners still to be placed can no
+        longer make up (their loads summed), so a batch is never pushed into a
+        half by a gap a later batch closes anyway -- that would decide halves on
+        participant order and cost the country balance of the group winners.
+        """
+        net = {0: 0, 1: 0}
+        pending = 0
+        for p in top_participants:
+            gq = trial_tops.get(getattr(p, "group_no", None))
+            if gq is None:
+                pending += abs(top_net_load[id(p)])
+            else:
+                net[gq // quarters_per_half] += top_net_load[id(p)]
+        return max(0, abs(net[0] - net[1]) - pending - 1) * 100000
 
     # ---------------------------------------------------------------------------
     # Ranks 3 and 4 of the ladder, plus the round-two tiebreaker.  All three are
@@ -860,6 +889,99 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             + score_round_two(trial_matches, weights=round_two_weights, bounds=bracket_bounds)
         )
 
+    # ---------------------------------------------------------------------------
+    # Country lookahead for the group winners.
+    #
+    # Phase 1 places the winners one hierarchy level at a time, and half_load_cost
+    # can leave a later level no choice: on 11 groups x 3 (33 players, 64 slots)
+    # the two groups whose 3rd gets no bye must share the half that takes 6
+    # winners.  An earlier level that already put the other winner of one of
+    # those groups' countries in that half has then made the country pile-up
+    # unavoidable.  So each candidate assignment is also charged for the best
+    # winner country split still REACHABLE: the pending winners enumerated over
+    # the halves their own level still has room in, keeping the final net half
+    # load balanced.  Enumeration is exponential in the pending winners, so it
+    # only runs once at most WINNER_LOOKAHEAD_MAX_PENDING are left; the levels
+    # before that are too wide open for a single pile-up to be forced anyway.
+    # ---------------------------------------------------------------------------
+    top_sorted = sorted(top_participants, key=lambda p: -p.seeding)
+    winner_level_slots = {}
+    _start = 0
+    for _hierarchy_group in hierarchy_groups:
+        for _p in top_sorted[_start:_start + len(_hierarchy_group)]:
+            winner_level_slots[id(_p)] = _hierarchy_group
+        _start += len(_hierarchy_group)
+    winner_countries = {id(p): _participant_countries(p) for p in top_participants}
+    # Same slack as check_country_balance_halves: a team carries two countries.
+    winner_country_slack = 2 if any(
+        getattr(p, "start_number_b", None) is not None for p in top_participants
+    ) else 1
+    winner_lookahead_cache: dict = {}
+
+    def winner_country_lookahead(trial_state, trial_tops):
+        """country_half cost of the best winner country split still reachable."""
+        placed, pending = [], []
+        for p in top_sorted:
+            gq = trial_tops.get(getattr(p, "group_no", None))
+            (pending if gq is None else placed).append((p, None if gq is None else gq // quarters_per_half))
+        if not pending or len(pending) > WINNER_LOOKAHEAD_MAX_PENDING:
+            return 0
+        cache_key = frozenset((id(p), h) for p, h in placed)
+        if cache_key in winner_lookahead_cache:
+            return winner_lookahead_cache[cache_key]
+
+        counts = {}
+        net = [0, 0]
+        for p, h in placed:
+            net[h] += top_net_load[id(p)]
+            for country in winner_countries[id(p)]:
+                counts.setdefault(country, [0, 0])[h] += 1
+        # Room per (level, half) for the pending winners.
+        room = {}
+        for p, _ in pending:
+            level = winner_level_slots.get(id(p), ())
+            if id(level) in room:
+                continue
+            needs_bye = id(p) in bye_recipient_ids
+            level_room = [0, 0]
+            for s in level:
+                if trial_state[s] is None and not (needs_bye and trial_state[opponent_slot(s)] is not None):
+                    level_room[slot_half(s)] += 1
+            room[id(level)] = level_room
+
+        best = None
+
+        def search(index):
+            nonlocal best
+            if index == len(pending):
+                if abs(net[0] - net[1]) > 1:
+                    return
+                excess = sum(max(0, abs(c0 - c1) - winner_country_slack) for c0, c1 in counts.values())
+                if best is None or excess < best:
+                    best = excess
+                return
+            if best == 0:
+                return
+            p = pending[index][0]
+            level_room = room[id(winner_level_slots.get(id(p), ()))]
+            for h in (0, 1):
+                if level_room[h] == 0:
+                    continue
+                level_room[h] -= 1
+                net[h] += top_net_load[id(p)]
+                for country in winner_countries[id(p)]:
+                    counts.setdefault(country, [0, 0])[h] += 1
+                search(index + 1)
+                for country in winner_countries[id(p)]:
+                    counts[country][h] -= 1
+                net[h] -= top_net_load[id(p)]
+                level_room[h] += 1
+
+        search(0)
+        cost = (best or 0) * bracket_weights["country_half"]
+        winner_lookahead_cache[cache_key] = cost
+        return cost
+
     def _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye):
         """Commit one placement onto a trial state (mirrors the real commit)."""
         trial_state[slot] = participant
@@ -897,6 +1019,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             total += placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
             _apply_placement(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
         trial_matches = slots_to_matches(trial_state)
+        total += half_load_cost(trial_tops) + winner_country_lookahead(trial_state, trial_tops)
         total += score_bracket(trial_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
         total += assignment_quality_cost(trial_matches)
         return total
@@ -925,6 +1048,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 cost = placement_penalty(participant, slot, trial_state, trial_locked, trial_tops, needs_bye)
                 _apply_placement(participant, slot, step_state, step_locked, step_tops, needs_bye)
                 step_matches = slots_to_matches(step_state)
+                cost += half_load_cost(step_tops) + winner_country_lookahead(step_state, step_tops)
                 cost += score_bracket(step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
                 cost += assignment_quality_cost(step_matches)
                 if best is None or cost < best[0]:
@@ -1085,7 +1209,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # Batch 2 → hierarchy_groups[2] (2 slots)         — greedy best-score + shuffle
     # Batch k → hierarchy_groups[k] (2^(k-1) slots)   — greedy best-score + shuffle
     # ---------------------------------------------------------------------------
-    top_sorted = sorted(top_participants, key=lambda p: -p.seeding)
     n_top = len(top_sorted)
 
     batch_start = 0
@@ -1369,8 +1492,52 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 len(check_quarter_group_separation(trial_matches, number_of_matches)),
             )
 
+        # The residual 2nd/3rd (delta 1/2) that Phase 2 still has to place, by group.
+        residual_by_group = {}
+        for p in class_subset:
+            if (
+                p.group_pos - top_group_pos in (1, 2)
+                and id(p) not in bye_recipient_ids
+                and p.group_no in group_top_quarter
+            ):
+                residual_by_group.setdefault(p.group_no, []).append(p)
+
+        def residual_overflow():
+            """Residual players the free slots of their forced quarter cannot hold.
+
+            A group's 2nd and 3rd go to the opposite half, in different quarters.
+            So once one of them sits there with a bye, the other is forced into the
+            sibling quarter -- and a 2nd with a bye placed without regard for that
+            can leave the sibling quarter full (S M1 consolation: free slots 4/6,
+            five 6th places forced into the "4" quarter).  Swapping two bye
+            recipients within a half moves that demand between its quarters while
+            leaving every per-quarter bye count alone.
+            """
+            free_in_q = {q: 0 for q in range(num_quarters)}
+            placed_quarters = {}
+            for s in range(1, bracket_size + 1):
+                value = slot_state[s]
+                if value is None:
+                    free_in_q[slot_quarter(s)] += 1
+                elif value != "BYE" and value.group_pos - top_group_pos in (1, 2):
+                    placed_quarters.setdefault(value.group_no, set()).add(slot_quarter(s))
+            forced = {q: 0 for q in range(num_quarters)}
+            for group_no, members in residual_by_group.items():
+                opp_h = 1 - group_top_quarter[group_no] // quarters_per_half
+                open_quarters = [
+                    opp_h * quarters_per_half + i for i in range(quarters_per_half)
+                    if opp_h * quarters_per_half + i not in placed_quarters.get(group_no, set())
+                ]
+                # Only a group with no choice left forces anything.
+                if len(open_quarters) == len(members):
+                    for q in open_quarters:
+                        forced[q] += 1
+            return sum(max(0, forced[q] - free_in_q[q]) for q in range(num_quarters))
+
         current_matches = slots_to_matches(slot_state)
-        best_cost = state_cost(current_matches)
+        # Lexicographic: residual capacity first -- an overflow sends the whole
+        # draw down the quarter_capacity_degrade path -- then the layout cost.
+        best_key = (residual_overflow(), state_cost(current_matches))
         # Separations are a HARD gate, not part of the objective: at 2500 a tier
         # unit outweighs both split weights, so a scored gate would let the pass
         # buy a tier repair with a separation -- "darf eigentlich nicht verletzt
@@ -1382,7 +1549,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # either way, and taking the first improving swap settles for whatever
         # trade it stumbles on -- on a 33-player draw that meant paying a real
         # round-two violation for a tier repair that a different pair delivered
-        # for free.  Each accepted swap strictly lowers the cost, so this
+        # for free.  Each accepted swap strictly lowers the key, so this
         # terminates; the outer cap only bounds the work on a pathological
         # plateau.
         for _ in range(len(candidates)):
@@ -1392,19 +1559,19 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
                     slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
                     trial_matches = slots_to_matches(slot_state)
-                    trial_cost = state_cost(trial_matches)
+                    trial_key = (residual_overflow(), state_cost(trial_matches))
                     # Separations are the more expensive check, so only pay for it
                     # once a swap is actually in the running.
-                    if trial_cost < best_cost and (best_swap is None or trial_cost < best_swap[0]):
+                    if trial_key < best_key and (best_swap is None or trial_key < best_swap[0]):
                         trial_separations = separation_counts(trial_matches)
                         if all(t <= b for t, b in zip(trial_separations, best_separations)):
-                            best_swap = (trial_cost, trial_separations, slot_a, slot_b)
+                            best_swap = (trial_key, trial_separations, slot_a, slot_b)
                     slot_state[slot_a], slot_state[slot_b] = participant_a, participant_b
 
             if best_swap is None:
                 break
 
-            best_cost, best_separations, slot_a, slot_b = best_swap
+            best_key, best_separations, slot_a, slot_b = best_swap
             participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
             slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
             # No group_top_quarter/_half resync: neither participant is top-placed,
@@ -1499,25 +1666,6 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         def _is_top(value):
             return value not in (None, "BYE") and value.group_pos == top_group_pos
 
-        def _bye_seeding_inversions(trial_state):
-            """Count (without bye, with bye) pairs of one tier where the player
-            without the bye has the higher seeding ("Hoechstes Seeding bekommt
-            zuerst Freilose")."""
-            by_tier = {}
-            for s in range(1, bracket_size + 1):
-                p = trial_state[s]
-                if p in (None, "BYE") or _is_top(p):
-                    continue
-                with_bye = trial_state[opponent_slot(s)] == "BYE"
-                by_tier.setdefault(p.group_pos, ([], []))[0 if with_bye else 1].append(p.seeding)
-            return sum(
-                1
-                for with_bye, without_bye in by_tier.values()
-                for r in with_bye
-                for n in without_bye
-                if n > r
-            )
-
         def _key(trial_state):
             trial_matches = slots_to_matches(trial_state)
             hard, matchup, distribution = score_bracket_tiers(
@@ -1526,7 +1674,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             )
             return (
                 hard,
-                _bye_seeding_inversions(trial_state),
+                # "Hoechstes Seeding bekommt zuerst Freilose"
+                len(check_bye_seeding_order(trial_matches, top_group_pos)),
                 assignment_quality_cost(trial_matches),
                 matchup,
                 distribution,

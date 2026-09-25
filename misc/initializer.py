@@ -72,6 +72,8 @@ def initialize_data():
             for rule, violations in quality["hard"].items():
                 for violation in violations:
                     bracket_problems.append(f"{label}: {rule}: {violation}")
+            for line in quality["bye_order"]:
+                bracket_problems.append(f"{label}: bye_order: {line}")
             return {'matches': matches, 'snapshots': snapshots,
                     'draw_seconds': time.perf_counter() - start, 'quality': quality}
         except Exception as exc:

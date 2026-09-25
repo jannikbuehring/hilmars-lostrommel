@@ -5,6 +5,7 @@ import pytest
 
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.snapshot import Snapshot
 from draw.bracket_drawer import draw_bracket, bracket_quality, HARD_BRACKET_RULES, TIER_QUARTER_BALANCE_WEIGHT
 from checks.bracket_checker import (
     check_bye_balance_halves,
@@ -343,11 +344,12 @@ def test_phase_1c_keeps_consolation_half_separation():
 def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
     """Review finding H4: 11 full groups of 3, 33 players, 64 slots, 31 byes.
 
-    Every seed of this layout takes the degrade path, but a layout without any
+    Most seeds of this layout take the degrade path, but a layout without any
     hard violation exists.  The old fill scored random reshuffles of all free
     slots and ended with 1-2 half/quarter separation violations on every seed.
     The local search must find a clean layout, and it must not move a group
-    winner out of its seeded slot.
+    winner out of its seeded slot.  Seeds the structured draw now places without
+    degrading are skipped; at least one must still degrade.
     """
     seeding_by_start_numbers.clear()
     for sn in range(401, 434):
@@ -374,15 +376,19 @@ def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
         }
 
     try:
+        degraded_draws = 0
         for rng_seed in range(5):
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_rows())
             degrade = next((s for s in snapshots if s.action == 'quarter_capacity_degrade'), None)
-            assert degrade is not None, f'rng_seed={rng_seed} no longer degrades; the test lost its subject.'
+            if degrade is None:
+                continue
+            degraded_draws += 1
 
             quality = bracket_quality(snapshots)
             assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
             assert winner_slots(matches) == winner_slots(degrade.initial_groups), f'rng_seed={rng_seed}'
+        assert degraded_draws > 0, 'No seed degrades any more; the test lost its subject.'
     finally:
         seeding_by_start_numbers.clear()
 
@@ -424,6 +430,38 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     assert quality['degraded']
     assert quality['hard'], 'Two 2nd places of one group cannot both be separated from each other.'
     assert set(quality['hard']) <= set(HARD_BRACKET_RULES)
+
+
+def test_bracket_quality_only_flags_an_unrepaired_degrade():
+    """A degrade whose fill ends clean is a regular bracket; one that got there by
+    handing byes out of seeding order is still degraded, and says why."""
+    seeding_by_start_numbers.clear()
+    try:
+        for sn in (901, 902, 903, 904):
+            Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500)
+            players_by_start_number[sn] = players_list[-1]
+        winner_a = DrawDataRow('S', 'M1', 300, 2, 1, 1, True, False, 901, '')
+        winner_b = DrawDataRow('S', 'M1', 299, 2, 2, 1, True, False, 902, '')
+        second_high = DrawDataRow('S', 'M1', 290, 2, 2, 2, True, False, 903, '')
+        second_low = DrawDataRow('S', 'M1', 280, 2, 1, 2, True, False, 904, '')
+
+        def quality_of(final_matches):
+            return bracket_quality([
+                Snapshot('quarter_capacity_degrade', [], None, [], {}, 0, initial_groups={}),
+                Snapshot('final', None, None, None, {}, 0, initial_groups=final_matches),
+            ])
+
+        in_order = quality_of({1: [winner_a, 'BYE'], 2: [second_high, 'BYE'], 3: [second_low, winner_b], 4: []})
+        assert not in_order['degraded']
+        assert in_order['bye_order'] == []
+
+        out_of_order = quality_of({1: [winner_a, 'BYE'], 2: [second_low, 'BYE'], 3: [second_high, winner_b], 4: []})
+        assert out_of_order['degraded']
+        assert out_of_order['bye_order'] == [
+            'pos 2: #903 (seeding 290) has no bye, #904 (seeding 280) has one'
+        ]
+    finally:
+        seeding_by_start_numbers.clear()
 
 
 def test_bracket_quality_reads_the_returned_state(eight_players):
@@ -1138,5 +1176,29 @@ def test_all_thirds_consolation_scores_clean():
         matches, snapshots = draw_bracket(build_tiered_rows(8, (3,), competition_class='W4'))
         assert bracket_quality(snapshots)['hard'] == {}
         assert score_bracket_tiers(matches, len(matches))[0] == 0
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_consolation_byes_for_second_places_do_not_degrade():
+    """The live S M1 consolation shape: 15 groups x pos {4,5,6}, four of them
+    without a 6th -- 41 players, 64 slots, 23 byes (15 winners + 8 fifth places).
+
+    A 5th place with a bye takes TWO slots in the half opposite its winner, and it
+    forces its group's 6th into the other quarter of that half.  Phase 1 used to
+    count it as one slot and Phase 1b/1c never checked the 6th's quarter, so
+    37 of 40 seeds overflowed a half or quarter and took the degrade path.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(10):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(15, (4, 5, 6), short_groups=(3, 7, 11, 15))
+            assert len(rows) == 41
+            matches, snapshots = draw_bracket(rows)
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 41-player consolation layout.'
+            quality = bracket_quality(snapshots)
+            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
     finally:
         seeding_by_start_numbers.clear()
