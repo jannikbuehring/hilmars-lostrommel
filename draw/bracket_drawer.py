@@ -25,6 +25,8 @@ from checks.bracket_checker import (
     check_placement_balance_quarters,
     check_round_two_matchups,
     score_round_two,
+    validate_bracket_weights,
+    DEFAULT_BRACKET_WEIGHTS,
     ROUND_TWO_DEFAULT_WEIGHTS,
 )
 from misc.config import config
@@ -270,17 +272,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # call restarting its own Random() from the same seed.
 
     # weights for bracket_checker.score_bracket (lower score = better bracket)
-    bracket_weights = {
-        "quarter_split": 200,
-        "half_split": 150,
-        "first_vs_first": 100,
-        "top_easy_opponent": 70,
-        "bottom_vs_bottom": 50,
-        "country_first": 35,
-        "country_half": 10,
-        "country_quarter": 4,
-        "base_first": 20,
-    }
+    bracket_weights = dict(DEFAULT_BRACKET_WEIGHTS)
     for weight_key, config_key in (
         ("quarter_split", "quarter_split_weight"),
         ("half_split", "half_split_weight"),
@@ -306,6 +298,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             )
         except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
             pass
+    for problem in validate_bracket_weights(bracket_weights, round_two_weights):
+        logging.warning("bracket_draw weights: %s", problem)
 
     top_group_pos = min(p.group_pos for p in class_subset if p.group_pos is not None)
     top_participants = [p for p in class_subset if p.group_pos == top_group_pos]

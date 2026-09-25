@@ -307,8 +307,8 @@ def test_find_draw_data_errors_on_committed_test_input():
     if not config.has_section("files"):
         config.add_section("files")
     originals = {key: config["files"].get(key) for key in ("draw_data_path", "players_path")}
-    config["files"]["draw_data_path"] = "input/draw_input_2026_20260626_test.csv"
-    config["files"]["players_path"] = "input/players_2026_test.csv"
+    config["files"]["draw_data_path"] = "input/draw_input_example.csv"
+    config["files"]["players_path"] = "input/players_example.csv"
     try:
         read_players()
         draw_data = read_draw_data()
