@@ -6,4 +6,4 @@ Bump __version__ here and nowhere else.
 """
 
 APP_NAME = "Hilmars Lostrommel"
-__version__ = "1.0.2"
+__version__ = "1.1.0"
