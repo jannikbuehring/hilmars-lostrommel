@@ -7,6 +7,20 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## 1.2.0 - 2026-09-25
+
+### Added
+
 - New `quarter_split_weight` key in `[bracket_draw]`, so the weight for quarter-group separation can be set in the config instead of being fixed at 200 (the default is still 200).
 
 ### Changed
@@ -20,16 +34,10 @@ and [keeps a changelog](https://keepachangelog.com).
 - Because the degrade fill now uses the random generator differently, the same seed draws different brackets than before, also in later classes.
 - Winner-vs-winner matches that the bracket cannot avoid (more top-placed players than matches, e.g. a consolation of only group thirds) are no longer hard-rule violations. They are shown as "unavoidable first-vs-first" in the HTML page, the report details and the new `first_vs_first_forced` / `round2_first_vs_first_forced` entries. Only matches above that minimum count as violations.
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - brackets with no spare slots no longer end up with broken half/quarter group separations and byes out of seeding order. In a bracket that is completely full, each quarter must have exactly as many free slots as the 3rd places sent there, and the bye placement could leave one quarter a slot short. The bye repair pass can now move a player with a bye into the other quarter of the same half to fix that, so these brackets no longer need the best-effort path. On the 2026 input with the configured seed, no bracket takes the best-effort path any more. The drawn brackets change for the same seed, also in later classes.
 - Countries in doubles/mixed brackets are spread evenly again when there are same-country teams (e.g. GER/GER). Such teams were excused on top of the doubles allowance, so a bracket with 5 country players in one half and 0 in the other counted as balanced. The country checks for halves and quarters now only use the doubles allowance.
-
-### Security
 
 ## 1.1.0 - 2026-09-25
 
