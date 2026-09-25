@@ -281,6 +281,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         "base_first": 20,
     }
     for weight_key, config_key in (
+        ("quarter_split", "quarter_split_weight"),
         ("half_split", "half_split_weight"),
         ("first_vs_first", "first_vs_first_weight"),
         ("top_easy_opponent", "top_easy_opponent_weight"),
