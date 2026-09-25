@@ -10,8 +10,8 @@ ROUND_TWO_DEFAULT_WEIGHTS = {
     "round_two_first_vs_first": 45,
     "round_two_top_easy_opponent": 42,
     "round_two_bottom_vs_bottom": 38,
-    # 9 is the only value below country_half and above country_quarter in BOTH
-    # ladders (defaults 10/4, config.ini 20/8).
+    # Must stay below country_half and above country_quarter; a config that
+    # changes either should re-check it (validate_bracket_weights warns).
     "round_two_country_first": 9,
 }
 
@@ -625,10 +625,9 @@ def score_round_two(matches: Dict[int, List], weights: Dict[str, int] = None, bo
     immediate, a round-two one only conditional, but a group winner drawn
     against a runner-up a round later still matters more than country spread
     ("1. gegen dritter oder freilos ist wichtiger als laenderverteilung", which
-    is about the matchup itself, not about when it happens).  The band 36..49 is
-    the only one satisfying that in BOTH weight ladders — bottom_vs_bottom (50)
-    and country_first (35) happen to be identical in score_bracket's defaults
-    and in config.ini, and nothing under pytest loads config.ini.  The country
+    is about the matchup itself, not about when it happens).  With the defaults
+    that is the band 36..49 (bottom_vs_bottom 50, country_first 35); a config
+    that moves either end is flagged by validate_bracket_weights.  The country
     term is instead ranked below round one's, between country_half and
     country_quarter.
     """
@@ -739,4 +738,51 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     compare the tiers instead.
     """
     return sum(score_bracket_tiers(matches, number_of_matches, weights))
+
+
+def validate_bracket_weights(weights: Dict[str, int] = None, round_two_weights: Dict[str, int] = None):
+    """Return a list of human-readable ordering problems in the weight ladders.
+
+    Across tiers the order is fixed by score_bracket_tiers; these are the orders
+    the weights themselves still decide:
+
+    * within the matchup tier top_easy_opponent outranks bottom_vs_bottom, and
+      within the distribution tier country_first > country_half > country_quarter;
+    * the three round-two tier weights sit strictly below every round-one matchup
+      weight and strictly above every country weight (see score_round_two);
+    * the round-two country term sits between country_half and country_quarter.
+
+    An empty list means the ladders are consistent.  Missing keys fall back to
+    the defaults, like score_bracket and score_round_two do.
+    """
+    w = {**DEFAULT_BRACKET_WEIGHTS, **(weights or {})}
+    r2 = {**ROUND_TWO_DEFAULT_WEIGHTS, **(round_two_weights or {})}
+    problems = []
+
+    if not w["top_easy_opponent"] > w["bottom_vs_bottom"]:
+        problems.append(
+            f"top_easy_opponent ({w['top_easy_opponent']}) must be above "
+            f"bottom_vs_bottom ({w['bottom_vs_bottom']})"
+        )
+    if not w["country_first"] > w["country_half"] > w["country_quarter"]:
+        problems.append(
+            f"country weights must descend: country_first ({w['country_first']}) > "
+            f"country_half ({w['country_half']}) > country_quarter ({w['country_quarter']})"
+        )
+
+    tier_keys = ("round_two_first_vs_first", "round_two_top_easy_opponent", "round_two_bottom_vs_bottom")
+    round_one_floor = min(w["first_vs_first"], w["top_easy_opponent"], w["bottom_vs_bottom"])
+    country_ceiling = max(w["country_first"], w["country_half"], w["country_quarter"])
+    for key in tier_keys:
+        if not country_ceiling < r2[key] < round_one_floor:
+            problems.append(
+                f"{key} ({r2[key]}) must lie strictly between the highest country weight "
+                f"({country_ceiling}) and the lowest round-one matchup weight ({round_one_floor})"
+            )
+    if not w["country_half"] > r2["round_two_country_first"] > w["country_quarter"]:
+        problems.append(
+            f"round_two_country_first ({r2['round_two_country_first']}) must lie strictly between "
+            f"country_quarter ({w['country_quarter']}) and country_half ({w['country_half']})"
+        )
+    return problems
 

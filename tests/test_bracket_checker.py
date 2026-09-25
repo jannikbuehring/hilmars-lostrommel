@@ -4,9 +4,6 @@ Covers the per-quarter country distribution check plus the three round-one
 matchup-quality rules (top-gets-an-easy-opponent, no bottom-vs-bottom, no
 same-country pairing) and the weight ladder that ranks them.
 """
-import configparser
-import pathlib
-
 import pytest
 
 from models.player import Player, players_list, players_by_start_number
@@ -25,22 +22,14 @@ from checks.bracket_checker import (
     score_bracket,
     score_bracket_tiers,
     score_round_two,
+    validate_bracket_weights,
+    DEFAULT_BRACKET_WEIGHTS,
     ROUND_TWO_DEFAULT_WEIGHTS,
 )
 
-# score_bracket's own defaults, spelled out so a partially-specified weights dict
-# never silently reintroduces a term through the .get() fallbacks.
-DEFAULT_WEIGHTS = {
-    'quarter_split': 200,
-    'half_split': 150,
-    'first_vs_first': 100,
-    'top_easy_opponent': 70,
-    'bottom_vs_bottom': 50,
-    'country_first': 35,
-    'country_half': 10,
-    'country_quarter': 4,
-    'base_first': 20,
-}
+# score_bracket's own defaults, passed explicitly so a partially-specified weights
+# dict never silently reintroduces a term through the .get() fallbacks.
+DEFAULT_WEIGHTS = DEFAULT_BRACKET_WEIGHTS
 
 
 def register_players(specs):
@@ -403,19 +392,28 @@ def test_new_weights_outrank_country_distribution():
         assert weights[term] > weights['country_half'] > weights['country_quarter']
 
 
-def test_live_ladder_keeps_the_in_tier_order():
-    """The live config.ini ranks the matchup terms above the country spread.
+def test_default_ladders_are_consistent():
+    """The default weights keep every in-tier order and the round-two band.
 
-    Across tiers the order is fixed by score_bracket_tiers; this only guards the
-    order the weights still decide.
+    The live config.ini is checked by the same function at draw time
+    (bracket_drawer logs a warning per problem), not here: the suite runs on
+    the defaults only.
     """
-    parser = configparser.ConfigParser()
-    parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
-    live = dict(DEFAULT_WEIGHTS)
-    for key in ('top_easy_opponent', 'bottom_vs_bottom', 'country_first', 'country_half', 'country_quarter'):
-        live[key] = parser.getint('bracket_draw', f'{key}_weight', fallback=live[key])
-    assert live['top_easy_opponent'] > live['bottom_vs_bottom']
-    assert live['country_first'] > live['country_half'] > live['country_quarter']
+    assert validate_bracket_weights(DEFAULT_WEIGHTS, ROUND_TWO_DEFAULT_WEIGHTS) == []
+
+
+@pytest.mark.parametrize('weights, round_two, fragment', [
+    ({'top_easy_opponent': 40}, {}, 'top_easy_opponent (40)'),
+    ({'country_quarter': 15}, {}, 'country weights must descend'),
+    # 45 is no longer below the lowest round-one matchup weight
+    ({'bottom_vs_bottom': 45, 'top_easy_opponent': 70}, {}, 'round_two_first_vs_first (45)'),
+    # a country weight above the round-two band
+    ({'country_first': 40}, {}, 'round_two_bottom_vs_bottom (38)'),
+    ({}, {'round_two_country_first': 12}, 'round_two_country_first (12)'),
+])
+def test_validate_bracket_weights_reports_a_broken_ladder(weights, round_two, fragment):
+    problems = validate_bracket_weights(weights, round_two)
+    assert any(fragment in problem for problem in problems), problems
 
 
 def _h4_brackets():
@@ -513,13 +511,12 @@ def test_round_two_is_not_part_of_the_score():
 
 
 def test_round_two_weights_sit_between_round_one_matchups_and_country():
-    """The 36..49 band, asserted against BOTH ladders.
+    """The 36..49 band, asserted against the default ladder.
 
-    Nothing under pytest calls initialize_config, so the suite only ever sees
-    score_bracket's defaults while the app only ever sees config.ini.  The band
-    works in both because bottom_vs_bottom (50) and country_first (35) happen to
-    carry the same value in each.
+    Deliberately spelled out rather than delegated to validate_bracket_weights,
+    so a mistake in that function cannot hide a broken default.
     """
+    weights = DEFAULT_WEIGHTS
     tier_weights = [
         ROUND_TWO_DEFAULT_WEIGHTS[key] for key in (
             'round_two_first_vs_first',
@@ -527,39 +524,18 @@ def test_round_two_weights_sit_between_round_one_matchups_and_country():
             'round_two_bottom_vs_bottom',
         )
     ]
-
-    def assert_band(weights, label):
-        round_one_floor = min(
-            weights['first_vs_first'], weights['top_easy_opponent'], weights['bottom_vs_bottom']
-        )
-        country_ceiling = max(
-            weights['country_first'], weights['country_half'], weights['country_quarter']
-        )
-        assert max(tier_weights) < round_one_floor, label
-        assert min(tier_weights) > country_ceiling, label
-        # The round-two country term ranks below round one's, not above.
-        assert (weights['country_half']
-                > ROUND_TWO_DEFAULT_WEIGHTS['round_two_country_first']
-                > weights['country_quarter']), label
-
-    assert_band(DEFAULT_WEIGHTS, 'defaults')
-
-    parser = configparser.ConfigParser()
-    parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
-    live = dict(DEFAULT_WEIGHTS)
-    for key, config_key in (
-        ('first_vs_first', 'first_vs_first_weight'),
-        ('top_easy_opponent', 'top_easy_opponent_weight'),
-        ('bottom_vs_bottom', 'bottom_vs_bottom_weight'),
-        ('country_first', 'country_first_weight'),
-        ('country_half', 'country_half_weight'),
-        ('country_quarter', 'country_quarter_weight'),
-    ):
-        live[key] = parser.getint('bracket_draw', config_key, fallback=live[key])
-    assert_band(live, 'config.ini')
-    # And config.ini must not have drifted away from the defaults it is checked against.
-    for key, value in ROUND_TWO_DEFAULT_WEIGHTS.items():
-        assert parser.getint('bracket_draw', f'{key}_weight', fallback=value) == value, key
+    round_one_floor = min(
+        weights['first_vs_first'], weights['top_easy_opponent'], weights['bottom_vs_bottom']
+    )
+    country_ceiling = max(
+        weights['country_first'], weights['country_half'], weights['country_quarter']
+    )
+    assert max(tier_weights) < round_one_floor
+    assert min(tier_weights) > country_ceiling
+    # The round-two country term ranks below round one's, not above.
+    assert (weights['country_half']
+            > ROUND_TWO_DEFAULT_WEIGHTS['round_two_country_first']
+            > weights['country_quarter'])
 
 
 # ---------------------------------------------------------------------------
