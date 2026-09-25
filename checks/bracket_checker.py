@@ -550,6 +550,34 @@ def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches
     return violations
 
 
+def check_bye_seeding_order(matches: Dict[int, List], top_group_pos: int):
+    """Flag byes that went to a lower seed of a tier than a player without one.
+
+    Returns a list of violation tuples:
+      (group_pos, participant_without_bye, participant_with_bye)
+
+    "Hoechstes Seeding bekommt zuerst Freilose": within one group position, a
+    player without a BYE must not have a higher seeding than one with a BYE.  The
+    group winners (``top_group_pos``) are skipped -- their byes are seeded slots,
+    not a choice among equals.  The drawer's structured phases hand the byes out
+    in seeding order by construction; only its degrade fill may break the rule.
+    """
+    by_tier = {}
+    for participants in matches.values():
+        for side, participant in enumerate(participants):
+            if participant in (None, "BYE") or participant.group_pos == top_group_pos:
+                continue
+            opponent = participants[1 - side] if len(participants) == 2 else None
+            by_tier.setdefault(participant.group_pos, ([], []))[0 if opponent == "BYE" else 1].append(participant)
+    return [
+        (group_pos, without_bye, with_bye)
+        for group_pos, (with_byes, without_byes) in sorted(by_tier.items())
+        for with_bye in with_byes
+        for without_bye in without_byes
+        if without_bye.seeding > with_bye.seeding
+    ]
+
+
 def _bye_advancer(participants):
     """The participant that advances without playing, or None when undecided.
 

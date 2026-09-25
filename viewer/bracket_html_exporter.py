@@ -529,6 +529,12 @@ def _quality_notice(quality):
     hard_count = sum(len(v) for v in quality.get("hard", {}).values())
     if hard_count:
         parts.append(f"{hard_count} hard-rule violation{'s' if hard_count != 1 else ''}")
+    bye_order_count = len(quality.get("bye_order", []))
+    if bye_order_count:
+        parts.append(
+            f"byes out of seeding order ({bye_order_count} "
+            f"pair{'s' if bye_order_count != 1 else ''})"
+        )
     forced_count = len(quality.get("forced", {}).get("first_vs_first_forced", []))
     if forced_count:
         parts.append(

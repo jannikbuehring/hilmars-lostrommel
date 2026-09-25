@@ -11,6 +11,10 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Changed
 
+- A bracket that took the best-effort path is only reported as "degraded" when the result still breaks a hard rule or gives byes out of seeding order. A best-effort draw that ends clean counts as a regular bracket. Byes out of seeding order are now listed (terminal, report details, HTML notice).
+- Fewer brackets need the best-effort path: when players below the group winners get byes (e.g. the best 5th places of a consolation), the half balance now counts the extra slot each such bye takes, and the bye repair pass checks that every group's remaining 2nd/3rd still fits its quarter. On the 2026 input this removes the best-effort path from 9 of 12 affected brackets, including S M1 consolation.
+- The group-winner placement now looks ahead so that winners of one country are not forced into the same half by a later placement step.
+- The drawn brackets change for the same seed, also in later classes.
 - Brackets are now compared by rule tier instead of by one weighted sum: hard rules (half/quarter group separation, winner vs winner) first, then the winner/bottom-tier matchups, then country and base. A higher tier always wins, however large the numbers below it; the weights only trade off rules within one tier.
 - The best-effort fill for over-tight brackets ("degraded") is now a local search that can also move "player vs BYE" matches and byes within a placement tier, instead of random reshuffles. Group winners never move. A bye moves to a lower-seeded player of the same tier only when that removes a hard-rule violation.
 - Because the degrade fill now uses the random generator differently, the same seed draws different brackets than before, also in later classes.
