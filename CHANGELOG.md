@@ -7,6 +7,20 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## 1.1.0 - 2026-09-25
+
+### Added
+
 - New input validation checks for the draw data that abort the run before drawing. They reject:
   - bracket entries flagged for both or neither of main round / consolation
   - `group_no` given without `group_pos` (or the other way round)
@@ -25,10 +39,6 @@ and [keeps a changelog](https://keepachangelog.com).
 - At the start of every run, the previous run's output CSV, report and HTML files are moved to a `previous` folder next to the output CSV
 - The output CSV is written to a temporary file first and then renamed, so a crash never leaves a half-written file
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - Surrounding whitespace in input fields is now trimmed. Before, `"GER "` counted as a separate country and `"F "` caused a false wrong-competition error
@@ -38,10 +48,8 @@ and [keeps a changelog](https://keepachangelog.com).
 - A class with no more group-stage entries than groups no longer crashes the group draw
 - A failing group draw of one class no longer aborts the whole run. The class is reported as a warning and left out, and all other classes are still drawn and exported
 - A run that fails part-way no longer leaves the previous run's output CSV and HTML in place looking current. The terminal now shows a red banner when the draw did not complete, and "View HTML" for a bracket whose draw failed no longer opens the previous run's page
-- An output file that is open in Excel is now detected before drawing, instead of making the run fail after the whole draw
+- An output file that is currently open is now detected before drawing, instead of making the run fail after the whole draw
 - One failing HTML export no longer skips the HTML of all later classes
-
-### Security
 
 ## 1.0.2 - 2026-09-24
 
