@@ -370,13 +370,13 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
       (country, count_half0, count_half1, violation_amount)
 
     For doubles/mixed (detected by presence of paired participants), allow a difference
-    of up to 2. If the excess in one half can be (partially) explained by full-country
-    teams concentrated in that half (each full team contributes 2 players), the
-    violation amount is reduced accordingly. Purely explained excesses are ignored.
+    of up to 2.  That slack is what accounts for full-country teams: a GER/GER team
+    moves two players at once, yet any mix of full and mixed teams can still be split
+    to within 2.  The teams are deliberately not forgiven on top of it -- that would
+    excuse two more players per full team, so 2x GER/GER + GER/ENG in one half (5/0)
+    would score as clean.
     """
     counts = defaultdict(lambda: [0, 0])
-    # track full-country teams per country per half (counts of teams)
-    full_team_counts = defaultdict(lambda: [0, 0])
     is_doubles = False
     for match_idx, participants in matches.items():
         half = _match_half(match_idx, number_of_matches)
@@ -392,28 +392,14 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
                 b = players_by_start_number[p.start_number_b]
                 counts[b.country][half] += 1
                 is_doubles = True
-                try:
-                    if a.country == b.country:
-                        full_team_counts[a.country][half] += 1
-                except Exception:
-                    pass
 
     allowed_diff = 2 if is_doubles else 1
 
     violations = []
     for country, (c0, c1) in counts.items():
         diff = abs(c0 - c1)
-        if diff <= allowed_diff:
-            continue
-        violation_amount = diff - allowed_diff
-        # determine which half has the excess
-        half_with_max = 0 if c0 > c1 else 1
-        # number of players from full teams in that half
-        full_team_players = full_team_counts.get(country, [0, 0])[half_with_max] * 2
-        # reduce violation by players that can be explained by full teams
-        remaining_violation = violation_amount - full_team_players
-        if remaining_violation > 0:
-            violations.append((country, c0, c1, remaining_violation))
+        if diff > allowed_diff:
+            violations.append((country, c0, c1, diff - allowed_diff))
     return violations
 
 
@@ -455,8 +441,8 @@ def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: 
     (4 GER players -> one in each quarter).  The per-quarter allowance is
     ceil(total / num_quarters), plus 1 for doubles/mixed, and the violation is
     the excess above that allowance summed over the quarters.  As in the halves
-    check, excess explained by full-country teams (which occupy a single slot
-    with two same-country players) is forgiven.
+    check, the doubles slack of 1 is what absorbs a full-country team (two
+    same-country players in one slot); the teams are not forgiven on top of it.
 
     Weighted *below* the half-level balance in score_bracket, so spreading
     across the halves stays the more important objective.
@@ -468,8 +454,6 @@ def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: 
         return []
 
     counts = defaultdict(lambda: [0] * num_quarters)
-    # track full-country teams per country per quarter (counts of teams)
-    full_team_counts = defaultdict(lambda: [0] * num_quarters)
     is_doubles = False
     for match_idx, participants in matches.items():
         quarter = _match_quarter(match_idx, number_of_matches)
@@ -487,25 +471,13 @@ def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: 
                 b = players_by_start_number[p.start_number_b]
                 counts[b.country][quarter] += 1
                 is_doubles = True
-                try:
-                    if a.country == b.country:
-                        full_team_counts[a.country][quarter] += 1
-                except Exception:
-                    pass
 
     violations = []
     for country, quarter_counts in counts.items():
         total = sum(quarter_counts)
         # Ideal share rounded up; doubles get one extra slot of slack per quarter.
         allowed = -(-total // num_quarters) + (1 if is_doubles else 0)
-        teams = full_team_counts.get(country, [0] * num_quarters)
-        violation_amount = 0
-        for quarter, count in enumerate(quarter_counts):
-            excess = count - allowed
-            if excess <= 0:
-                continue
-            # players in this quarter that are explained by full-country teams
-            violation_amount += max(0, excess - teams[quarter] * 2)
+        violation_amount = sum(max(0, count - allowed) for count in quarter_counts)
         if violation_amount > 0:
             violations.append((country, list(quarter_counts), violation_amount))
     return violations
