@@ -22,6 +22,8 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Fixed
 
+- Countries in doubles/mixed brackets are spread evenly again when there are same-country teams (e.g. GER/GER). Such teams were excused on top of the doubles allowance, so a bracket with 5 country players in one half and 0 in the other counted as balanced. The country checks for halves and quarters now only use the doubles allowance.
+
 ### Security
 
 ## 1.1.0 - 2026-09-25

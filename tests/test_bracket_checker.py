@@ -10,6 +10,7 @@ from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from checks.bracket_checker import (
     check_bye_balance_halves,
+    check_country_balance_halves,
     check_country_balance_quarters,
     check_no_first_vs_first,
     check_top_easy_first_round,
@@ -112,17 +113,58 @@ def test_small_bracket_uses_actual_quarter_count():
     assert not check_country_balance_quarters(matches, len(matches))
 
 
-def test_full_country_doubles_team_is_forgiven():
-    """A genuine GER/GER pair concentrated in a quarter is explained, not punished."""
-    register_players([(i, 'GER') for i in range(1, 5)] + [(i, 'SWE') for i in range(5, 17)])
-    matches = {
-        1: [doubles(1, 2), doubles(5, 6)],      # Q0: GER/GER team + SWE/SWE
-        2: [doubles(3, 4), doubles(7, 8)],      # Q0: GER/GER team + SWE/SWE
-        3: [doubles(9, 10), doubles(11, 12)],   # Q1
-        4: [doubles(13, 14), doubles(15, 16)],  # Q1
-    }
+def _ger_doubles_field():
+    """1-4 form two GER/GER teams, 5/6 a GER/ENG team; everyone else is SWE."""
+    register_players(
+        [(i, 'GER') for i in range(1, 6)] + [(6, 'ENG')] + [(i, 'SWE') for i in range(7, 41)]
+    )
+
+
+def _swe_team(k):
+    return doubles(5 + 2 * k, 6 + 2 * k)  # k >= 1 -> two SWE players
+
+
+def test_full_country_doubles_teams_sharing_a_quarter_violate():
+    """Two GER/GER teams in one quarter are a concentration, not a lumpy split."""
+    _ger_doubles_field()
+    # 8 matches => 2 matches per quarter; both GER/GER teams in quarter 0.
+    matches = {i: [_swe_team(2 * i), _swe_team(2 * i + 1)] for i in range(1, 9)}
+    matches[1] = [doubles(1, 2), _swe_team(1)]
+    matches[2] = [doubles(3, 4), _swe_team(2)]
     ger = [v for v in check_country_balance_quarters(matches, len(matches)) if v[0] == 'GER']
-    assert not ger, f'Full-country doubles teams should be forgiven: {ger}'
+    assert ger, 'Two GER/GER teams in one quarter should be flagged.'
+    _country, counts, magnitude = ger[0]
+    assert counts == [4, 0, 0, 0]
+    # allowed = ceil(4/4) + 1 (doubles) = 2, so the excess in Q0 is 2
+    assert magnitude == 2
+
+
+def test_full_country_doubles_teams_spread_are_clean():
+    """One GER/GER team per quarter is as even as two-player teams can get."""
+    _ger_doubles_field()
+    matches = {i: [_swe_team(2 * i), _swe_team(2 * i + 1)] for i in range(1, 9)}
+    matches[1] = [doubles(1, 2), _swe_team(1)]  # Q0
+    matches[3] = [doubles(3, 4), _swe_team(2)]  # Q1
+    ger = [v for v in check_country_balance_quarters(matches, len(matches)) if v[0] == 'GER']
+    assert not ger, f'GER/GER teams in different quarters should not violate: {ger}'
+
+
+def test_full_country_doubles_teams_do_not_excuse_half_imbalance():
+    """2x GER/GER + GER/ENG all in one half is 5/0, and 3/2 was available."""
+    _ger_doubles_field()
+    matches = {i: [_swe_team(2 * i), _swe_team(2 * i + 1)] for i in range(1, 9)}
+    matches[1] = [doubles(1, 2), _swe_team(1)]
+    matches[2] = [doubles(3, 4), _swe_team(2)]
+    matches[3] = [doubles(5, 6), _swe_team(3)]
+    ger = [v for v in check_country_balance_halves(matches, len(matches)) if v[0] == 'GER']
+    # diff 5 - allowed 2 (doubles)
+    assert ger == [('GER', 5, 0, 3)]
+
+    # Same teams split 3/2 across the halves -> clean.
+    matches[2] = [_swe_team(2), _swe_team(4)]
+    matches[5] = [doubles(3, 4), _swe_team(10)]
+    ger = [v for v in check_country_balance_halves(matches, len(matches)) if v[0] == 'GER']
+    assert not ger, f'A 3/2 split should not violate: {ger}'
 
 
 def test_quarter_country_term_contributes_to_score():
