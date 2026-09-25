@@ -19,6 +19,8 @@ from checks.bracket_checker import (
     check_placement_balance_quarters,
     check_round_two_matchups,
     derive_round_two_matches,
+    forced_first_vs_first,
+    split_first_vs_first,
     score_bracket,
     score_bracket_tiers,
     score_round_two,
@@ -610,3 +612,43 @@ def test_tier_balance_exempts_a_bracket_with_one_quarter_per_half():
     register_players([(i, f'C{i}') for i in range(1, 5)])
     matches = {1: [tiered(1, 1, 2), tiered(2, 2, 2)], 2: [tiered(3, 3, 2), tiered(4, 4, 2)]}
     assert check_placement_balance_quarters(matches, 2) == []
+
+
+@pytest.mark.parametrize('top_count, number_of_matches, expected', [
+    (8, 4, 4),   # consolation of 8 groups x 3, top two advance: only thirds
+    (10, 8, 2),  # 10 thirds + 6 fourths in 16 slots
+    (4, 8, 0),
+    (8, 8, 0),
+])
+def test_forced_first_vs_first(top_count, number_of_matches, expected):
+    assert forced_first_vs_first(top_count, number_of_matches) == expected
+
+
+def test_split_first_vs_first_keeps_the_counts():
+    assert split_first_vs_first(['a', 'b', 'c'], 2) == (['c'], ['a', 'b'])
+    assert split_first_vs_first(['a'], 3) == ([], ['a'])
+    assert split_first_vs_first(['a', 'b'], 0) == (['a', 'b'], [])
+
+
+def test_single_tier_bracket_has_no_hard_first_vs_first():
+    """All participants share one placement, so every pairing is forced."""
+    matches = three_tier_matches([(3, 3), (3, 3), (3, 3), (3, 3)])
+    assert len(check_no_first_vs_first(matches)) == 4
+    assert score_bracket_tiers(matches, 4, DEFAULT_WEIGHTS)[0] == 0
+
+
+def test_only_first_vs_first_above_the_forced_count_is_hard():
+    """5 top players in 4 matches force one pairing; the second one is avoidable."""
+    matches = three_tier_matches([(3, 3), (3, 3), (3, 4), (4, 4)])
+    assert score_bracket_tiers(matches, 4, DEFAULT_WEIGHTS)[0] == DEFAULT_WEIGHTS['first_vs_first']
+    # A partial state passes the real top count; 6 tops would force both.
+    assert score_bracket_tiers(matches, 4, DEFAULT_WEIGHTS, top_count=6)[0] == 0
+
+
+def test_round_two_first_vs_first_forced_by_byes():
+    """Four bye-advancing tops in two round-two matches cannot avoid each other."""
+    matches = three_tier_matches([(1, 'BYE'), (1, 'BYE'), (1, 'BYE'), (1, 'BYE')])
+    round_two = check_round_two_matchups(matches, bounds=(1, 3))
+    assert round_two['first_vs_first'] == []
+    assert len(round_two['first_vs_first_forced']) == 2
+    assert score_round_two(matches, bounds=(1, 3)) == 0

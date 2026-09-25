@@ -221,6 +221,12 @@ def prepare_report(groups, group_failures, bracket_payload):
                 details = " | ".join(
                     f"{rule}: {violation}" for rule, violations in hard.items() for violation in violations
                 )
+                # Unavoidable pairings (more winners than matches) keep the status
+                # "ok" but are still worth a line for the operator.
+                forced_count = len(quality.get("forced", {}).get("first_vs_first_forced", []))
+                if forced_count:
+                    note = f"{forced_count} unavoidable first_vs_first"
+                    details = f"{details} | {note}" if details else note
                 rows.append(row(competition, competition_class, bracket_type, status,
                                 hard=hard, other=quality["soft_count"], details=details))
     return rows

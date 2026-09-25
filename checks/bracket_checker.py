@@ -169,6 +169,44 @@ def check_no_first_vs_first(matches: Dict[int, List], bounds=None):
     return violations
 
 
+def forced_first_vs_first(top_count: int, number_of_matches: int) -> int:
+    """Return how many top-vs-top matches no bracket of this size can avoid.
+
+    Every bye absorbs one top-tier participant and every lower-tier participant
+    can absorb one more; whoever of the top tier is left over must meet each
+    other.  With ``byes = 2 * number_of_matches - participants`` that leftover is
+    ``2 * top_count - 2 * number_of_matches`` players, i.e.
+    ``top_count - number_of_matches`` matches.  Example: 8 groups of 3 with the
+    top two advancing leave a consolation of 8 thirds -- 4 matches, all of them
+    third vs third, and none of it a rule break.
+    """
+    return max(0, top_count - number_of_matches)
+
+
+def split_first_vs_first(violations: List, forced: int):
+    """Split check_no_first_vs_first's result into ``(avoidable, forced)``.
+
+    The forced matches are interchangeable, so which entries land in which list
+    is arbitrary; only the counts carry meaning.
+    """
+    forced = min(forced, len(violations))
+    return violations[forced:], violations[:forced]
+
+
+def _top_count(matches: Dict[int, List], top: int) -> int:
+    """Count the participants of placement tier *top* present in *matches*.
+
+    Only the full count for a finished bracket; a partial state must pass the
+    real count in, like it does *bounds*.
+    """
+    return sum(
+        1
+        for participants in matches.values()
+        for p in participants
+        if p not in (None, "BYE") and getattr(p, "group_pos", None) == top
+    )
+
+
 def _bracket_position_bounds(matches: Dict[int, List]):
     """Return (top, bottom) group_pos present in *matches*, or None when empty.
 
@@ -587,6 +625,9 @@ def check_round_two_matchups(matches: Dict[int, List], bounds=None):
     Returns a dict keyed 'first_vs_first' / 'top_easy_opponent' /
     'bottom_vs_bottom' / 'country_first', each holding the violations the
     corresponding round-one checker reports for the virtual round-two dict.
+    'first_vs_first' only holds the avoidable matches; the ones forced by more
+    bye-advancing top placements than round-two matches (see
+    :func:`forced_first_vs_first`) are under 'first_vs_first_forced'.
 
     *bounds* is the bracket's real ``(top, bottom)`` tier range and callers that
     know it MUST pass it.  Deriving it from the round-two view alone mis-tiers
@@ -605,8 +646,15 @@ def check_round_two_matchups(matches: Dict[int, List], bounds=None):
     if bounds is None:
         bounds = _bracket_position_bounds(matches)
     round_two = derive_round_two_matches(matches)
+    first_vs_first, first_vs_first_forced = [], []
+    if bounds is not None:
+        forced = forced_first_vs_first(_top_count(round_two, bounds[0]), len(round_two))
+        first_vs_first, first_vs_first_forced = split_first_vs_first(
+            check_no_first_vs_first(round_two, bounds=bounds), forced
+        )
     return {
-        "first_vs_first": check_no_first_vs_first(round_two, bounds=bounds),
+        "first_vs_first": first_vs_first,
+        "first_vs_first_forced": first_vs_first_forced,
         "top_easy_opponent": check_top_easy_first_round(round_two, bounds=bounds),
         "bottom_vs_bottom": check_no_bottom_vs_bottom(round_two, bounds=bounds),
         "country_first": check_country_conflicts_first_round(round_two),
@@ -661,7 +709,9 @@ DEFAULT_BRACKET_WEIGHTS = {
 }
 
 
-def score_bracket_tiers(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None, bounds=None):
+def score_bracket_tiers(
+    matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None, bounds=None, top_count=None
+):
     """Return the bracket score split into ``(hard, matchup, distribution)``.
 
     Compare the tuples, not their sum: a weighted sum is not a priority order
@@ -679,7 +729,10 @@ def score_bracket_tiers(matches: Dict[int, List], number_of_matches: int, weight
       over the halves and quarters.
 
     *bounds* is the bracket's ``(top, bottom)`` tier range for the half check;
-    it is only needed for a partial state.
+    it is only needed for a partial state.  *top_count* is how many top-tier
+    participants the bracket holds in total, likewise only needed for a partial
+    state: first-vs-first is charged only above what the bracket cannot avoid
+    (:func:`forced_first_vs_first`).
     """
     if weights is None:
         weights = DEFAULT_BRACKET_WEIGHTS
@@ -687,10 +740,16 @@ def score_bracket_tiers(matches: Dict[int, List], number_of_matches: int, weight
     def w(key):
         return weights.get(key, DEFAULT_BRACKET_WEIGHTS[key])
 
+    first_vs_first = check_no_first_vs_first(matches)
+    if first_vs_first:
+        if top_count is None:
+            top_count = _top_count(matches, first_vs_first[0][1].group_pos)
+        forced = forced_first_vs_first(top_count, number_of_matches)
+        first_vs_first, _ = split_first_vs_first(first_vs_first, forced)
     hard = (
         len(check_quarter_group_separation(matches, number_of_matches)) * w("quarter_split")
         + len(check_half_group_separation(matches, number_of_matches, bounds=bounds)) * w("half_split")
-        + len(check_no_first_vs_first(matches)) * w("first_vs_first")
+        + len(first_vs_first) * w("first_vs_first")
     )
     matchup = (
         len(check_top_easy_first_round(matches)) * w("top_easy_opponent")
@@ -729,7 +788,7 @@ def score_bracket_tiers(matches: Dict[int, List], number_of_matches: int, weight
     return hard, matchup, distribution
 
 
-def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None):
+def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dict[str, int] = None, top_count=None):
     """Return a weighted score for the bracket; lower is better.
 
     The sum of :func:`score_bracket_tiers`.  It stays an integer because
@@ -737,7 +796,7 @@ def score_bracket(matches: Dict[int, List], number_of_matches: int, weights: Dic
     snapshots and viewers show it.  The phase-5 Monte Carlo and the degrade fill
     compare the tiers instead.
     """
-    return sum(score_bracket_tiers(matches, number_of_matches, weights))
+    return sum(score_bracket_tiers(matches, number_of_matches, weights, top_count=top_count))
 
 
 def validate_bracket_weights(weights: Dict[str, int] = None, round_two_weights: Dict[str, int] = None):

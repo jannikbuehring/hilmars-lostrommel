@@ -100,6 +100,19 @@ def test_clean_bracket_has_no_quality_notice(eight_players, tmp_path):
     assert 'class="quality-notice"' not in html
 
 
+def test_unavoidable_first_vs_first_is_noted_not_counted(eight_players, tmp_path):
+    _, matches, snapshots = _draw_eight_player_bracket()
+    quality = {"degraded": False, "hard": {},
+               "forced": {"first_vs_first_forced": ["a", "b"]}, "soft_count": 0}
+    bracket = {"main": {"matches": matches, "snapshots": snapshots, "quality": quality}}
+
+    html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
+
+    notice = "2 unavoidable first-vs-first matches (more group winners than matches)"
+    assert f'<span class="quality-notice">{notice}</span>' in html
+    assert "hard-rule" not in html
+
+
 def test_export_skips_missing_bracket_types(eight_players, tmp_path):
     _, matches, snapshots = _draw_eight_player_bracket()
     bracket = {"main": {"matches": matches, "snapshots": snapshots}}
