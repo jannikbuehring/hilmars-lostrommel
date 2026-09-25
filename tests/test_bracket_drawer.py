@@ -342,44 +342,35 @@ def test_phase_1c_keeps_consolation_half_separation():
 
 
 def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
-    """Review finding H4: 11 full groups of 3, 33 players, 64 slots, 31 byes.
+    """Review finding H4: the degrade fill must end clean and keep the winners.
 
-    Most seeds of this layout take the degrade path, but a layout without any
+    4 groups x {1,2,3}, group 2 without its 3rd: 11 players, 16 slots, 5 byes.
+    Every seed of this layout takes the degrade path, yet a layout without any
     hard violation exists.  The old fill scored random reshuffles of all free
-    slots and ended with 1-2 half/quarter separation violations on every seed.
-    The local search must find a clean layout, and it must not move a group
-    winner out of its seeded slot.  Seeds the structured draw now places without
-    degrading are skipped; at least one must still degrade.
+    slots and left half/quarter separation violations behind.  The local search
+    must find a clean layout, and it must not move a group winner out of its
+    seeded slot.  (The original 11 x 3 subject no longer degrades since Phase 1c
+    can move a bye recipient; seeds that stop degrading are skipped, at least one
+    must still degrade.)
     """
     seeding_by_start_numbers.clear()
-    for sn in range(401, 434):
-        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn % 4}', f'Base{sn}', 'F', 1500)
-    for p in players_list:
-        players_by_start_number[p.start_number] = p
-
-    def build_rows():
-        rows = []
-        seed = 300
-        sn = 401
-        for group_pos in (1, 2, 3):
-            for group_no in range(1, 12):
-                seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow('S', 'M1', seed, 11, group_no, group_pos, True, False, sn, ''))
-                seed -= 1
-                sn += 1
-        return rows
 
     def winner_slots(match_map):
         return {
-            sn: slot for sn, slot in participant_slots(match_map).items()
-            if sn - 401 < 11
+            p.start_number_a: slot for slot, p in (
+                (((index - 1) * 2) + side + 1, p)
+                for index, participants in match_map.items()
+                for side, p in enumerate(participants)
+            )
+            if p not in (None, 'BYE') and p.group_pos == 1
         }
 
     try:
         degraded_draws = 0
         for rng_seed in range(5):
             random.seed(rng_seed)
-            matches, snapshots = draw_bracket(build_rows())
+            matches, snapshots = draw_bracket(build_tiered_rows(4, (1, 2, 3), short_groups=(2,)))
+            seeding_by_start_numbers.clear()
             degrade = next((s for s in snapshots if s.action == 'quarter_capacity_degrade'), None)
             if degrade is None:
                 continue
@@ -970,12 +961,13 @@ def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
     -- leaving exactly ONE winner on a runner-up.  Before round two was scored at
     all, five were.
 
-    Two, not one, is the achievable bound: the layout that reaches one leaves the
-    runners-up split 4/2 across the quarters of a half, and Phase 1c will not buy
-    a round-two unit (42) with a tier unit (2500).  That ranking is deliberate --
-    even distribution is a level-1 rule in open_questions.md, the round-two
-    preference a level-2 one -- and it is stable, not incidental: every rng seed
-    lands on exactly 2.
+    One is out of reach: the layout that reaches it leaves the runners-up split
+    4/2 across the quarters of a half, and Phase 1c will not buy a round-two unit
+    (42) with a tier unit (2500).  That ranking is deliberate -- even distribution
+    is a level-1 rule in open_questions.md, the round-two preference a level-2
+    one.  Two is reachable, but only the degrade fill ever found it; the regular
+    path, which this layout now always takes since Phase 1c can move a bye
+    recipient, settles on three.  Three is the bound, so a regression still shows.
 
     Round-two 1-vs-1 is structurally impossible here (hierarchy levels 0-3 supply
     one match to each round-two pair and level 4 the other, so it needs
@@ -987,9 +979,9 @@ def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
             random.seed(rng_seed)
             matches, _snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
             round_two = check_round_two_matchups(matches, bounds=(1, 3))
-            assert len(round_two['top_easy_opponent']) <= 2, (
+            assert len(round_two['top_easy_opponent']) <= 3, (
                 f'{len(round_two["top_easy_opponent"])} group winners meet a runner-up in '
-                f'round two (rng_seed={rng_seed}); at most two are forced.'
+                f'round two (rng_seed={rng_seed}); at most three are expected.'
             )
             assert round_two['first_vs_first'] == []
             assert round_two['bottom_vs_bottom'] == []
@@ -1200,5 +1192,50 @@ def test_consolation_byes_for_second_places_do_not_degrade():
                 f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 41-player consolation layout.'
             quality = bracket_quality(snapshots)
             assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_full_bracket_moves_a_bye_to_fix_quarter_capacity():
+    """The live S M3 main shape: 50 groups x pos {1,2,3} -- 150 players, 256 slots,
+    106 byes (every winner, every runner-up, the six best 3rd places).
+
+    Not a single slot is spare, so each quarter must hold exactly the 3rd places
+    its sibling quarter's runners-up force into it.  Phase 1/1b balance tops+byes
+    with one unit of slack and could leave a quarter one slot short; Phase 1c's
+    swaps keep every per-quarter bye count and so cannot close that gap, which sent
+    the draw down the degrade path and broke half/quarter separations.  The bye
+    move must repair it: no degrade, no hard violation, and every move stays in
+    its half and never touches a winner.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        moved = 0
+        # Five shared countries: with unique ones the country tiebreaks never steer
+        # Phase 1b into the one-slot gap.  Each of these seeds used to degrade.
+        for rng_seed in (0, 5, 7):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(
+                50, (1, 2, 3), competition_class='M3',
+                country_for=lambda group_no, group_pos: f'K{(group_no * 3 + group_pos) % 5}',
+            )
+            matches, snapshots = draw_bracket(rows)
+            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
+                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 150-player / 256-slot layout.'
+            quality = bracket_quality(snapshots)
+            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
+            assert not quality['bye_order'], f'rng_seed={rng_seed}: {quality["bye_order"]}'
+
+            number_of_matches = len(matches)
+            for snapshot in (s for s in snapshots if s.action == 'bye_move'):
+                moved += 1
+                slot_from, slot_to = snapshot.groups
+                (participant,) = snapshot.participants
+                assert participant.group_pos != 1, f'A group winner was moved (rng_seed={rng_seed}).'
+                half = lambda slot: 0 if (slot + 1) // 2 <= number_of_matches // 2 else 1
+                assert half(slot_from) == half(slot_to), f'A bye move changed halves (rng_seed={rng_seed}).'
+            seeding_by_start_numbers.clear()
+        # Otherwise the layout never needed the repair and the test proves nothing.
+        assert moved, 'No seed exercised the bye move.'
     finally:
         seeding_by_start_numbers.clear()

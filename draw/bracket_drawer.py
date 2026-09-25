@@ -1466,18 +1466,21 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # pass having run.  Also like rebalance_bottom_tier_quarters.
     # ---------------------------------------------------------------------------
     def repair_bye_placements():
-        """Swap placed non-top bye recipients while it strictly improves the layout."""
+        """Swap or move placed non-top bye recipients while it strictly improves the layout."""
         # Top-placed participants are filtered out HERE rather than skipped per pair
         # inside the sweep: a swap moves both of its participants, so a group winner
         # must not be a partner either, and dropping them up front shrinks the
         # quadratic sweep instead of paying for them on every iteration.
-        candidates = sorted(
-            s for s in locked_slots
-            if slot_state[s] not in (None, "BYE")
-            and slot_state[s].group_pos != top_group_pos
-            and slot_state[opponent_slot(s)] == "BYE"
-        )
-        if len(candidates) < 2:
+        def bye_recipient_slots():
+            return sorted(
+                s for s in locked_slots
+                if slot_state[s] not in (None, "BYE")
+                and slot_state[s].group_pos != top_group_pos
+                and slot_state[opponent_slot(s)] == "BYE"
+            )
+
+        candidates = bye_recipient_slots()
+        if not candidates:
             return
 
         def state_cost(trial_matches):
@@ -1492,15 +1495,17 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 len(check_quarter_group_separation(trial_matches, number_of_matches)),
             )
 
-        # The residual 2nd/3rd (delta 1/2) that Phase 2 still has to place, by group.
+        # The residual 2nd/3rd (delta 1/2) that Phase 2 still has to place, by group,
+        # and the residual 4ths (delta 3), each tied to its winner's own half.
         residual_by_group = {}
+        residual_fourths = []
         for p in class_subset:
-            if (
-                p.group_pos - top_group_pos in (1, 2)
-                and id(p) not in bye_recipient_ids
-                and p.group_no in group_top_quarter
-            ):
+            if id(p) in bye_recipient_ids or p.group_no not in group_top_quarter:
+                continue
+            if p.group_pos - top_group_pos in (1, 2):
                 residual_by_group.setdefault(p.group_no, []).append(p)
+            elif p.group_pos - top_group_pos == 3:
+                residual_fourths.append(p)
 
         def residual_overflow():
             """Residual players the free slots of their forced quarter cannot hold.
@@ -1509,9 +1514,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             So once one of them sits there with a bye, the other is forced into the
             sibling quarter -- and a 2nd with a bye placed without regard for that
             can leave the sibling quarter full (S M1 consolation: free slots 4/6,
-            five 6th places forced into the "4" quarter).  Swapping two bye
-            recipients within a half moves that demand between its quarters while
-            leaving every per-quarter bye count alone.
+            five 6th places forced into the "4" quarter).  A 4th is forced into the
+            other quarter of its winner's half.  The moves below change how many
+            free slots a quarter has, so they need the 4ths counted too.
             """
             free_in_q = {q: 0 for q in range(num_quarters)}
             placed_quarters = {}
@@ -1532,6 +1537,13 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 if len(open_quarters) == len(members):
                     for q in open_quarters:
                         forced[q] += 1
+            for p in residual_fourths:
+                top_q = group_top_quarter[p.group_no]
+                top_h = top_q // quarters_per_half
+                same_qs = [top_h * quarters_per_half + i for i in range(quarters_per_half)]
+                allowed = [q for q in same_qs if q != top_q] or same_qs
+                if len(allowed) == 1:
+                    forced[allowed[0]] += 1
             return sum(max(0, forced[q] - free_in_q[q]) for q in range(num_quarters))
 
         current_matches = slots_to_matches(slot_state)
@@ -1545,15 +1557,32 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # behind, so the bar is "no worse", not "none".
         best_separations = separation_counts(current_matches)
 
+        # Two kinds of step, both feasibility-guarded by residual_overflow and the
+        # separation gate:
+        #
+        # * swap two non-top bye recipients -- every per-quarter bye count stays;
+        # * move one non-top bye recipient, with its BYE, into a free match of the
+        #   other quarter of its own half -- only while that lowers the overflow.
+        #
+        # The swap alone cannot repair a bracket without a spare slot.  S M3 main
+        # (50 groups x 3, 256 slots, 106 byes) fills every slot, so each quarter
+        # must hold precisely the 3rd places its sibling quarter's runners-up force
+        # into it; Phase 1/1b balance tops+byes with one unit of slack and could
+        # leave free slots 8/10 against 9/9 forced 3rd places.  Swapping two
+        # runners-up of that half moves one forced 3rd each way (net zero), so the
+        # draw went down the degrade path.  Moving ONE of them closes the gap: its
+        # old quarter gains two free slots and one forced 3rd.  A move never leaves
+        # its half, so the half separation and the bye-half balance stay put.
+        #
         # Best-improvement rather than first-improvement: a sweep costs the same
-        # either way, and taking the first improving swap settles for whatever
+        # either way, and taking the first improving step settles for whatever
         # trade it stumbles on -- on a 33-player draw that meant paying a real
         # round-two violation for a tier repair that a different pair delivered
-        # for free.  Each accepted swap strictly lowers the key, so this
-        # terminates; the outer cap only bounds the work on a pathological
-        # plateau.
-        for _ in range(len(candidates)):
-            best_swap = None
+        # for free.  Each accepted step strictly lowers the key, so this
+        # terminates; the cap only bounds the work on a pathological plateau.
+        for _ in range(2 * len(candidates) + number_of_matches):
+            candidates = bye_recipient_slots()
+            best_step = None
             for index, slot_a in enumerate(candidates):
                 for slot_b in candidates[index + 1:]:
                     participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
@@ -1561,31 +1590,70 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     trial_matches = slots_to_matches(slot_state)
                     trial_key = (residual_overflow(), state_cost(trial_matches))
                     # Separations are the more expensive check, so only pay for it
-                    # once a swap is actually in the running.
-                    if trial_key < best_key and (best_swap is None or trial_key < best_swap[0]):
+                    # once a step is actually in the running.
+                    if trial_key < best_key and (best_step is None or trial_key < best_step[0]):
                         trial_separations = separation_counts(trial_matches)
                         if all(t <= b for t, b in zip(trial_separations, best_separations)):
-                            best_swap = (trial_key, trial_separations, slot_a, slot_b)
+                            best_step = (trial_key, trial_separations, "bye_swap", slot_a, slot_b)
                     slot_state[slot_a], slot_state[slot_b] = participant_a, participant_b
 
-            if best_swap is None:
+            free_matches = [
+                m for m in range(1, number_of_matches + 1)
+                if slot_state[2 * m - 1] is None and slot_state[2 * m] is None
+            ] if best_key[0] > 0 else []
+            for slot_from in candidates:
+                bye_from = opponent_slot(slot_from)
+                quarter_from = slot_quarter(slot_from)
+                for match_to in free_matches:
+                    # Keep the player on the same side of its match.
+                    slot_to = 2 * match_to - 1 if slot_from % 2 == 1 else 2 * match_to
+                    quarter_to = slot_quarter(slot_to)
+                    if quarter_to == quarter_from or quarter_to // quarters_per_half != quarter_from // quarters_per_half:
+                        continue
+                    bye_to = opponent_slot(slot_to)
+                    participant = slot_state[slot_from]
+                    slot_state[slot_from], slot_state[bye_from] = None, None
+                    slot_state[slot_to], slot_state[bye_to] = participant, "BYE"
+                    # A move shifts the per-quarter bye counts Phase 1/1b balanced,
+                    # so it is only worth that when it removes an overflow.
+                    trial_overflow = residual_overflow()
+                    if trial_overflow < best_key[0]:
+                        trial_matches = slots_to_matches(slot_state)
+                        trial_key = (trial_overflow, state_cost(trial_matches))
+                        if best_step is None or trial_key < best_step[0]:
+                            trial_separations = separation_counts(trial_matches)
+                            if all(t <= b for t, b in zip(trial_separations, best_separations)):
+                                best_step = (trial_key, trial_separations, "bye_move", slot_from, slot_to)
+                    slot_state[slot_to], slot_state[bye_to] = None, None
+                    slot_state[slot_from], slot_state[bye_from] = participant, "BYE"
+
+            if best_step is None:
                 break
 
-            best_key, best_separations, slot_a, slot_b = best_swap
-            participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
-            slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
-            # No group_top_quarter/_half resync: neither participant is top-placed,
+            best_key, best_separations, action, slot_a, slot_b = best_step
+            if action == "bye_swap":
+                participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
+                slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
+                moved = [participant_a, participant_b]
+            else:
+                bye_a, bye_b = opponent_slot(slot_a), opponent_slot(slot_b)
+                moved = [slot_state[slot_a]]
+                slot_state[slot_a], slot_state[bye_a] = None, None
+                slot_state[slot_b], slot_state[bye_b] = moved[0], "BYE"
+                locked_slots.difference_update((slot_a, bye_a))
+                locked_slots.update((slot_b, bye_b))
+            # No group_top_quarter/_half resync: no top-placed participant moves,
             # so the anchors cannot have moved.
-            swapped_matches = slots_to_matches(slot_state)
+            stepped_matches = slots_to_matches(slot_state)
             snapshots.append(
                 Snapshot(
-                    "bye_swap",
+                    action,
                     [slot_a, slot_b],
                     None,
-                    [participant_a, participant_b],
-                    get_bracket_violations(swapped_matches),
-                    score_bracket(swapped_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-                    initial_groups=copy.deepcopy(swapped_matches),
+                    moved,
+                    get_bracket_violations(stepped_matches),
+                    score_bracket(stepped_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                    initial_groups=copy.deepcopy(stepped_matches),
                 )
             )
 
