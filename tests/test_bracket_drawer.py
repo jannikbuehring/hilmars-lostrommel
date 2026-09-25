@@ -339,6 +339,53 @@ def test_phase_1c_keeps_consolation_half_separation():
         seeding_by_start_numbers.clear()
 
 
+def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
+    """Review finding H4: 11 full groups of 3, 33 players, 64 slots, 31 byes.
+
+    Every seed of this layout takes the degrade path, but a layout without any
+    hard violation exists.  The old fill scored random reshuffles of all free
+    slots and ended with 1-2 half/quarter separation violations on every seed.
+    The local search must find a clean layout, and it must not move a group
+    winner out of its seeded slot.
+    """
+    seeding_by_start_numbers.clear()
+    for sn in range(401, 434):
+        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn % 4}', f'Base{sn}', 'F', 1500)
+    for p in players_list:
+        players_by_start_number[p.start_number] = p
+
+    def build_rows():
+        rows = []
+        seed = 300
+        sn = 401
+        for group_pos in (1, 2, 3):
+            for group_no in range(1, 12):
+                seeding_by_start_numbers[str(sn)] = seed
+                rows.append(DrawDataRow('S', 'M1', seed, 11, group_no, group_pos, True, False, sn, ''))
+                seed -= 1
+                sn += 1
+        return rows
+
+    def winner_slots(match_map):
+        return {
+            sn: slot for sn, slot in participant_slots(match_map).items()
+            if sn - 401 < 11
+        }
+
+    try:
+        for rng_seed in range(5):
+            random.seed(rng_seed)
+            matches, snapshots = draw_bracket(build_rows())
+            degrade = next((s for s in snapshots if s.action == 'quarter_capacity_degrade'), None)
+            assert degrade is not None, f'rng_seed={rng_seed} no longer degrades; the test lost its subject.'
+
+            quality = bracket_quality(snapshots)
+            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
+            assert winner_slots(matches) == winner_slots(degrade.initial_groups), f'rng_seed={rng_seed}'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
 def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     """A layout too tight for hard quarter separation must not abort the draw.
 
