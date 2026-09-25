@@ -7,6 +7,8 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- New `quarter_split_weight` key in `[bracket_draw]`, so the weight for quarter-group separation can be set in the config instead of being fixed at 200 (the default is still 200).
+
 ### Changed
 
 ### Deprecated

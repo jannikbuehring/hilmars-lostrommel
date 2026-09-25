@@ -183,3 +183,4 @@ config/config_groups.ini
 output/output_2026_ER_E.csv
 output/previous/
 output/*_report.csv
+input/draw_input_2026_generated.csv

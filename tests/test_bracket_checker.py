@@ -421,6 +421,7 @@ def test_soft_matchup_terms_never_outweigh_a_separation():
     parser.read(pathlib.Path(__file__).resolve().parents[1] / 'config' / 'config.ini')
     live = dict(DEFAULT_WEIGHTS)
     for key, config_key in (
+        ('quarter_split', 'quarter_split_weight'),
         ('half_split', 'half_split_weight'),
         ('top_easy_opponent', 'top_easy_opponent_weight'),
         ('bottom_vs_bottom', 'bottom_vs_bottom_weight'),
