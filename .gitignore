@@ -185,3 +185,4 @@ output/previous/
 output/*_report.csv
 input/draw_input_2026_generated.csv
 rules.md
+config/config.ini
