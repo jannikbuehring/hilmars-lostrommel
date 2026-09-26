@@ -24,18 +24,16 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+      # Ship the documented defaults: the spec copies config/config.ini next to
+      # the exe, so the exe always starts from a known, reviewed config.
+      - name: Use config template as shipped config
+        run: Copy-Item config/config_template.ini config/config.ini -Force
+
       - name: Build exe
         run: pyinstaller --noconfirm hilmars_lostrommel.spec
-
-      # Ship the documented defaults, not whatever config.ini happens to be
-      # committed: the exe then always starts from a known, reviewed config.
-      - name: Use config template as shipped config
-        run: Copy-Item config/config_template.ini dist/config/config.ini -Force
 
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
           name: hilmars_lostrommel-windows
-          path: |
-            dist/hilmars_lostrommel.exe
-            dist/config/
+          path: dist/
