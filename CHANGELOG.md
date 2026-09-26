@@ -7,12 +7,7 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
-- New `config/config_template.ini` that lists every config key with an explanation and its default value, and says which keys are required.
-
 ### Changed
-
-- Bracket half/quarter geometry and the rule for which quarters a group member may occupy now live in one module, `models/bracket_geometry.py`. The drawer's Phases 1b, 1c and 2, the bracket checker and the HTML viewer all use it, replacing four separate copies of the rule and three copies of the geometry.
-- The Windows exe built by CI now ships `config_template.ini` as its `config.ini`, so it always starts with the documented defaults instead of whichever `config.ini` happens to be committed.
 
 ### Deprecated
 
@@ -20,11 +15,24 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Fixed
 
+### Security
+
+## 1.2.1 - 2026-09-26
+
+### Added
+
+- New `config/config_template.ini` that lists every config key with an explanation and its default value, and says which keys are required.
+
+### Changed
+
+- Bracket half/quarter geometry and the rule for which quarters a group member may occupy now live in one module, `models/bracket_geometry.py`. The drawer's Phases 1b, 1c and 2, the bracket checker and the HTML viewer all use it, replacing four separate copies of the rule and three copies of the geometry.
+- The Windows exe built by CI now ships `config_template.ini` as its `config.ini`, so it always starts with the documented defaults instead of whichever `config.ini` happens to be committed.
+
+### Fixed
+
 - Bracket draw, Phase 2: in a bracket with only 2 first-round matches, a group's 4th place was treated as unconstrained and could land in the half opposite its group winner. It now stays in the winner's half.
 - Bracket draw, Phase 2: a group's runner-up without a residual 3rd place ignored a 3rd place that had already received a bye in Phase 1b, and could land in the same quarter as it. It now avoids that quarter.
 - The quarter-separation check computed the half of a quarter as `quarter // 2`, which is wrong for 2-match brackets, so a 4th place in the wrong half went unreported there. In the same brackets a 2nd/3rd pair that cannot be split (the opposite half has only one quarter) is no longer reported as a quarter violation.
-
-### Security
 
 ## 1.2.0 - 2026-09-25
 
