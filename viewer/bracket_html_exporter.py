@@ -529,6 +529,9 @@ def _quality_notice(quality):
             f"byes out of seeding order ({bye_order_count} "
             f"pair{'s' if bye_order_count != 1 else ''})"
         )
+    balance = quality.get("balance", [])
+    if balance:
+        parts.append(f"unbalanced halves ({', '.join(balance)})")
     forced_count = len(quality.get("forced", {}).get("first_vs_first_forced", []))
     if forced_count:
         parts.append(

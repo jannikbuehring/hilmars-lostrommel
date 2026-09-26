@@ -25,11 +25,13 @@ from checks.bracket_checker import (
     check_bye_seeding_order,
     check_base_conflicts_first_round,
     check_placement_balance_quarters,
+    check_placement_balance_halves,
     check_round_two_matchups,
     forced_first_vs_first,
     split_first_vs_first,
     score_round_two,
     validate_bracket_weights,
+    BALANCED_TIERS_BELOW_TOP,
     DEFAULT_BRACKET_WEIGHTS,
     ROUND_TWO_DEFAULT_WEIGHTS,
 )
@@ -64,6 +66,12 @@ TIER_QUARTER_BALANCE_WEIGHT = 2500
 # was the sole reason two Slovenian group winners shared a half: the country-clean
 # assignment needed both of its first two placements in the upper half.
 BYE_HALF_BALANCE_WEIGHT = 5000
+
+# Same rank, same rule line: the group winners, runners-up and 3rd places even
+# over the halves (check_placement_balance_halves).  Like the byes, their split is
+# decided by the winners' halves in Phase 1, so both are charged there on the
+# split the state is already committed to (projected_half_balance_units).
+TIER_HALF_BALANCE_WEIGHT = 5000
 
 # winner_country_lookahead enumerates 2^k half choices for the k group winners
 # still to be placed; 12 keeps one enumeration at a few thousand leaves.
@@ -101,6 +109,19 @@ HARD_BRACKET_RULES = ("half_group_separation", "quarter_group_separation", "firs
 # Pairings the rules would forbid but the bracket's shape makes unavoidable (more
 # top placements than matches, see forced_first_vs_first).  Shown, never counted.
 FORCED_BRACKET_RULES = ("first_vs_first_forced", "round2_first_vs_first_forced")
+# "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte gleichmaessig auf die
+# Haelften verteilen": a rule, not a quality goal, but one the shape can make
+# unavoidable, so it gets its own report status ("imbalanced") below the hard ones.
+HALF_BALANCE_RULES = ("bye_balance_halves", "placement_balance_halves")
+
+
+def _describe_half_balance(rule, violation):
+    """One readable line for a HALF_BALANCE_RULES violation tuple."""
+    if rule == "bye_balance_halves":
+        count_half0, count_half1, _amount = violation
+        return f"byes {count_half0}/{count_half1} over the halves"
+    group_pos, (count_half0, count_half1), _amount = violation
+    return f"pos {group_pos}: {count_half0}/{count_half1} over the halves"
 
 
 def _describe_hard_violation(rule, violation):
@@ -122,9 +143,11 @@ def bracket_quality(snapshots):
     returns as its LAST snapshot, so the final violations are read from there
     instead of being re-checked.  Returns
     {"degraded": bool, "hard": {rule: [description]}, "forced": {rule: [description]},
-    "bye_order": [description], "soft_count": int}; "hard" and "forced" only carry
-    rules that actually have entries, one readable line each.  "forced" pairings
-    are unavoidable and so count neither as hard nor as soft violations.
+    "bye_order": [description], "balance": [description], "soft_count": int};
+    "hard" and "forced" only carry rules that actually have entries, one readable
+    line each.  "forced" pairings are unavoidable and so count neither as hard nor
+    as soft violations.  "balance" lists byes or tiers split more than one apart
+    over the halves (HALF_BALANCE_RULES); they are not in "soft_count" either.
 
     "degraded" means the draw took the quarter_capacity_degrade path AND its fill
     did not repair it: a hard violation is left, or byes were handed out of
@@ -141,9 +164,14 @@ def bracket_quality(snapshots):
         rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
         for rule in FORCED_BRACKET_RULES if violations.get(rule)
     }
+    balance = [
+        _describe_half_balance(rule, v)
+        for rule in HALF_BALANCE_RULES for v in violations.get(rule) or []
+    ]
     soft_count = sum(
         len(value) for key, value in violations.items()
-        if key not in HARD_BRACKET_RULES and key not in FORCED_BRACKET_RULES and isinstance(value, list)
+        if key not in HARD_BRACKET_RULES and key not in FORCED_BRACKET_RULES
+        and key not in HALF_BALANCE_RULES and isinstance(value, list)
     )
     group_positions = [
         p.group_pos for participants in final_matches.values() for p in participants
@@ -157,13 +185,60 @@ def bracket_quality(snapshots):
         )
     ]
     degraded = any(s.action == "quarter_capacity_degrade" for s in snapshots) and bool(hard or bye_order)
-    return {"degraded": degraded, "hard": hard, "forced": forced, "bye_order": bye_order, "soft_count": soft_count}
+    return {"degraded": degraded, "hard": hard, "forced": forced, "bye_order": bye_order,
+            "balance": balance, "soft_count": soft_count}
+
+
+def _took_degrade_path(snapshots):
+    return any(s.action == "quarter_capacity_degrade" for s in snapshots)
+
+
+def _result_rank(snapshots):
+    """Lower is better: hard violations, then byes out of seeding order, then
+    halves out of balance, then whether the draw needed the degrade fill."""
+    quality = bracket_quality(snapshots)
+    return (
+        sum(len(v) for v in quality["hard"].values()),
+        len(quality["bye_order"]),
+        len(quality["balance"]),
+        _took_degrade_path(snapshots),
+    )
 
 
 def draw_bracket(class_subset: list[DrawDataRow]):
     """
     Build a single-elimination bracket from seeded participants.
     class_subset: players advancing from groups
+
+    Phase 1 balances the byes and tiers over the halves (review finding N2).  On
+    the tightest shapes that can pick a winner layout Phase 2 cannot fill, where
+    the old objective found one it could.  So a draw that ends on the degrade
+    path is drawn once more without the half balance, from the same RNG state
+    -- i.e. exactly the draw the pre-N2 objective made -- and the better result
+    by _result_rank is kept: a separation is never paid for an even split.
+    """
+    rng_state = random.getstate()
+    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True)
+    if not _took_degrade_path(snapshots):
+        return matches, snapshots
+    balanced_rng_state = random.getstate()
+    random.setstate(rng_state)
+    try:
+        fallback_matches, fallback_snapshots = _draw_bracket_attempt(class_subset, half_balance=False)
+    except Exception as exc:  # the balanced result stands; see N1 for the known crash
+        logging.warning("Bracket fallback draw without half balance failed: %s", exc)
+        random.setstate(balanced_rng_state)
+        return matches, snapshots
+    if _result_rank(fallback_snapshots) < _result_rank(snapshots):
+        return fallback_matches, fallback_snapshots
+    random.setstate(balanced_rng_state)
+    return matches, snapshots
+
+
+def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool):
+    """One full draw.  *half_balance* False drops the bye/tier half balance
+    from Phase 1 (projected_half_balance_units, the lookahead), which leaves
+    the pre-N2 objective: only the byes already on the board are balanced.
     """
 
     def bye_hierarchy(num_slots: int) -> List[List[int]]:
@@ -261,6 +336,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             # Reported only -- deliberately not part of score_bracket, see the note there.
             "bye_balance_halves": check_bye_balance_halves(current_matches, number_of_matches),
             "placement_balance_quarters": check_placement_balance_quarters(current_matches, number_of_matches),
+            "placement_balance_halves": check_placement_balance_halves(
+                current_matches, number_of_matches, bounds=bracket_bounds
+            ),
             "round2_first_vs_first": round_two["first_vs_first"],
             "round2_first_vs_first_forced": round_two["first_vs_first_forced"],
             "round2_top_easy_opponent": round_two["top_easy_opponent"],
@@ -781,9 +859,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # Allow up to 1 above the current minimum without penalty.
         combined_excess = max(0, future - min_combined - 1)
 
-        # The half balance (half_load_cost) and the byes' own balance across the
-        # halves ("Freilose ... gleichmaessig auf die Haelften verteilen",
-        # assignment_quality_cost) are both charged on the FINISHED assignment, not
+        # The half balance (half_load_cost) and the byes' and tiers' own balance
+        # across the halves ("Freilose, Gruppenerste, ... gleichmaessig auf die
+        # Haelften verteilen", assignment_quality_cost) are charged on the FINISHED assignment, not
         # here: accumulated as per-step marginals they charged legal layouts for
         # the order they happened to be built in.  See BYE_HALF_BALANCE_WEIGHT.
         #
@@ -791,8 +869,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         #   half_load_cost      x 100000  net half load           (feasibility)
         #   combined_excess     x  10000  quarter tops+byes       (feasibility)
         #   bye_half     (5000)           byes even over halves
+        #   tier_half    (5000)           tiers top..top+2 even over halves
         #   tier_quarter (2500)           tiers even within a half
-        #                                 -- both in assignment_quality_cost
+        #                                 -- all three in assignment_quality_cost
         #   score_bracket + score_round_two          quality tiebreakers
         # score_bracket peaks at 250 across a full 33-player/64-slot draw's Phase
         # 1/1b calls (the few-thousand values only occur on a finished, degraded
@@ -835,21 +914,125 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         return max(0, abs(net[0] - net[1]) - pending - 1) * 100000
 
     # ---------------------------------------------------------------------------
-    # Ranks 3 and 4 of the ladder, plus the round-two tiebreaker.  All three are
+    # Rank 3 of the ladder: byes and tiers top..top+2 even over the halves.
+    #
+    # Both splits are fixed by the group winners' halves long before the players
+    # themselves are placed: a winner's 2nd/3rd (and their byes) must go to the
+    # opposite half, its 4th to the same one.  Scoring only what is on the board
+    # let Phase 1 accept a winner layout that could only end 8/6 on the byes or
+    # 4/2 on the winners (review finding N2), and nothing after Phase 1 can change
+    # it.  So every participant not yet placed is counted in the half its
+    # group's anchor already forces, and only what is truly still open (a group
+    # whose winner is pending, a bye recipient below top+3) counts as slack --
+    # charged, like half_load_cost, only for the gap the slack can no longer
+    # close, so a legal final split is never charged for its build order.
+    # ---------------------------------------------------------------------------
+    winner_groups = {p.group_no for p in top_participants if getattr(p, "group_no", None) is not None}
+    balanced_tiers = range(top_group_pos, top_group_pos + BALANCED_TIERS_BELOW_TOP + 1)
+    half_tracked = [
+        p for p in class_subset
+        if id(p) in bye_recipient_ids or getattr(p, "group_pos", None) in balanced_tiers
+    ]
+
+    # The same projection per group, for winner_country_lookahead's hypothetical
+    # completions: what a group adds to (half 0 - half 1) of the byes and of each
+    # balanced tier when its winner lands in half 0 (negated for half 1), and the
+    # participants no winner binds (their own slack).
+    half_balance_keys = ("bye", *balanced_tiers) if half_balance else ()
+    half_balance_weight = {
+        key: BYE_HALF_BALANCE_WEIGHT if key == "bye" else TIER_HALF_BALANCE_WEIGHT for key in half_balance_keys
+    }
+    group_half_vector: dict = {}
+    free_half_slack = dict.fromkeys(half_balance_keys, 0)
+    for _p in half_tracked:
+        _keys = [
+            _key for _key in (("bye",) if id(_p) in bye_recipient_ids else ()) + (_p.group_pos,)
+            if _key in half_balance_keys
+        ]
+        _delta = _p.group_pos - top_group_pos
+        if getattr(_p, "group_no", None) in winner_groups and _delta <= 3:
+            _vector = group_half_vector.setdefault(_p.group_no, dict.fromkeys(half_balance_keys, 0))
+            for _key in _keys:
+                _vector[_key] += 1 if _delta in (0, 3) else -1
+        else:
+            for _key in _keys:
+                free_half_slack[_key] += 1
+
+    def projected_half_balance_units(trial_matches, trial_tops=None):
+        """(bye units, tier units) of the half split *trial_matches* is committed to.
+
+        On a finished bracket this equals check_bye_balance_halves plus
+        check_placement_balance_halves.  *trial_tops* is the group -> anchor
+        quarter map of the trial (default: the real one).
+        """
+        if not half_balance:
+            return sum(v[-1] for v in check_bye_balance_halves(trial_matches, number_of_matches)), 0
+        if trial_tops is None:
+            trial_tops = group_top_quarter
+        top_half = {g: geo.quarter_half(q) for g, q in trial_tops.items()}
+        byes = [0, 0]
+        tiers = {pos: [0, 0] for pos in balanced_tiers}
+        placed = set()
+        for match_idx, participants in trial_matches.items():
+            h = geo.match_half(match_idx)
+            for p in participants:
+                if p == "BYE":
+                    byes[h] += 1
+                elif p is not None:
+                    placed.add(id(p))
+                    if p.group_pos in tiers:
+                        tiers[p.group_pos][h] += 1
+
+        bye_slack = 0
+        tier_slack = dict.fromkeys(tiers, 0)
+        # A group whose winner is still pending moves as one: its anchor-bound bye
+        # recipients land together, winner/4th on one side, 2nd/3rd on the other.
+        pending_group_byes = {}
+        for p in half_tracked:
+            if id(p) in placed:
+                continue
+            needs_bye = id(p) in bye_recipient_ids
+            h = required_half_for_participant_with_map(p, top_half)
+            if h is not None:
+                byes[h] += needs_bye
+                if p.group_pos in tiers:
+                    tiers[p.group_pos][h] += 1
+                continue
+            if p.group_pos in tiers:
+                tier_slack[p.group_pos] += 1
+            if not needs_bye:
+                continue
+            group_no = getattr(p, "group_no", None)
+            delta = p.group_pos - top_group_pos
+            if group_no in winner_groups and group_no not in top_half and delta <= 3:
+                pending_group_byes[group_no] = pending_group_byes.get(group_no, 0) + (1 if delta in (0, 3) else -1)
+            else:
+                bye_slack += 1
+        bye_slack += sum(abs(v) for v in pending_group_byes.values())
+
+        def excess(counts, slack):
+            return max(0, abs(counts[0] - counts[1]) - slack - 1)
+        return excess(byes, bye_slack), sum(excess(tiers[pos], tier_slack[pos]) for pos in tiers)
+
+    # ---------------------------------------------------------------------------
+    # Rank 4 of the ladder, plus the round-two tiebreaker.  These and rank 3 are
     # functions of a FINISHED assignment rather than per-step marginals, so unlike
     # the two feasibility terms above they are evaluated once on the completed
     # trial state instead of being accumulated placement by placement.
     #
     # The two feasibility terms have to stay per-step: they gate whether the REST
     # of the draw can still be filled, so they must be charged as the capacity is
-    # consumed.  These three only grade the result, and measuring the result
+    # consumed.  These only grade the result, and measuring the result
     # directly is both exact and cheaper -- accumulating a marginal is at best a
     # lower bound on it, and for bye_half_excess it was not even that (a legal
     # final split could be charged for the order it was built in, which is what
     # BYE_HALF_BALANCE_WEIGHT documents).
     # ---------------------------------------------------------------------------
-    def assignment_quality_cost(trial_matches):
-        """Bye-half + tier-quarter balance + round-two quality for a finished state."""
+    def assignment_quality_cost(trial_matches, trial_tops=None, tier_halves=True):
+        """Bye/tier-half + tier-quarter balance + round-two quality for a finished state.
+
+        *tier_halves* False leaves out the tier-half term (see _fill_residual_soft).
+        """
         # Only charge for a tier every member of which is already on the board.
         # A partially placed tier's counts are a moving target: in a 33-player /
         # 64-slot draw the 3rd places arrive as 9 bye recipients here and 2
@@ -861,14 +1044,12 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             v[-1] for v in check_placement_balance_quarters(trial_matches, number_of_matches)
             if sum(v[1]) == tier_totals.get(v[0], 0)
         )
-        # No "fully placed" guard for the byes: unlike a tier, every bye is written
-        # the moment its recipient is committed (opponent_slot), so a partial state
-        # holds a prefix of the byes and never a number a later phase revises.
-        bye_half_units = sum(
-            v[-1] for v in check_bye_balance_halves(trial_matches, number_of_matches)
-        )
+        # The half terms need no "fully placed" guard: they already count every
+        # participant still to come in the half it is bound to (see above).
+        bye_half_units, tier_half_units = projected_half_balance_units(trial_matches, trial_tops)
         return (
             bye_half_units * BYE_HALF_BALANCE_WEIGHT
+            + (tier_half_units * TIER_HALF_BALANCE_WEIGHT if tier_halves else 0)
             + tier_units * TIER_QUARTER_BALANCE_WEIGHT
             + score_round_two(trial_matches, weights=round_two_weights, bounds=bracket_bounds)
         )
@@ -887,6 +1068,15 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # load balanced.  Enumeration is exponential in the pending winners, so it
     # only runs once at most WINNER_LOOKAHEAD_MAX_PENDING are left; the levels
     # before that are too wide open for a single pile-up to be forced anyway.
+    #
+    # The same enumeration also scores rank 3, the bye/tier half balance, of each
+    # reachable completion.  projected_half_balance_units treats a pending winner
+    # as free to take either half, but half_load_cost may not let it: on doubles
+    # 10 groups x 2 (32 slots, 12 byes) a level that put both groups whose
+    # runner-up also gets a bye into one half left the last level only 6/4
+    # winner splits that keep the net load balanced.  The lookahead returns what
+    # the best reachable completion costs ON TOP of the projection's own lower
+    # bound, so assignment_quality_cost still charges the rest exactly once.
     # ---------------------------------------------------------------------------
     top_sorted = sorted(top_participants, key=lambda p: -p.seeding)
     winner_level_slots = {}
@@ -903,7 +1093,9 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     winner_lookahead_cache: dict = {}
 
     def winner_country_lookahead(trial_state, trial_tops):
-        """country_half cost of the best winner country split still reachable."""
+        """Cost of the best winner split still reachable: its country_half cost,
+        plus its bye/tier half balance beyond what projected_half_balance_units
+        already charges for this state (never negative)."""
         placed, pending = [], []
         for p in top_sorted:
             gq = trial_tops.get(getattr(p, "group_no", None))
@@ -916,10 +1108,26 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
         counts = {}
         net = [0, 0]
+        # Half 0 minus half 1 of the byes and tiers, from the placed winners' groups.
+        balance = dict.fromkeys(half_balance_keys, 0)
+        pending_slack = dict.fromkeys(half_balance_keys, 0)
         for p, h in placed:
             net[h] += top_net_load[id(p)]
             for country in winner_countries[id(p)]:
                 counts.setdefault(country, [0, 0])[h] += 1
+            for key, value in group_half_vector.get(getattr(p, "group_no", None), {}).items():
+                balance[key] += value if h == 0 else -value
+        for p, _ in pending:
+            for key, value in group_half_vector.get(getattr(p, "group_no", None), {}).items():
+                pending_slack[key] += abs(value)
+
+        def balance_cost(slack):
+            return sum(
+                half_balance_weight[key] * max(0, abs(balance[key]) - slack[key] - 1)
+                for key in half_balance_keys
+            )
+        # What projected_half_balance_units already charges for this state.
+        projected = balance_cost({key: free_half_slack[key] + pending_slack[key] for key in half_balance_keys})
         # Room per (level, half) for the pending winners.
         room = {}
         for p, _ in pending:
@@ -941,10 +1149,11 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 if abs(net[0] - net[1]) > 1:
                     return
                 excess = sum(max(0, abs(c0 - c1) - winner_country_slack) for c0, c1 in counts.values())
-                if best is None or excess < best:
-                    best = excess
+                cost = balance_cost(free_half_slack) + excess * bracket_weights["country_half"]
+                if best is None or cost < best:
+                    best = cost
                 return
-            if best == 0:
+            if best is not None and best <= projected:
                 return
             p = pending[index][0]
             level_room = room[id(winner_level_slots.get(id(p), ()))]
@@ -953,16 +1162,21 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     continue
                 level_room[h] -= 1
                 net[h] += top_net_load[id(p)]
+                vector = group_half_vector.get(getattr(p, "group_no", None), {})
+                for key, value in vector.items():
+                    balance[key] += value if h == 0 else -value
                 for country in winner_countries[id(p)]:
                     counts.setdefault(country, [0, 0])[h] += 1
                 search(index + 1)
                 for country in winner_countries[id(p)]:
                     counts[country][h] -= 1
+                for key, value in vector.items():
+                    balance[key] -= value if h == 0 else -value
                 net[h] -= top_net_load[id(p)]
                 level_room[h] += 1
 
         search(0)
-        cost = (best or 0) * bracket_weights["country_half"]
+        cost = 0 if best is None else best - projected
         winner_lookahead_cache[cache_key] = cost
         return cost
 
@@ -1005,7 +1219,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         trial_matches = slots_to_matches(trial_state)
         total += half_load_cost(trial_tops) + winner_country_lookahead(trial_state, trial_tops)
         total += score_bracket(trial_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
-        total += assignment_quality_cost(trial_matches)
+        total += assignment_quality_cost(trial_matches, trial_tops)
         return total
 
     def greedy_assignment(participants, pool, allowed_slots):
@@ -1034,7 +1248,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 step_matches = slots_to_matches(step_state)
                 cost += half_load_cost(step_tops) + winner_country_lookahead(step_state, step_tops)
                 cost += score_bracket(step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
-                cost += assignment_quality_cost(step_matches)
+                cost += assignment_quality_cost(step_matches, step_tops)
                 if best is None or cost < best[0]:
                     best = (cost, slot)
             if best is None:
@@ -1427,7 +1641,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # That is the same capacity-neutrality argument that makes
     # rebalance_bottom_tier_quarters safe to run after capacity is settled.
     #
-    # Deterministic first-improvement, consuming NO randomness: drawing from the
+    # Deterministic best-improvement, consuming NO randomness: drawing from the
     # shared RNG stream here would shift every downstream random outcome, so any
     # change in a drawn bracket stays attributable to the rules rather than to the
     # pass having run.  Also like rebalance_bottom_tier_quarters.
@@ -1685,6 +1899,12 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         quarters of a half, round-two quality), because the moves shift exactly
         what those phases balanced; then score_bracket_tiers' matchup and
         distribution tiers.
+
+        The tier-half term is left out of that objective.  The winners never move
+        here, so the tier split over the halves only changes by breaking a
+        separation, and as a tiebreaker it steered the sideways moves away from
+        the repairs: in a before/after sweep, three 4-tier short-group draws
+        ended with 6-14 more half-separation violations with it in.
         """
         free_slots_all = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
 
@@ -1707,7 +1927,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                 hard,
                 # "Hoechstes Seeding bekommt zuerst Freilose"
                 len(check_bye_seeding_order(trial_matches, top_group_pos)),
-                assignment_quality_cost(trial_matches),
+                assignment_quality_cost(trial_matches, tier_halves=False),
                 matchup,
                 distribution,
             )

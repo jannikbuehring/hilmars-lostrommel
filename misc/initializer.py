@@ -74,6 +74,8 @@ def initialize_data():
                     bracket_problems.append(f"{label}: {rule}: {violation}")
             for line in quality["bye_order"]:
                 bracket_problems.append(f"{label}: bye_order: {line}")
+            for line in quality["balance"]:
+                bracket_problems.append(f"{label}: imbalanced: {line}")
             return {'matches': matches, 'snapshots': snapshots,
                     'draw_seconds': time.perf_counter() - start, 'quality': quality}
         except Exception as exc:

@@ -222,6 +222,25 @@ def test_report_has_one_row_per_draw_with_status(output_file_path):
     assert forced_row['first_vs_first'] == 0
     assert forced_row['details'] == '4 unavoidable first_vs_first'
 
+    # Review finding N2: an uneven half split is its own status, below the hard ones.
+    imbalanced = {'S': {'M4': {
+        'main': {'quality': {
+            'degraded': False, 'hard': {}, 'soft_count': 0,
+            'balance': ['byes 8/6 over the halves', 'pos 1: 4/2 over the halves'],
+        }},
+        'consolation': {'quality': {
+            'degraded': False, 'hard': {'first_vs_first': ['x']}, 'soft_count': 0,
+            'balance': ['byes 3/1 over the halves'],
+        }},
+    }}}
+    by_draw = {r['draw']: r for r in prepare_report({}, [], imbalanced)}
+    assert by_draw['main']['status'] == 'imbalanced'
+    assert by_draw['main']['details'] == (
+        'imbalanced: byes 8/6 over the halves | imbalanced: pos 1: 4/2 over the halves'
+    )
+    assert by_draw['consolation']['status'] == 'violations'
+    assert 'imbalanced: byes 3/1 over the halves' in by_draw['consolation']['details']
+
     written = write_report_csv(rows)
 
     assert written == str(output_file_path.parent / "output_report.csv") == report_file_path()

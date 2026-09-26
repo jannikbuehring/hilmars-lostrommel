@@ -568,6 +568,53 @@ def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches
     return violations
 
 
+# rules.md names the group winners, runners-up and 3rd places, i.e. the
+# bracket's top tier and the two below it (relative, so a consolation's 4..6).
+BALANCED_TIERS_BELOW_TOP = 2
+
+
+def check_placement_balance_halves(matches: Dict[int, List], number_of_matches: int, bounds=None):
+    """Flag a placement tier split unevenly across the two halves.
+
+    rules.md: "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte
+    gleichmaessig auf die Haelften verteilen".  The byes are
+    :func:`check_bye_balance_halves`; this covers the tiers ``top .. top+2``,
+    relative to the bracket like the separation checks (*bounds* is the optional
+    ``(top, bottom)`` pair for partial states).
+
+    Unlike :func:`check_placement_balance_quarters` this is a half-level count, so
+    it is decided by the group winners' halves: a winner's 2nd/3rd are pinned to
+    the opposite half.  The drawer therefore charges it in Phase 1, where the
+    winners are placed (bracket_drawer's projected_half_balance_units).
+
+    A difference of 1 is allowed (an odd tier count cannot split evenly).
+    Returns (group_pos, (count_half0, count_half1), violation_amount) per
+    aggrieved tier, mirroring :func:`check_bye_balance_halves`.
+    """
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        return []
+    top = bounds[0]
+    geo = BracketGeometry(number_of_matches)
+    counts = defaultdict(lambda: [0, 0])
+    for match_idx, participants in matches.items():
+        for p in participants:
+            if p == "BYE" or p is None:
+                continue
+            group_pos = getattr(p, "group_pos", None)
+            if group_pos is None or not top <= group_pos <= top + BALANCED_TIERS_BELOW_TOP:
+                continue
+            counts[group_pos][geo.match_half(match_idx)] += 1
+
+    violations = []
+    for group_pos, (c0, c1) in sorted(counts.items()):
+        violation_amount = abs(c0 - c1) - 1
+        if violation_amount > 0:
+            violations.append((group_pos, (c0, c1), violation_amount))
+    return violations
+
+
 def check_bye_seeding_order(matches: Dict[int, List], top_group_pos: int):
     """Flag byes that went to a lower seed of a tier than a player without one.
 

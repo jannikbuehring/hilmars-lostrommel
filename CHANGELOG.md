@@ -7,13 +7,20 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- Draw report status `imbalanced`: a bracket without hard violations whose byes, group winners, runners-up or 3rd places are split more than one apart over the two halves. It sits between `ok` and `violations`, is listed on the terminal (`… : imbalanced: byes 8/6 over the halves`) and marked on the bracket's HTML page. Some such splits are structurally forced; the `details` column says which counts are off.
+- `check_placement_balance_halves` in `checks/bracket_checker.py`: the per-half count of each tier `top..top+2` (relative, so a consolation's 4th/5th/6th), reported as `placement_balance_halves`.
+
 ### Changed
+
+- Bracket draw: a draw that ends on the degrade path is drawn once more without the new half balance, from the same random state, and the better result is kept (fewest hard violations, then bye-order breaks, then half imbalances). Such draws take about twice as long; all others are unaffected.
 
 ### Deprecated
 
 ### Removed
 
 ### Fixed
+
+- Bracket draw, Phase 1: the rule "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte gleichmäßig auf die Hälften verteilen" was not enforced where it is decided. The group winners' halves fix both splits, but Phase 1 only balanced the byes already on the board, so draws came out with byes 8/6 or winners 4/2 and were reported `ok`. Phase 1 now charges the split each winner layout commits the rest of the draw to, and its winner lookahead scores the splits still reachable. In a synthetic sweep of 1,184 draws the imbalanced regular-path draws fell from 106 to 36 (19 of those only involve 4th places, which the rule does not name, and 7 are structurally forced). No draw got more hard violations (total 190 → 174), and 2 fewer took the degrade path.
 
 ### Security
 

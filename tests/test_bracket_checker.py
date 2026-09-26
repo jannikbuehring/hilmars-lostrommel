@@ -20,6 +20,7 @@ from checks.bracket_checker import (
     check_quarter_group_separation,
     quarter_misfits,
     check_placement_balance_quarters,
+    check_placement_balance_halves,
     check_round_two_matchups,
     derive_round_two_matches,
     forced_first_vs_first,
@@ -657,6 +658,33 @@ def test_tier_balance_exempts_a_bracket_with_one_quarter_per_half():
     register_players([(i, f'C{i}') for i in range(1, 5)])
     matches = {1: [tiered(1, 1, 2), tiered(2, 2, 2)], 2: [tiered(3, 3, 2), tiered(4, 4, 2)]}
     assert check_placement_balance_quarters(matches, 2) == []
+
+
+def test_tiers_split_evenly_across_halves_are_clean():
+    """3/3 winners and 2/1 runners-up (odd count) are both fine."""
+    bracket = tier_bracket({0: [1, 1, 2], 1: [1, 2], 2: [1, 1, 2], 3: [1]})
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES) == []
+
+
+def test_tier_lopsided_across_halves_violates():
+    """The N2 failure mode: group winners 4/2 over the halves."""
+    bracket = tier_bracket({0: [1, 1], 1: [1, 1], 2: [1], 3: [1]})
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES) == [(1, (4, 2), 1)]
+
+
+def test_half_balance_is_relative_to_the_bracket():
+    """A consolation's top tier is its lowest group_pos present (here 4)."""
+    bracket = tier_bracket({0: [4, 4, 5, 5, 5], 2: [4, 4, 6]})
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES) == [(5, (3, 0), 2)]
+    # Explicit bounds win over what the (partial) state shows.
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES, bounds=(5, 6)) == [(5, (3, 0), 2)]
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES, bounds=(1, 3)) == []
+
+
+def test_half_balance_ignores_tiers_below_the_third():
+    """rules.md names winners, runners-up and 3rds only: a 4th is top+3."""
+    bracket = tier_bracket({0: [1, 4, 4, 4], 2: [1]})
+    assert check_placement_balance_halves(bracket, TIER_BRACKET_MATCHES) == []
 
 
 @pytest.mark.parametrize('top_count, number_of_matches, expected', [

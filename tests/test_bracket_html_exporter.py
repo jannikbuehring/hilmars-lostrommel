@@ -113,6 +113,19 @@ def test_unavoidable_first_vs_first_is_noted_not_counted(eight_players, tmp_path
     assert "hard-rule" not in html
 
 
+def test_unbalanced_halves_are_noted(eight_players, tmp_path):
+    """Review finding N2: byes or tiers split unevenly over the halves are marked."""
+    _, matches, snapshots = _draw_eight_player_bracket()
+    quality = {"degraded": False, "hard": {}, "soft_count": 0,
+               "balance": ["byes 8/6 over the halves"]}
+    bracket = {"main": {"matches": matches, "snapshots": snapshots, "quality": quality}}
+
+    html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
+
+    notice = "unbalanced halves (byes 8/6 over the halves)"
+    assert f'<span class="quality-notice">{notice}</span>' in html
+
+
 def test_export_skips_missing_bracket_types(eight_players, tmp_path):
     _, matches, snapshots = _draw_eight_player_bracket()
     bracket = {"main": {"matches": matches, "snapshots": snapshots}}

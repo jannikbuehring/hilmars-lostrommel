@@ -6,7 +6,10 @@ import pytest
 from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.snapshot import Snapshot
-from draw.bracket_drawer import draw_bracket, bracket_quality, HARD_BRACKET_RULES, TIER_QUARTER_BALANCE_WEIGHT
+from draw.bracket_drawer import (
+    draw_bracket, bracket_quality, HARD_BRACKET_RULES, TIER_QUARTER_BALANCE_WEIGHT,
+    _draw_bracket_attempt, _result_rank,
+)
 from checks.bracket_checker import (
     check_bye_balance_halves,
     check_half_group_separation,
@@ -15,6 +18,7 @@ from checks.bracket_checker import (
     check_top_easy_first_round,
     check_no_bottom_vs_bottom,
     check_placement_balance_quarters,
+    check_placement_balance_halves,
     check_round_two_matchups,
     score_bracket,
     score_bracket_tiers,
@@ -805,6 +809,77 @@ def test_two_tier_draw_reports_no_new_placement_violations():
             matches, _ = draw_bracket(build_tiered_rows(7, (1, 2), competition_class='M3'))
             assert check_top_easy_first_round(matches) == []
             assert check_no_bottom_vs_bottom(matches) == []
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+@pytest.mark.parametrize('number_of_groups, positions, short_groups', [
+    # 12 players, 16 slots: the last two winners used to share a half (4/2).
+    (6, (1, 2), ()),
+    # 25 players, 32 slots: winners 6/4 and runners-up 4/6.
+    (10, (1, 2, 3), (1, 2, 3, 4, 5)),
+])
+def test_byes_and_tiers_split_evenly_across_halves(number_of_groups, positions, short_groups):
+    """Review finding N2: "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte
+    gleichmaessig auf die Haelften verteilen".
+
+    The split is fixed by the winners' halves in Phase 1 (a winner's 2nd/3rd and
+    their byes go to the opposite half), so Phase 1 has to charge the split it
+    commits to, not just the byes already on the board.  Before the fix both
+    shapes drew 4/2 or 6/4 winner splits on 3-4 of these 6 seeds, all reported ok.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(6):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(number_of_groups, positions, short_groups=short_groups)
+            matches, snapshots = draw_bracket(rows)
+            number_of_matches = len(matches)
+            assert not check_bye_balance_halves(matches, number_of_matches), f'rng_seed={rng_seed}'
+            assert not check_placement_balance_halves(matches, number_of_matches), (
+                f'rng_seed={rng_seed}: {check_placement_balance_halves(matches, number_of_matches)}'
+            )
+            quality = bracket_quality(snapshots)
+            assert quality['balance'] == [] and not quality['hard'] and not quality['degraded'], (
+                f'rng_seed={rng_seed}: {quality}'
+            )
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_forced_half_imbalance_is_reported_not_hidden():
+    """3 groups of 3rd/4th, group 1 without a 4th: 5 players, 8 slots, 3 byes.
+
+    The half holding two 3rd places and their byes is full, so both 4ths must go
+    to the other half -- a 2/0 split no layout avoids.  It must still show up
+    (report status "imbalanced"), and must not cost a separation.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        random.seed(0)
+        matches, snapshots = draw_bracket(build_tiered_rows(3, (3, 4), short_groups=(1,)))
+        quality = bracket_quality(snapshots)
+        assert not quality['hard'] and not quality['degraded']
+        assert quality['balance'] in (['pos 4: 2/0 over the halves'], ['pos 4: 0/2 over the halves'])
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+def test_half_balance_never_costs_a_hard_rule():
+    """A draw that ends on the degrade path is redrawn without the half balance
+    from the same RNG state, i.e. exactly as the pre-N2 objective drew it, and
+    the better one is kept -- so the result never ranks below that draw.
+    4 groups x pos 1-4 with one short group degrades on most seeds.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(4):
+            rows = build_tiered_rows(4, (1, 2, 3, 4), short_groups=(1,))
+            random.seed(rng_seed)
+            _, snapshots = draw_bracket(rows)
+            random.seed(rng_seed)
+            _, unbalanced_snapshots = _draw_bracket_attempt(rows, half_balance=False)
+            assert _result_rank(snapshots) <= _result_rank(unbalanced_snapshots), f'rng_seed={rng_seed}'
     finally:
         seeding_by_start_numbers.clear()
 
