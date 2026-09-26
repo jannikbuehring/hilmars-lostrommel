@@ -9,6 +9,7 @@ from models.draw_data import DrawDataRow
 from models.draw_data import seeding_by_start_numbers
 from models.player import players_by_start_number
 from models.snapshot import Snapshot
+from models.bracket_geometry import BracketGeometry, allowed_quarters
 from checks.bracket_checker import (
     score_bracket,
     score_bracket_tiers,
@@ -207,23 +208,12 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     byes = bracket_size - num_participants
     logging.debug("Bracket size: %s, participants: %s, byes: %s", bracket_size, num_participants, byes)
 
-    # Quarter geometry: at most 4 quarters, at least 2; each half contains
-    # quarters_per_half quarters.  For small brackets (2 first-round matches)
-    # there are only 2 quarters (one per half, quarters_per_half = 1).
-    num_quarters = min(4, max(2, number_of_matches))
-    quarters_per_half = max(1, num_quarters // 2)
-
-    def slot_to_match(slot: int):
-        return ((slot + 1) // 2, 0 if slot % 2 == 1 else 1)
-
-    def slot_half(slot: int) -> int:
-        match_idx, _ = slot_to_match(slot)
-        return 0 if match_idx <= (number_of_matches // 2) else 1
-
-    def slot_quarter(slot: int) -> int:
-        match_idx, _ = slot_to_match(slot)
-        matches_per_quarter = max(1, number_of_matches // 4)
-        return min(3, (match_idx - 1) // matches_per_quarter)
+    # Half/quarter geometry lives in models.bracket_geometry, shared with the checker.
+    geo = BracketGeometry(number_of_matches)
+    num_quarters = geo.num_quarters
+    slot_to_match = geo.slot_to_match
+    slot_half = geo.slot_half
+    slot_quarter = geo.slot_quarter
 
     def opponent_slot(slot: int) -> int:
         return slot + 1 if slot % 2 == 1 else slot - 1
@@ -259,7 +249,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             forced_first_vs_first(bracket_top_count, number_of_matches),
         )
         return {
-            "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches),
+            "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches, bounds=bracket_bounds),
             "half_group_separation": check_half_group_separation(current_matches, number_of_matches, bounds=bracket_bounds),
             "first_vs_first": first_vs_first,
             "first_vs_first_forced": first_vs_first_forced,
@@ -414,7 +404,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         """Record the quarter (and derived half) for a group's top-placed participant."""
         q = slot_quarter(slot)
         group_top_quarter[group_no] = q
-        group_top_half[group_no] = q // quarters_per_half
+        group_top_half[group_no] = geo.quarter_half(q)
 
     def required_half_for_participant_with_map(participant, top_half_map):
         group_no = getattr(participant, "group_no", None)
@@ -433,6 +423,17 @@ def draw_bracket(class_subset: list[DrawDataRow]):
 
     def required_half_for_participant(participant):
         return required_half_for_participant_with_map(participant, group_top_half)
+
+    def _allowed_for(participant, sibling_quarter=None):
+        """allowed_quarters for *participant*, anchored on its group's top quarter.
+
+        The one rule Phase 1b, 1c and 2 all place by; *sibling_quarter* is where the
+        group's other 2nd/3rd already sits, if anywhere.
+        """
+        group_pos = getattr(participant, "group_pos", None)
+        delta = group_pos - top_group_pos if group_pos is not None else None
+        anchor = group_top_quarter.get(getattr(participant, "group_no", None))
+        return allowed_quarters(delta, anchor, geo, sibling_quarter)
 
     def raise_with_failure_snapshot(action, failure_details, participants=None):
         current_matches = slots_to_matches(slot_state)
@@ -533,8 +534,8 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # quarter its runner-up already occupies.  That is a violation of a rule
         # that "darf eigentlich nicht verletzt werden" (open_questions.md), and it
         # fires for every group of that shape: a 12-group / 36-player / 64-slot
-        # layout produced 8 of them.  Mirrors _required_quarters_for's
-        # group_opposite_quarter_used, which enforces the same thing inside 1b.
+        # layout produced 8 of them.  Mirrors group_opposite_quarter_used, which
+        # feeds the same sibling_quarter into allowed_quarters inside 1b.
         for placed_slot, placed in slot_state.items():
             if placed is None or placed == "BYE":
                 continue
@@ -587,25 +588,19 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             """
             return min(candidates, key=lambda q: (-quarter_remaining[q], _country_cost(p, q)))
 
-        # delta=3 (4th place): other quarter of the SAME half as pos-1.
+        # delta=3 (4th place): other quarter of the SAME half as pos-1 (in a small
+        # bracket with one quarter per half, that half's only quarter).
         for p in delta3_players:
-            top_q = group_top_quarter[p.group_no]
-            top_h = top_q // quarters_per_half
-            same_half_qs = [top_h * quarters_per_half + i for i in range(quarters_per_half)]
-            other_qs = [q for q in same_half_qs if q != top_q]
-            if other_qs:
-                _commit(p, _best_quarter(p, other_qs))
-            else:
-                # Only one quarter in this half (small bracket) — treat as unconstrained.
-                unconstrained_players.append(p)
+            _commit(p, _best_quarter(p, _allowed_for(p)))
 
-        def _place_delta1(p):
-            top_q = group_top_quarter[p.group_no]
-            top_h = top_q // quarters_per_half
-            opp_h = 1 - top_h
-            opp_qs = [opp_h * quarters_per_half + i for i in range(quarters_per_half)]
-            chosen_q = _best_quarter(p, opp_qs)
-            group_opposite_half_used[p.group_no] = chosen_q
+        def _place_sibling(p):
+            """Place a delta=1/2 player in the opposite half, away from its sibling.
+
+            Whichever of the group's 2nd/3rd is placed first -- here or with a bye in
+            Phase 1b -- claims its quarter; the other is steered to the one left.
+            """
+            chosen_q = _best_quarter(p, _allowed_for(p, group_opposite_half_used.get(p.group_no)))
+            group_opposite_half_used.setdefault(p.group_no, chosen_q)
             _commit(p, chosen_q)
 
         # A full group's delta=1 and delta=2 occupy the two DIFFERENT opposite-half
@@ -622,29 +617,18 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         # delta=1 (paired): pick the OPPOSITE-half quarter with the most remaining
         # capacity; break ties by fewest same-country conflicts.
         for p in paired_delta1:
-            _place_delta1(p)
+            _place_sibling(p)
 
         # delta=2 (3rd place): MUST use the OTHER opposite-half quarter so that
         # 2nd and 3rd from the same group land in different quarters.
         for p in delta2_players:
-            top_q = group_top_quarter[p.group_no]
-            top_h = top_q // quarters_per_half
-            opp_h = 1 - top_h
-            opp_qs = [opp_h * quarters_per_half + i for i in range(quarters_per_half)]
-            if p.group_no in group_opposite_half_used:
-                already = group_opposite_half_used[p.group_no]
-                other = [q for q in opp_qs if q != already]
-                chosen_q = other[0] if other else opp_qs[0]
-            else:
-                # No delta=1 sibling yet; pick by capacity then country.
-                chosen_q = _best_quarter(p, opp_qs)
-                group_opposite_half_used[p.group_no] = chosen_q
-            _commit(p, chosen_q)
+            _place_sibling(p)
 
-        # delta=1 (solo): short groups whose delta=1 has no delta=2 sibling — placed
-        # last, into whatever opposite-half capacity the forced players left free.
+        # delta=1 (solo): short groups whose delta=1 has no residual delta=2 sibling
+        # -- placed last, into whatever opposite-half capacity the forced players
+        # left free, and away from a delta=2 that took a bye in Phase 1b.
         for p in solo_delta1:
-            _place_delta1(p)
+            _place_sibling(p)
 
         # Unconstrained players: group by group_no, assign each group to the
         # quarter with the most remaining capacity.
@@ -847,7 +831,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
             if gq is None:
                 pending += abs(top_net_load[id(p)])
             else:
-                net[gq // quarters_per_half] += top_net_load[id(p)]
+                net[geo.quarter_half(gq)] += top_net_load[id(p)]
         return max(0, abs(net[0] - net[1]) - pending - 1) * 100000
 
     # ---------------------------------------------------------------------------
@@ -923,7 +907,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         placed, pending = [], []
         for p in top_sorted:
             gq = trial_tops.get(getattr(p, "group_no", None))
-            (pending if gq is None else placed).append((p, None if gq is None else gq // quarters_per_half))
+            (pending if gq is None else placed).append((p, None if gq is None else geo.quarter_half(gq)))
         if not pending or len(pending) > WINNER_LOOKAHEAD_MAX_PENDING:
             return 0
         cache_key = frozenset((id(p), h) for p, h in placed)
@@ -1309,30 +1293,13 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     # ---------------------------------------------------------------------------
     non_top_bye_recipients = [p for p in bye_recipients if p.group_pos != top_group_pos]
     # Records the opposite-half quarter a group already used, so its 2nd/3rd land
-    # in different quarters (mirrors assign_quarter_buckets).
+    # in different quarters (the sibling_quarter of allowed_quarters; Phase 2 seeds
+    # its own map from the slots this one led to).
     group_opposite_quarter_used: dict = {}
 
     def _required_quarters_for(participant):
         """Allowed quarters for a non-top bye, per the half/quarter separation rules."""
-        group_no = getattr(participant, "group_no", None)
-        if group_no is None or group_no not in group_top_quarter:
-            return list(range(num_quarters))
-        top_q = group_top_quarter[group_no]
-        top_h = top_q // quarters_per_half
-        delta = participant.group_pos - top_group_pos
-        if delta in (1, 2):
-            opp_h = 1 - top_h
-            opp_qs = [opp_h * quarters_per_half + i for i in range(quarters_per_half)]
-            used = group_opposite_quarter_used.get(group_no)
-            if delta == 2 and used is not None:
-                other = [q for q in opp_qs if q != used]
-                return other if other else opp_qs
-            return opp_qs
-        if delta == 3:
-            same_qs = [top_h * quarters_per_half + i for i in range(quarters_per_half)]
-            other = [q for q in same_qs if q != top_q]
-            return other if other else same_qs
-        return list(range(num_quarters))
+        return _allowed_for(participant, group_opposite_quarter_used.get(getattr(participant, "group_no", None)))
 
     any_slot_tier = list(range(1, bracket_size + 1))
 
@@ -1492,7 +1459,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
         def separation_counts(trial_matches):
             return (
                 len(check_half_group_separation(trial_matches, number_of_matches, bounds=bracket_bounds)),
-                len(check_quarter_group_separation(trial_matches, number_of_matches)),
+                len(check_quarter_group_separation(trial_matches, number_of_matches, bounds=bracket_bounds)),
             )
 
         # The residual 2nd/3rd (delta 1/2) that Phase 2 still has to place, by group,
@@ -1528,20 +1495,16 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     placed_quarters.setdefault(value.group_no, set()).add(slot_quarter(s))
             forced = {q: 0 for q in range(num_quarters)}
             for group_no, members in residual_by_group.items():
-                opp_h = 1 - group_top_quarter[group_no] // quarters_per_half
-                open_quarters = [
-                    opp_h * quarters_per_half + i for i in range(quarters_per_half)
-                    if opp_h * quarters_per_half + i not in placed_quarters.get(group_no, set())
-                ]
+                # A residual 2nd/3rd has at most one placed sibling; the members share
+                # the same allowed quarters, so the first one speaks for the group.
+                placed = placed_quarters.get(group_no, set())
+                open_quarters = _allowed_for(members[0], next(iter(placed), None))
                 # Only a group with no choice left forces anything.
                 if len(open_quarters) == len(members):
                     for q in open_quarters:
                         forced[q] += 1
             for p in residual_fourths:
-                top_q = group_top_quarter[p.group_no]
-                top_h = top_q // quarters_per_half
-                same_qs = [top_h * quarters_per_half + i for i in range(quarters_per_half)]
-                allowed = [q for q in same_qs if q != top_q] or same_qs
+                allowed = _allowed_for(p)
                 if len(allowed) == 1:
                     forced[allowed[0]] += 1
             return sum(max(0, forced[q] - free_in_q[q]) for q in range(num_quarters))
@@ -1608,7 +1571,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
                     # Keep the player on the same side of its match.
                     slot_to = 2 * match_to - 1 if slot_from % 2 == 1 else 2 * match_to
                     quarter_to = slot_quarter(slot_to)
-                    if quarter_to == quarter_from or quarter_to // quarters_per_half != quarter_from // quarters_per_half:
+                    if quarter_to == quarter_from or geo.quarter_half(quarter_to) != geo.quarter_half(quarter_from):
                         continue
                     bye_to = opponent_slot(slot_to)
                     participant = slot_state[slot_from]

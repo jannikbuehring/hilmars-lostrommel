@@ -11,6 +11,7 @@ from checks.bracket_checker import (
     check_bye_balance_halves,
     check_half_group_separation,
     check_quarter_group_separation,
+    quarter_misfits,
     check_top_easy_first_round,
     check_no_bottom_vs_bottom,
     check_placement_balance_quarters,
@@ -20,6 +21,7 @@ from checks.bracket_checker import (
     score_round_two,
 )
 from misc.config import config
+from models.bracket_geometry import BracketGeometry
 
 
 def participant_slots(match_map):
@@ -1237,5 +1239,34 @@ def test_full_bracket_moves_a_bye_to_fix_quarter_capacity():
             seeding_by_start_numbers.clear()
         # Otherwise the layout never needed the repair and the test proves nothing.
         assert moved, 'No seed exercised the bye move.'
+    finally:
+        seeding_by_start_numbers.clear()
+
+
+@pytest.mark.parametrize('number_of_groups, positions, short_groups', [
+    (4, (1, 2, 3), ()),
+    (5, (1, 2, 3), (1, 3, 5)),
+    (6, (1, 2, 3, 4), (1, 4)),
+    (7, (4, 5, 6), ()),
+    (6, (3, 4), (1, 3, 5)),
+    (11, (1, 2, 3), ()),
+])
+def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positions, short_groups):
+    """The drawer's phases and the checker share allowed_quarters.
+
+    So whenever the report shows no hard violation, no group member may sit
+    outside the quarters allowed_quarters gives it relative to its winner.
+    """
+    seeding_by_start_numbers.clear()
+    try:
+        for rng_seed in range(3):
+            random.seed(rng_seed)
+            rows = build_tiered_rows(number_of_groups, positions, short_groups=short_groups)
+            matches, snapshots = draw_bracket(rows)
+            if bracket_quality(snapshots)['hard']:
+                continue
+            misfits = quarter_misfits(matches, BracketGeometry(len(matches)), positions[0])
+            assert not misfits, f'rng_seed={rng_seed}: {misfits}'
+            seeding_by_start_numbers.clear()
     finally:
         seeding_by_start_numbers.clear()

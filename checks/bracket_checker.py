@@ -2,6 +2,7 @@
 from collections import defaultdict
 from typing import Dict, List
 from models.player import players_by_start_number
+from models.bracket_geometry import BracketGeometry, allowed_quarters
 
 
 # Weights for score_round_two.  See its docstring for why the three tier weights
@@ -14,22 +15,6 @@ ROUND_TWO_DEFAULT_WEIGHTS = {
     # changes either should re-check it (validate_bracket_weights warns).
     "round_two_country_first": 9,
 }
-
-
-def _match_half(match_index: int, number_of_matches: int) -> int:
-    """Return 0 for first half, 1 for second half."""
-    half = 0 if match_index <= (number_of_matches // 2) else 1
-    return half
-
-
-def _match_quarter(match_index: int, number_of_matches: int) -> int:
-    """Return 0-3 for the quarter of the bracket.
-
-    For small brackets with fewer than 4 matches the highest valid quarter
-    index is returned (e.g. 2-match bracket yields quarters 0 and 1 only).
-    """
-    matches_per_quarter = max(1, number_of_matches // 4)
-    return min(3, (match_index - 1) // matches_per_quarter)
 
 
 def check_half_group_separation(matches: Dict[int, List], number_of_matches: int, bounds=None):
@@ -48,6 +33,7 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
     if bounds is None:
         return violations
     top = bounds[0]
+    geo = BracketGeometry(number_of_matches)
 
     # collect group_pos halves
     group_pos_halves = defaultdict(lambda: {"14": set(), "23": set()})
@@ -62,7 +48,7 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
                 continue
             if pos is None:
                 continue
-            h = _match_half(match_idx, number_of_matches)
+            h = geo.match_half(match_idx)
             delta = pos - top
             if delta in (0, 3):
                 group_pos_halves[group_no]["14"].add(h)
@@ -86,51 +72,79 @@ def check_half_group_separation(matches: Dict[int, List], number_of_matches: int
     return violations
 
 
-def check_quarter_group_separation(matches: Dict[int, List], number_of_matches: int):
+def quarter_misfits(matches: Dict[int, List], geometry: BracketGeometry, top: int):
+    """Group members whose quarter breaks :func:`allowed_quarters`, relative to their winner.
+
+    The same rule the drawer places by, checked on a (possibly partial) layout.
+    A 2nd/3rd is checked against its sibling's quarter as *sibling_quarter*.  A
+    group without its top-tier member in *matches* has no anchor and so no misfits.
+    Returns (group_no, delta, quarter, allowed) tuples.
+    """
+    members = defaultdict(list)  # group_no -> [(delta, quarter)]
+    for match_idx, participants in matches.items():
+        for p in participants:
+            if p is None or p == "BYE":
+                continue
+            group_no = getattr(p, "group_no", None)
+            group_pos = getattr(p, "group_pos", None)
+            if group_no is None or group_pos is None:
+                continue
+            members[group_no].append((group_pos - top, geometry.match_quarter(match_idx)))
+
+    misfits = []
+    for group_no, group_members in members.items():
+        anchor = next((q for delta, q in group_members if delta == 0), None)
+        for index, (delta, quarter) in enumerate(group_members):
+            sibling = next(
+                (q for other, (d, q) in enumerate(group_members) if other != index and d in (1, 2)),
+                None,
+            ) if delta in (1, 2) else None
+            allowed = allowed_quarters(delta, anchor, geometry, sibling)
+            if quarter not in allowed:
+                misfits.append((group_no, delta, quarter, allowed))
+    return misfits
+
+
+def check_quarter_group_separation(matches: Dict[int, List], number_of_matches: int, bounds=None):
     """Check that within each group:
       - 2nd and 3rd-highest placements are in *different* quarters.
       - The 4th-highest placement is in the same half but a *different* quarter
         from the 1st-highest placement.
 
+    Derived from :func:`quarter_misfits`.  A 2nd/3rd that is only in the wrong half
+    is left to :func:`check_half_group_separation`.  Where a half has a single
+    quarter (2 first-round matches), a 2nd/3rd pair cannot be split and is not
+    flagged.  *bounds* is the optional ``(top, bottom)`` pair for partial states.
+
     Returns a list of violation tuples (group_no, description).
     """
-    violations = []
+    if bounds is None:
+        bounds = _bracket_position_bounds(matches)
+    if bounds is None:
+        return []
+    geo = BracketGeometry(number_of_matches)
+    misfits = quarter_misfits(matches, geo, bounds[0])
 
-    group_pos_quarters: dict = defaultdict(lambda: defaultdict(set))
+    quarters_by_group = defaultdict(dict)  # group_no -> {delta: quarter}
     for match_idx, participants in matches.items():
         for p in participants:
-            if p is None or p == "BYE":
+            if p is None or p == "BYE" or getattr(p, "group_pos", None) is None:
                 continue
-            try:
-                group_no = p.group_no
-                pos = p.group_pos
-            except Exception:
-                continue
-            q = _match_quarter(match_idx, number_of_matches)
-            group_pos_quarters[group_no][pos].add(q)
+            quarters_by_group[getattr(p, "group_no", None)][p.group_pos - bounds[0]] = geo.match_quarter(match_idx)
 
-    all_positions = [pos for pd in group_pos_quarters.values() for pos in pd]
-    if not all_positions:
-        return violations
-    top_pos = min(all_positions)
-
-    for group_no, pos_map in group_pos_quarters.items():
-        top_qs = pos_map.get(top_pos, set())
-        second_qs = pos_map.get(top_pos + 1, set())
-        third_qs = pos_map.get(top_pos + 2, set())
-        fourth_qs = pos_map.get(top_pos + 3, set())
-
-        # 2nd and 3rd must be in different quarters
-        if second_qs and third_qs and (second_qs & third_qs):
-            violations.append((group_no, "positions 2nd/3rd in same quarter"))
-
-        # 4th must be in the same half as 1st but a different quarter
-        if top_qs and fourth_qs:
-            top_halves = {q // 2 for q in top_qs}
-            fourth_halves = {q // 2 for q in fourth_qs}
-            if top_halves != fourth_halves:
+    violations = []
+    reported_pairs = set()
+    for group_no, delta, quarter, _allowed in misfits:
+        group_quarters = quarters_by_group[group_no]
+        if delta in (1, 2):
+            if group_quarters.get(1) is not None and group_quarters.get(1) == group_quarters.get(2) \
+                    and group_no not in reported_pairs:
+                reported_pairs.add(group_no)
+                violations.append((group_no, "positions 2nd/3rd in same quarter"))
+        elif delta == 3:
+            if geo.quarter_half(quarter) != geo.quarter_half(group_quarters[0]):
                 violations.append((group_no, "position 4th not in same half as 1st"))
-            elif top_qs & fourth_qs:
+            else:
                 violations.append((group_no, "position 4th in same quarter as 1st"))
 
     return violations
@@ -378,8 +392,9 @@ def check_country_balance_halves(matches: Dict[int, List], number_of_matches: in
     """
     counts = defaultdict(lambda: [0, 0])
     is_doubles = False
+    geo = BracketGeometry(number_of_matches)
     for match_idx, participants in matches.items():
-        half = _match_half(match_idx, number_of_matches)
+        half = geo.match_half(match_idx)
         for p in participants:
             if p == "BYE" or p is None:
                 continue
@@ -420,9 +435,10 @@ def check_bye_balance_halves(matches: Dict[int, List], number_of_matches: int):
     checker also exists so the viewers can report it.
     """
     counts = [0, 0]
+    geo = BracketGeometry(number_of_matches)
     for match_idx, participants in matches.items():
         if any(p == "BYE" for p in participants):
-            counts[_match_half(match_idx, number_of_matches)] += 1
+            counts[geo.match_half(match_idx)] += 1
 
     violation_amount = abs(counts[0] - counts[1]) - 1
     if violation_amount <= 0:
@@ -448,15 +464,16 @@ def check_country_balance_quarters(matches: Dict[int, List], number_of_matches: 
     across the halves stays the more important objective.
     """
     # Derive the quarter count from the bracket itself rather than assuming 4:
-    # small brackets only ever yield quarters 0/1 (see _match_quarter).
-    num_quarters = len({_match_quarter(i, number_of_matches) for i in range(1, number_of_matches + 1)})
+    # small brackets only ever yield quarters 0/1 (see BracketGeometry).
+    geo = BracketGeometry(number_of_matches)
+    num_quarters = len({geo.match_quarter(i) for i in range(1, number_of_matches + 1)})
     if num_quarters < 2:
         return []
 
     counts = defaultdict(lambda: [0] * num_quarters)
     is_doubles = False
     for match_idx, participants in matches.items():
-        quarter = _match_quarter(match_idx, number_of_matches)
+        quarter = geo.match_quarter(match_idx)
         if quarter >= num_quarters:
             continue
         for p in participants:
@@ -520,7 +537,8 @@ def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches
     Returns (group_pos, counts_per_quarter, violation_amount) per aggrieved tier,
     mirroring the magnitude convention of the country balance checks.
     """
-    num_quarters = len({_match_quarter(i, number_of_matches) for i in range(1, number_of_matches + 1)})
+    geo = BracketGeometry(number_of_matches)
+    num_quarters = len({geo.match_quarter(i) for i in range(1, number_of_matches + 1)})
     quarters_per_half = num_quarters // 2
     if quarters_per_half < 2:
         # One quarter per half: nothing is free to balance.
@@ -528,7 +546,7 @@ def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches
 
     counts = defaultdict(lambda: [0] * num_quarters)
     for match_idx, participants in matches.items():
-        quarter = _match_quarter(match_idx, number_of_matches)
+        quarter = geo.match_quarter(match_idx)
         if quarter >= num_quarters:
             continue
         for p in participants:
@@ -747,7 +765,7 @@ def score_bracket_tiers(
         forced = forced_first_vs_first(top_count, number_of_matches)
         first_vs_first, _ = split_first_vs_first(first_vs_first, forced)
     hard = (
-        len(check_quarter_group_separation(matches, number_of_matches)) * w("quarter_split")
+        len(check_quarter_group_separation(matches, number_of_matches, bounds=bounds)) * w("quarter_split")
         + len(check_half_group_separation(matches, number_of_matches, bounds=bounds)) * w("half_split")
         + len(first_vs_first) * w("first_vs_first")
     )
