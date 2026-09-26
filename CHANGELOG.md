@@ -7,7 +7,11 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- New `config/config_template.ini` that lists every config key with an explanation and its default value, and says which keys are required.
+
 ### Changed
+
+- The Windows exe built by CI now ships `config_template.ini` as its `config.ini`, so it always starts with the documented defaults instead of whichever `config.ini` happens to be committed.
 
 ### Deprecated
 
