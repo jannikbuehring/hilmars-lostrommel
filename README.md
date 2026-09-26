@@ -15,7 +15,7 @@ Format examples: `input/players_example.csv` and `input/draw_input_example.csv`.
 
 Before the first run, copy `config/config_template.ini` to `config/config.ini` (the latter is gitignored, so each machine keeps its own).
 
-Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact), then use the interactive menu to browse Players / Groups / Bracket results.
+Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact and, if `NEXTCLOUD_SHARE_URL` is set, uploaded to that Nextcloud share), then use the interactive menu to browse Players / Groups / Bracket results.
 
 Surrounding whitespace is trimmed from every input field (so `"GER "` is read as `GER`). Before drawing, validity checks run against the input data. Every check aborts the run, except the "entered in at least one competition" check, which only warns:
 - No player has the same start number twice

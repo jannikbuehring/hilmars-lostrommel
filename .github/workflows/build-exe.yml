@@ -11,6 +11,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history and tags, so the config template can be compared
+          # against the previous release.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -37,3 +41,49 @@ jobs:
         with:
           name: hilmars_lostrommel-windows
           path: dist/
+
+      # The Nextcloud share keeps the user's config.ini across releases, so the
+      # config is only shipped there when the template changed since the
+      # previous release tag (HEAD^, so a tag build skips its own tag).
+      - name: Check whether the config template changed
+        id: cfg
+        shell: bash
+        run: |
+          prev=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          if [ -z "$prev" ] || ! git diff --quiet "$prev" HEAD -- config/config_template.ini; then
+            echo "include=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "include=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Previous release: ${prev:-none}"
+
+      - name: Zip for Nextcloud
+        id: zip
+        shell: pwsh
+        run: |
+          $release = Get-ChildItem dist -Directory -Filter 'hilmars_lostrommel_v*' | Select-Object -First 1
+          $staging = Join-Path dist/nextcloud $release.Name
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item (Join-Path $release.FullName '*.exe') $staging
+          if ('${{ steps.cfg.outputs.include }}' -eq 'true') {
+            Copy-Item (Join-Path $release.FullName 'config') $staging -Recurse
+          }
+          $zip = "$($release.Name).zip"
+          Compress-Archive -Path $staging -DestinationPath (Join-Path dist $zip) -Force
+          "name=$zip" >> $env:GITHUB_OUTPUT
+
+      # Public share without password: the share token is the WebDAV user,
+      # the password stays empty. The share must allow uploads.
+      - name: Upload to Nextcloud
+        if: vars.NEXTCLOUD_SHARE_URL != ''
+        shell: bash
+        env:
+          NEXTCLOUD_SHARE_URL: ${{ vars.NEXTCLOUD_SHARE_URL }}
+          ZIP: ${{ steps.zip.outputs.name }}
+        run: |
+          url="${NEXTCLOUD_SHARE_URL%/}"
+          token="${url##*/s/}"
+          host="${url%%/s/*}"
+          curl --fail --show-error -T "dist/$ZIP" -u "$token:" \
+               -H "X-Requested-With: XMLHttpRequest" \
+               "$host/public.php/webdav/$ZIP"

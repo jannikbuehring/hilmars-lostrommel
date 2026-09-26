@@ -9,9 +9,11 @@ and [keeps a changelog](https://keepachangelog.com).
 
 - Draw report status `imbalanced`: a bracket without hard violations whose byes, group winners, runners-up or 3rd places are split more than one apart over the two halves. It sits between `ok` and `violations`, is listed on the terminal (`… : imbalanced: byes 8/6 over the halves`) and marked on the bracket's HTML page. Some such splits are structurally forced; the `details` column says which counts are off.
 - `check_placement_balance_halves` in `checks/bracket_checker.py`: the per-half count of each tier `top..top+2` (relative, so a consolation's 4th/5th/6th), reported as `placement_balance_halves`.
+- CI uploads the build as a zip to a Nextcloud share when the repository variable `NEXTCLOUD_SHARE_URL` is set. The zip includes `config/config.ini` only if `config_template.ini` changed since the previous release.
 
 ### Changed
 
+- The exe and its config are built into `dist/hilmars_lostrommel_v<version>/`, and the exe is named `hilmars_lostrommel_v<version>.exe`. Only `config.ini` is shipped next to it; `config_template.ini` and other files in `config/` are no longer copied.
 - Bracket draw: a draw that ends on the degrade path is drawn once more without the new half balance, from the same random state, and the better result is kept (fewest hard violations, then bye-order breaks, then half imbalances). Such draws take about twice as long; all others are unaffected.
 
 ### Deprecated
