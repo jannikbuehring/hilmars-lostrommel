@@ -12,16 +12,8 @@ import os
 from datetime import datetime
 
 from misc.version import APP_NAME, __version__
+from models.bracket_geometry import BracketGeometry
 from viewer.viewer_shared import participant_display_fields
-
-
-def _match_quarter(match_idx, number_of_matches):
-    """Return the quarter index (0-3) for a 1-based first-round match index.
-
-    Mirrors draw/bracket_drawer.py::slot_quarter so the viewer's Q1-Q4 grouping
-    matches the quarter geometry the draw algorithm actually used.
-    """
-    return min(3, (match_idx - 1) // max(1, number_of_matches // 4))
 
 
 def _participant_key(p):
@@ -146,9 +138,11 @@ def _render_bracket_list(number_of_matches):
         return '<div class="bracket-list"></div>'
 
     # Group 1-based match indices by quarter, preserving order.
+    # Same quarter geometry the draw algorithm used.
+    geo = BracketGeometry(number_of_matches)
     quarters = {}
     for match_idx in range(1, number_of_matches + 1):
-        quarters.setdefault(_match_quarter(match_idx, number_of_matches), []).append(match_idx)
+        quarters.setdefault(geo.match_quarter(match_idx), []).append(match_idx)
 
     sections = []
     for quarter in sorted(quarters):

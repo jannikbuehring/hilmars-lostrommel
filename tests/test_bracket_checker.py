@@ -17,6 +17,8 @@ from checks.bracket_checker import (
     check_no_bottom_vs_bottom,
     check_country_conflicts_first_round,
     check_half_group_separation,
+    check_quarter_group_separation,
+    quarter_misfits,
     check_placement_balance_quarters,
     check_round_two_matchups,
     derive_round_two_matches,
@@ -29,6 +31,7 @@ from checks.bracket_checker import (
     DEFAULT_BRACKET_WEIGHTS,
     ROUND_TWO_DEFAULT_WEIGHTS,
 )
+from models.bracket_geometry import BracketGeometry
 
 # score_bracket's own defaults, passed explicitly so a partially-specified weights
 # dict never silently reintroduces a term through the .get() fallbacks.
@@ -694,3 +697,36 @@ def test_round_two_first_vs_first_forced_by_byes():
     assert round_two['first_vs_first'] == []
     assert len(round_two['first_vs_first_forced']) == 2
     assert score_round_two(matches, bounds=(1, 3)) == 0
+
+
+def test_quarter_separation_flags_fourth_in_wrong_half_of_small_bracket():
+    """2 matches = one quarter per half: the half must come from the quarter, not q // 2.
+
+    The old checker computed the half as ``quarter // 2``, which puts both quarters
+    of a 2-match bracket in half 0, so a 4th opposite its winner went unflagged.
+    """
+    matches = {1: [tiered(1, 1, 1), tiered(2, 2, 2)], 2: [tiered(3, 1, 4), tiered(4, 2, 1)]}
+    assert (1, "position 4th not in same half as 1st") in check_quarter_group_separation(matches, 2)
+    assert quarter_misfits(matches, BracketGeometry(2), 1) == [(1, 3, 1, [0])]
+
+
+def test_quarter_separation_pair_and_fourth_in_full_bracket():
+    matches = group_layout_matches({
+        1: [(1, 1), (2, 3)],   # q0: winner 1, 3rd of group 2
+        3: [(1, 4)],           # q1: 4th of group 1 -- same half, other quarter: fine
+        5: [(1, 2)],           # q2: 2nd of group 1
+        6: [(1, 3)],           # q2: 3rd of group 1 -- same quarter as the 2nd
+        7: [(2, 1)],           # q3: winner of group 2
+        8: [(2, 4)],           # q3: 4th of group 2 -- same quarter as its winner
+    })
+    assert sorted(check_quarter_group_separation(matches, len(matches))) == [
+        (1, "positions 2nd/3rd in same quarter"),
+        (2, "position 4th in same quarter as 1st"),
+    ]
+
+
+def test_quarter_separation_leaves_a_wrong_half_alone_to_the_half_check():
+    """A 2nd alone in its winner's half is a half violation, not a quarter one."""
+    matches = group_layout_matches({1: [(1, 1)], 3: [(1, 2)], 5: [(1, 3)]})
+    assert check_quarter_group_separation(matches, len(matches)) == []
+    assert check_half_group_separation(matches, len(matches))
