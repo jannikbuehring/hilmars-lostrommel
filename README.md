@@ -11,7 +11,11 @@ Prerequisites (place in `input/`):
 - `players.csv` — all players
 - `draw_input.csv` — competition entries per player/team, referencing players by start number
 
-Run `python hilmars_lostrommel.py` (or the pre-built executable in `builds/`), then use the interactive menu to browse Players / Groups / Bracket results.
+Format examples: `input/players_example.csv` and `input/draw_input_example.csv`. The `seeding` column is given on the group-stage row only; a **higher** value means a **stronger** entry (e.g. 1000 = best), so a classic Setzziffer (1 = best) must be inverted first. Bracket rows (main round / consolation) leave `seeding` blank and take it from the same player's or pair's group-stage row, which therefore has to exist.
+
+Before the first run, copy `config/config_template.ini` to `config/config.ini` (the latter is gitignored, so each machine keeps its own).
+
+Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact), then use the interactive menu to browse Players / Groups / Bracket results.
 
 Surrounding whitespace is trimmed from every input field (so `"GER "` is read as `GER`). Before drawing, validity checks run against the input data. Every check aborts the run, except the "entered in at least one competition" check, which only warns:
 - No player has the same start number twice
@@ -54,7 +58,7 @@ Every bracket (all singles/doubles/mixed classes, main and consolation) is **exp
 
 # Configuration
 
-Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracket phase limits) is controlled by `config/config.ini`. Full key reference: [ARCHITECTURE.md § Configuration](ARCHITECTURE.md#8-configuration).
+Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracket phase limits, rule weights) is controlled by `config/config.ini`, created from `config/config_template.ini`. The exe built by CI ships the template unchanged, so a local config with other weights or another seed draws the same input differently. For a reproducible draw, set `random_seed`. Full key reference: [ARCHITECTURE.md § Configuration](ARCHITECTURE.md#8-configuration).
 
 # Known issues
 
