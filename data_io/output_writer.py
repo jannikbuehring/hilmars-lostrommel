@@ -6,7 +6,7 @@ import os
 import shutil
 from types import SimpleNamespace
 
-from misc.config import config
+from misc.config import settings
 from models.player import players_by_start_number
 
 HEADERS = [
@@ -165,7 +165,7 @@ PREVIOUS_DIR_NAME = "previous"
 
 def report_file_path():
     """Path of the draw report: `<output stem>_report.csv` next to the output CSV."""
-    stem, _ = os.path.splitext(config["files"]["output_file_path"])
+    stem, _ = os.path.splitext(settings.files.output_file_path)
     return f"{stem}_report.csv"
 
 
@@ -197,7 +197,7 @@ def _write_csv_atomically(path, headers, rows):
 
 def write_to_csv(draw_data):
     """Write the provided draw data to a CSV file and return the path written."""
-    output_file_path = config["files"]["output_file_path"]
+    output_file_path = settings.files.output_file_path
     _write_csv_atomically(output_file_path, HEADERS, (vars(line) for line in draw_data))
     return output_file_path
 
@@ -302,10 +302,10 @@ def archive_previous_outputs():
 
     Returns the list of source paths that were moved.
     """
-    output_file_path = config["files"]["output_file_path"]
+    output_file_path = settings.files.output_file_path
     previous_dir = os.path.join(os.path.dirname(output_file_path) or ".", PREVIOUS_DIR_NAME)
-    bracket_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
-    group_dir = config["files"].get("group_html_output_dir", "output/groups")
+    bracket_dir = settings.files.bracket_html_output_dir
+    group_dir = settings.files.group_html_output_dir
 
     moves = [(path, previous_dir) for path in (output_file_path, report_file_path()) if os.path.isfile(path)]
     for directory, pattern, target in (

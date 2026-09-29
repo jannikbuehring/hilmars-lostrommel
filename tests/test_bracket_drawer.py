@@ -26,7 +26,7 @@ from draw.bracket_drawer import (
     bracket_quality,
     draw_bracket,
 )
-from misc.config import config
+from misc.config import settings
 from models.bracket_geometry import BracketGeometry
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
@@ -619,13 +619,7 @@ def test_batch_is_assigned_jointly_not_player_by_player():
             rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 2, True, False, sn, ""))
             seed -= 1
 
-        config.read_dict(
-            {
-                "bracket_draw": {
-                    "joint_batch_max_evaluations": str(budget),
-                }
-            }
-        )
+        settings.bracket_draw.joint_batch_max_evaluations = budget
         random.seed(rng_seed)
         # phase1_only returns the bracket with only the winners placed.
         matches, _snapshots = draw_bracket(rows, phase1_only=True)
@@ -646,7 +640,6 @@ def test_batch_is_assigned_jointly_not_player_by_player():
                 f"{player_by_player} (rng_seed={rng_seed})."
             )
     finally:
-        config.remove_section("bracket_draw")
         seeding_by_start_numbers.clear()
 
 

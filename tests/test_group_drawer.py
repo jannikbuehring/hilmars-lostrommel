@@ -5,7 +5,7 @@ import random
 import pytest
 
 from draw.group_drawer import EmptySlot, draw_groups_monte_carlo
-from misc.config import config
+from misc.config import settings
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 
@@ -34,18 +34,11 @@ def crowded_class():
 @pytest.fixture
 def escape_heavy_config():
     """One seed, and a short patience so escapes (accepted worse swaps) happen often."""
-    config["group_draw"] = {
-        "max_iterations": "1500",
-        "max_no_improvement_iterations": "20",
-        "max_escape_attempts": "10",
-        "max_seed_retries": "1",
-        "country_violation_weight": "1",
-        "team_country_violation_weight": "1",
-        "base_violation_weight": "1",
-        "qttr_violation_weight": "1",
-    }
-    yield
-    config.remove_section("group_draw")
+    group_draw = settings.group_draw
+    group_draw.max_iterations = 1500
+    group_draw.max_no_improvement_iterations = 20
+    group_draw.max_escape_attempts = 10
+    group_draw.max_seed_retries = 1
 
 
 def _replay(snapshots):
@@ -78,7 +71,7 @@ def test_one_entry_per_group_does_not_crash(escape_heavy_config):
     for p in players_list:
         players_by_start_number[p.start_number] = p
     rows = [DrawDataRow("S", "M1", 300 - sn, 4, "", "", False, False, sn, "") for sn in range(1, 5)]
-    config["group_draw"]["max_seed_retries"] = "5"
+    settings.group_draw.max_seed_retries = 5
 
     groups, snapshots = draw_groups_monte_carlo(rows, 4)
 

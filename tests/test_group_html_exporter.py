@@ -6,7 +6,7 @@ import re
 import pytest
 
 from draw.group_drawer import draw_groups_monte_carlo
-from misc.config import config
+from misc.config import settings
 from misc.version import APP_NAME, __version__
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
@@ -35,23 +35,16 @@ def eight_players():
 
 @pytest.fixture
 def group_draw_config():
-    """Seed config["group_draw"], which initialize_config never fills under pytest.
+    """Keep the group draw small.
 
     Iteration counts are kept small so the draw (and its snapshot history) stays
     fast; the exporter's behavior does not depend on their size.
     """
-    config["group_draw"] = {
-        "max_iterations": "200",
-        "max_no_improvement_iterations": "50",
-        "max_escape_attempts": "2",
-        "max_seed_retries": "2",
-        "country_violation_weight": "1",
-        "team_country_violation_weight": "1",
-        "base_violation_weight": "1",
-        "qttr_violation_weight": "1",
-    }
-    yield
-    config.remove_section("group_draw")
+    group_draw = settings.group_draw
+    group_draw.max_iterations = 200
+    group_draw.max_no_improvement_iterations = 50
+    group_draw.max_escape_attempts = 2
+    group_draw.max_seed_retries = 2
 
 
 def _singles_rows(start_numbers, amount_of_groups=2):

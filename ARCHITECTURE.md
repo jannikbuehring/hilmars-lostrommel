@@ -6,14 +6,14 @@ Technical reference for the **hilmars-lostrommel** codebase. This document compl
 
 A CLI tool that generates round-robin **group draws** and single-elimination **knock-out brackets** (main + consolation) for table-tennis tournaments, across singles/doubles/mixed competitions and multiple classes (M1/M2/M3, W1/W2/W3, X1/X2/X3, etc.). Input is CSV; output is one combined CSV, a draw report, and a self-contained HTML file per group class and per bracket, which a console menu opens in the browser.
 
-- **Entry point:** `hilmars_lostrommel.py` → `misc.initializer.initialize_data()` (runs the whole read → validate → draw → export pipeline once) → `misc.menu.show_main_menu()` (interactive loop to browse the results).
+- **Entry point:** `hilmars_lostrommel.py` → `misc.config.initialize_config()` → `misc.initializer.initialize_data(results)` (runs the whole read → validate → draw → export pipeline once, filling a `DrawResults`) → `misc.menu.show_main_menu(results)` (interactive loop to browse the results).
 - **Version:** `misc/version.py` (`APP_NAME`, `__version__`) is the single source of truth, read by the startup banner, the HTML exports and the PyInstaller spec. Releases are tagged `v<version>`; the CI build runs on those tags.
 - **Distribution:** a single console executable built by PyInstaller (`hilmars_lostrommel.spec`), see [§10](#10-build). No pre-built exe is committed.
 - **No GUI, no network I/O** at runtime. Everything is local files plus a terminal UI (`tabulate` for tables, `inquirer` for menus, `yaspin` for progress spinners).
 
 ## 2. Data flow / pipeline
 
-`misc/initializer.py::initialize_data()` runs its stages in order, each with a spinner. It returns `True` when it reached the end (possibly with warnings) and `False` when a stage aborted the run. On `False`, or on an exception that escapes into `main()`, `hilmars_lostrommel.py` prints a red banner saying that no current output was written, and then opens the menu anyway.
+`misc/initializer.py::initialize_data(results)` runs its stages in order, each with a spinner. Every per-competition stage loops over `COMPETITIONS` (S/D/M) and stores its results in `results.groups[competition][class]` and `results.brackets[competition][class]`. It returns `True` when it reached the end (possibly with warnings) and `False` when a stage aborted the run. On `False`, or on an exception that escapes into `main()`, `hilmars_lostrommel.py` prints a red banner saying that no current output was written, and then opens the menu anyway.
 
 0. **Archive the previous run** — `output_writer.archive_previous_outputs()` moves the last run's output CSV, report and generated HTML into `previous/` next to the output CSV (emptied first, so it only holds the run before this one). This runs first so that an aborted run can never leave old files looking current. A `PermissionError` (typically `output.csv` open in Excel) aborts here with "close it and restart", instead of after the whole draw.
 1. **Read players** — `data_io.input_reader.read_players()`. Aborts on any error.
@@ -74,7 +74,7 @@ Both drawers take an optional `progress` callable that receives one plain-langua
 
 A Monte-Carlo / simulated-annealing-style local search.
 
-1. Read tuning parameters from `config[group_draw]` (see [§8](#8-configuration)).
+1. Read tuning parameters from `settings.group_draw` (see [§8](#8-configuration)).
 2. **Outer loop over `max_seed_retries` random seeds.** The best result across attempts is kept; a score of 0 exits early.
 3. **Deterministic seed placement:** entries sorted by `seeding` descending (higher = stronger), split into batches of `amount_of_groups`, and distributed so the N strongest land one per group. Groups are padded with `EmptySlot`.
 4. **Violation scoring** (weighted sum from `checks/group_checker.py`, lower is better): country spread, shared training base, unrated players (singles), team country spread (doubles/mixed).
@@ -159,7 +159,7 @@ Key invariants:
 
 `config/config.ini` is gitignored, so every machine keeps its own. Copy `config/config_template.ini` (which carries the code defaults) to `config/config.ini` before the first run. The CI build ships the template, so a local config with other weights or another seed draws the same input differently from the shipped exe.
 
-`misc.config.initialize_config(base_dir)` reads the file once into a module-level `ConfigParser` (`from misc.config import config`), seeds `random` from `settings.random_seed` if set, and configures logging from `settings.log_level`.
+`misc.config.initialize_config(base_dir)` parses the file once into the typed `Settings` dataclass, shared as `from misc.config import settings` (for example `settings.bracket_draw.max_attempts`). It then seeds `random` from `random_seed` if set and configures logging from `log_level`. A missing key or an empty value keeps the default. An unknown key or section is logged as a warning, so a typo does not silently fall back to the default. A value that is not a whole number where one is expected stops the run with a `ConfigError` naming the key. The bracket weight order is checked once here (`validate_bracket_weights`), with a warning per problem.
 
 | Section | Key | Meaning |
 |---|---|---|
@@ -178,15 +178,15 @@ Key invariants:
 | | `round_two_first_vs_first_weight`, `round_two_top_easy_opponent_weight`, `round_two_bottom_vs_bottom_weight` | `score_round_two`. Must lie strictly between the highest country weight and the lowest round-one matchup weight. |
 | | `round_two_country_first_weight` | Round-two same-country pairing, between `country_quarter_weight` and `country_half_weight`. |
 
-A missing or non-integer bracket weight falls back to its default. The Phase 1 penalty ladder (see [§5](#5-algorithms-draw)) is deliberately not configurable, and neither is Phase 1c, which runs until no step improves.
+The Phase 1 penalty ladder (see [§5](#5-algorithms-draw)) is deliberately not configurable, and neither is Phase 1c, which runs until no step improves.
 
 ## 9. Known Issues
 
-- **The tests only exercise the default weights.** `tests/conftest.py` clears the config before every test, so the weights a local `config/config.ini` sets are never tested. A misspelled weight key falls back to the default silently, and `validate_bracket_weights` does not check the hard tier's order.
+- **The tests only exercise the default weights.** `tests/conftest.py` resets `settings` to the defaults before every test, so the weights a local `config/config.ini` sets are never tested. `validate_bracket_weights` does not check the hard tier's order.
 - **Some tight layouts still take the degrade path.** Small or uneven shapes (for example 4 groups where one group lacks its 3rd, or 4-tier brackets with short groups) can end up in `_fill_residual_soft`. Some of these end clean, some keep a hard violation; all are flagged in the terminal, the report and the HTML.
 - **Some `imbalanced` brackets are structurally forced.** For example, 3 groups of 3rd/4th places with one group short (5 players, 8 slots): the half holding two 3rd places and their byes is full, so both 4ths go to the other half. The report cannot tell a forced split from an avoidable one, so check `details` before redrawing.
 - **`check_placement_balance_quarters` can be non-zero even when Phase 1/1b/1c did all they could**, because the tiers they do not place are decided by Phase 2's capacity buckets. It mostly affects small brackets where a quarter is one or two matches.
-- **Module-level global state.** The registries in [§3](#3-core-data-model-models) are filled as a side effect of construction or of specific calls, and `misc/menu.py` reads the initializer's result dicts directly instead of receiving them as parameters.
+- **Module-level global state.** The registries in [§3](#3-core-data-model-models) are filled as a side effect of construction or of specific calls, and `settings` is a module-level object read by every module rather than passed in.
 
 ## 10. Build
 

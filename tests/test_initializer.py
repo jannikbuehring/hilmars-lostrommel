@@ -3,20 +3,17 @@
 import pytest
 
 import misc.initializer as initializer
-from misc.config import config
+from misc.config import settings
 
 
 @pytest.fixture
 def output_config(tmp_path):
-    """Point every output path at tmp_path; initialize_config never runs under pytest."""
+    """Point every output path at tmp_path."""
     out = tmp_path / "output"
-    config["files"] = {
-        "output_file_path": str(out / "output.csv"),
-        "bracket_html_output_dir": str(out / "brackets"),
-        "group_html_output_dir": str(out / "groups"),
-    }
-    yield out
-    config.remove_section("files")
+    settings.files.output_file_path = str(out / "output.csv")
+    settings.files.bracket_html_output_dir = str(out / "brackets")
+    settings.files.group_html_output_dir = str(out / "groups")
+    return out
 
 
 def test_failed_run_returns_false_and_leaves_no_stale_output(output_config, monkeypatch):
@@ -30,7 +27,7 @@ def test_failed_run_returns_false_and_leaves_no_stale_output(output_config, monk
 
     monkeypatch.setattr(initializer, "read_players", missing)
 
-    assert initializer.initialize_data() is False
+    assert initializer.initialize_data(initializer.DrawResults()) is False
 
     # Nothing from the previous run is left where it would look current.
     assert not (out / "output.csv").exists()
@@ -53,5 +50,5 @@ def test_locked_previous_output_aborts_before_reading_input(output_config, monke
     monkeypatch.setattr("data_io.output_writer.os.replace", locked)
     monkeypatch.setattr(initializer, "read_players", must_not_run)
 
-    assert initializer.initialize_data() is False
+    assert initializer.initialize_data(initializer.DrawResults()) is False
     assert (out / "output.csv").read_text() == "open in Excel"

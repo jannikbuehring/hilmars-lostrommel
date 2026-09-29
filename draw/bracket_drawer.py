@@ -1,6 +1,5 @@
 """Module to handle drawing of single-elimination brackets with country conflict avoidance."""
 
-import configparser
 import copy
 import itertools
 import logging
@@ -10,8 +9,6 @@ from typing import List
 
 from checks.bracket_checker import (
     BALANCED_TIERS_BELOW_TOP,
-    DEFAULT_BRACKET_WEIGHTS,
-    ROUND_TWO_DEFAULT_WEIGHTS,
     check_base_conflicts_first_round,
     check_bye_balance_halves,
     check_bye_seeding_order,
@@ -31,9 +28,8 @@ from checks.bracket_checker import (
     score_bracket_tiers,
     score_round_two,
     split_first_vs_first,
-    validate_bracket_weights,
 )
-from misc.config import config
+from misc.config import settings
 from models.bracket_geometry import BracketGeometry, allowed_quarters
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import players_by_start_number
@@ -376,62 +372,24 @@ def _draw_bracket_attempt(
             "base_conflicts": check_base_conflicts_first_round(current_matches),
         }
 
-    max_attempts = 2000
-    try:
-        max_attempts = config.getint("bracket_draw", "max_attempts", fallback=max_attempts)
-    except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
-        pass
-
+    max_attempts = settings.bracket_draw.max_attempts
     # Evaluation budget for the joint per-batch assignment in Phase 1/1b.  A batch
     # is solved exactly when its assignment count P(pool, batch) fits the budget,
     # otherwise a hill-climb seeded with the player-by-player result runs for that
     # many iterations.  Raising it buys optimality on large batches at the cost of
     # draw runtime.
-    joint_batch_max_evaluations = 5000
-    try:
-        joint_batch_max_evaluations = config.getint(
-            "bracket_draw", "joint_batch_max_evaluations", fallback=joint_batch_max_evaluations
-        )
-    except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
-        pass
+    joint_batch_max_evaluations = settings.bracket_draw.joint_batch_max_evaluations
 
     # Uses the shared global `random` module (seeded once from
-    # config[settings].random_seed by misc.config.initialize_config), the same
+    # settings.general.random_seed by misc.config.initialize_config), the same
     # RNG stream draw/group_drawer.py uses, so a single config seed
     # deterministically drives the whole pipeline instead of each bracket_draw
     # call restarting its own Random() from the same seed.
 
-    # weights for bracket_checker.score_bracket (lower score = better bracket)
-    bracket_weights = dict(DEFAULT_BRACKET_WEIGHTS)
-    for weight_key, config_key in (
-        ("quarter_split", "quarter_split_weight"),
-        ("half_split", "half_split_weight"),
-        ("first_vs_first", "first_vs_first_weight"),
-        ("top_easy_opponent", "top_easy_opponent_weight"),
-        ("bottom_vs_bottom", "bottom_vs_bottom_weight"),
-        ("country_first", "country_first_weight"),
-        ("country_half", "country_half_weight"),
-        ("country_quarter", "country_quarter_weight"),
-        ("base_first", "base_first_weight"),
-    ):
-        try:
-            bracket_weights[weight_key] = config.getint(
-                "bracket_draw", config_key, fallback=bracket_weights[weight_key]
-            )
-        except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
-            pass
-
-    # weights for bracket_checker.score_round_two (round-two matchup quality)
-    round_two_weights = dict(ROUND_TWO_DEFAULT_WEIGHTS)
-    for weight_key in round_two_weights:
-        try:
-            round_two_weights[weight_key] = config.getint(
-                "bracket_draw", f"{weight_key}_weight", fallback=round_two_weights[weight_key]
-            )
-        except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
-            pass
-    for problem in validate_bracket_weights(bracket_weights, round_two_weights):
-        logging.warning("bracket_draw weights: %s", problem)
+    # Weights for bracket_checker.score_bracket and score_round_two (lower score =
+    # better bracket).  Their order is checked once, when the config is loaded.
+    bracket_weights = dict(settings.bracket_draw.weights)
+    round_two_weights = dict(settings.bracket_draw.round_two_weights)
 
     top_group_pos = min(p.group_pos for p in class_subset if p.group_pos is not None)
     top_participants = [p for p in class_subset if p.group_pos == top_group_pos]

@@ -7,7 +7,13 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- A warning at startup for every unknown key or section in `config.ini`, so a misspelled key no longer silently falls back to its default
+
 ### Changed
+
+- A config value that is not a whole number where one is expected now stops the run with a message naming the key. Before, a bracket weight such as `1000.0` silently fell back to its default
+- Every config key is now optional. A missing key uses the default value shown in `config_template.ini`
+- The bracket weight order is checked once at startup instead of once per bracket, so each warning appears only once
 
 ### Deprecated
 

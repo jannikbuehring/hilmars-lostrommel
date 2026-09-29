@@ -10,7 +10,7 @@ from checks.group_checker import (
     check_team_country_distribution,
     get_qttr_violations,
 )
-from misc.config import config
+from misc.config import settings
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
 
@@ -46,10 +46,11 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
     each attempt start, on every new best score and every PROGRESS_INTERVAL steps.
     """
     report = progress or (lambda _msg: None)
-    max_iterations = int(config["group_draw"]["max_iterations"])
-    max_no_improvement_iterations = int(config["group_draw"]["max_no_improvement_iterations"])
-    max_escape_attempts = int(config["group_draw"]["max_escape_attempts"])
-    max_seed_retries = int(config["group_draw"].get("max_seed_retries", 5))
+    group_settings = settings.group_draw
+    max_iterations = group_settings.max_iterations
+    max_no_improvement_iterations = group_settings.max_no_improvement_iterations
+    max_escape_attempts = group_settings.max_escape_attempts
+    max_seed_retries = group_settings.max_seed_retries
 
     best_groups = None
     best_snapshots = None
@@ -81,19 +82,11 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
             return violations
 
         def calculate_violation_score(violations):
-            country_violations = violations["country"]
-            country_violation_weight = int(config["group_draw"]["country_violation_weight"])
-            team_country_violations = violations["team_country"]
-            team_country_violation_weight = int(config["group_draw"]["team_country_violation_weight"])
-            base_violations = violations["base"]
-            base_violation_weight = int(config["group_draw"]["base_violation_weight"])
-            qttr_violations = violations["qttr"]
-            qttr_violation_weight = int(config["group_draw"]["qttr_violation_weight"])
             return (
-                sum(v[4] for v in country_violations) * country_violation_weight
-                + sum(v[5] for v in team_country_violations) * team_country_violation_weight
-                + len(base_violations) * base_violation_weight
-                + len(qttr_violations) * qttr_violation_weight
+                sum(v[4] for v in violations["country"]) * group_settings.country_violation_weight
+                + sum(v[5] for v in violations["team_country"]) * group_settings.team_country_violation_weight
+                + len(violations["base"]) * group_settings.base_violation_weight
+                + len(violations["qttr"]) * group_settings.qttr_violation_weight
             )
 
         def calc_max_group_size(num_participants: int, num_groups: int) -> int:

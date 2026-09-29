@@ -1,4 +1,4 @@
-from misc.config import config
+from misc.config import settings
 from models.draw_data import DrawDataRow
 from models.player import Player
 
@@ -10,7 +10,7 @@ def _parse_bool(value: str) -> bool:
 
 def read_draw_data() -> list[DrawDataRow]:
     """Read draw data from the specified CSV file and return a list of DrawDataRow objects."""
-    draw_data_file_path = config["files"]["draw_data_path"]
+    draw_data_file_path = settings.files.draw_data_path
     with open(draw_data_file_path, "r", encoding="utf-8") as file:
         lines = file.readlines()
         draw_data = []
@@ -46,7 +46,7 @@ def read_draw_data() -> list[DrawDataRow]:
 
 def read_players() -> list[Player]:
     """Read player data from the specified CSV file and return a list of Player objects."""
-    player_file_path = config["files"]["players_path"]
+    player_file_path = settings.files.players_path
     with open(player_file_path, "r", encoding="utf-8") as file:
         lines = file.readlines()
         players = []

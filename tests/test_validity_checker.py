@@ -324,22 +324,12 @@ def test_find_draw_data_errors_accepts_valid_input():
 def test_find_draw_data_errors_on_committed_test_input():
     """Guards against false positives on a real-size input."""
     from data_io.input_reader import read_draw_data, read_players
-    from misc.config import config
+    from misc.config import settings
 
-    if not config.has_section("files"):
-        config.add_section("files")
-    originals = {key: config["files"].get(key) for key in ("draw_data_path", "players_path")}
-    config["files"]["draw_data_path"] = "input/draw_input_example.csv"
-    config["files"]["players_path"] = "input/players_example.csv"
-    try:
-        read_players()
-        draw_data = read_draw_data()
-    finally:
-        for key, value in originals.items():
-            if value is None:
-                config.remove_option("files", key)
-            else:
-                config["files"][key] = value
+    settings.files.draw_data_path = "input/draw_input_example.csv"
+    settings.files.players_path = "input/players_example.csv"
+    read_players()
+    draw_data = read_draw_data()
 
     assert check_all_players_only_exist_once() == set()
     assert find_missing_players(draw_data) == set()

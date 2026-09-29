@@ -17,7 +17,7 @@ from data_io.output_writer import (
     write_to_csv,
 )
 from draw.bracket_drawer import draw_bracket
-from misc.config import config
+from misc.config import settings
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 
@@ -42,15 +42,10 @@ def eight_players():
 
 @pytest.fixture
 def output_file_path(tmp_path):
-    """Point config["files"]["output_file_path"] at a temp file.
-
-    initialize_config never runs under pytest, so the singleton ConfigParser has
-    no sections at all until a test adds one.
-    """
+    """Point settings.files.output_file_path at a temp file."""
     path = tmp_path / "nested" / "output.csv"
-    config["files"] = {"output_file_path": str(path)}
-    yield path
-    config.remove_section("files")
+    settings.files.output_file_path = str(path)
+    return path
 
 
 def _singles_rows(start_numbers):
@@ -283,8 +278,8 @@ def test_report_has_one_row_per_draw_with_status(output_file_path):
 def output_dirs(output_file_path, tmp_path):
     """Output CSV plus bracket/group HTML directories under one tmp output dir."""
     out = output_file_path.parent
-    config["files"]["bracket_html_output_dir"] = str(out / "brackets")
-    config["files"]["group_html_output_dir"] = str(out / "groups")
+    settings.files.bracket_html_output_dir = str(out / "brackets")
+    settings.files.group_html_output_dir = str(out / "groups")
     (out / "brackets").mkdir(parents=True)
     (out / "groups").mkdir(parents=True)
     return out

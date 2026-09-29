@@ -1,7 +1,7 @@
 """Tests for data_io/input_reader.py."""
 
 from data_io.input_reader import read_draw_data, read_players
-from misc.config import config
+from misc.config import settings
 
 HEADER = "S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B\n"
 
@@ -13,17 +13,8 @@ def test_read_draw_data_parses_main_and_consolation_round_flags(tmp_path):
         encoding="utf-8",
     )
 
-    if not config.has_section("files"):
-        config.add_section("files")
-    original_path = config["files"].get("draw_data_path")
-    config["files"]["draw_data_path"] = str(csv_file)
-    try:
-        draw_data = read_draw_data()
-    finally:
-        if original_path is None:
-            config.remove_option("files", "draw_data_path")
-        else:
-            config["files"]["draw_data_path"] = original_path
+    settings.files.draw_data_path = str(csv_file)
+    draw_data = read_draw_data()
 
     assert [(row.main_round, row.consolation_round) for row in draw_data] == [
         (True, False),
@@ -33,17 +24,8 @@ def test_read_draw_data_parses_main_and_consolation_round_flags(tmp_path):
 
 
 def _read_with_config_path(key, csv_file, reader):
-    if not config.has_section("files"):
-        config.add_section("files")
-    original_path = config["files"].get(key)
-    config["files"][key] = str(csv_file)
-    try:
-        return reader()
-    finally:
-        if original_path is None:
-            config.remove_option("files", key)
-        else:
-            config["files"][key] = original_path
+    setattr(settings.files, key, str(csv_file))
+    return reader()
 
 
 def test_read_draw_data_strips_whitespace_around_fields(tmp_path):

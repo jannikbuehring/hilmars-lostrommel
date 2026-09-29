@@ -2,126 +2,55 @@ import sys
 
 import inquirer
 
-from misc.initializer import (
-    doubles_brackets,
-    doubles_groups,
-    mixed_brackets,
-    mixed_groups,
-    singles_brackets,
-    singles_groups,
-)
+from misc.initializer import COMPETITIONS, DrawResults
 from viewer.bracket_viewer import show_bracket
 from viewer.group_viewer import show_groups
 from viewer.player_viewer import show_players_table
 
-TO_SHOW = ""
 
-
-def show_main_menu():
-    """Display the main menu and handle user choices."""
-    global TO_SHOW
-    TO_SHOW = ""
-    action = inquirer.list_input("Choose what to do", choices=["View", "Exit"])
-    match action:
-        case "View":
-            view_choice()
-        case "Exit":
+def show_main_menu(results: DrawResults):
+    """Display the main menu until the user exits."""
+    while True:
+        action = inquirer.list_input("Choose what to do", choices=["View", "Exit"])
+        if action == "Exit":
             sys.exit()
-    show_main_menu()
+        _view_menu(results)
 
 
-def view_choice():
-    """Choose what to view: Players, Groups, Bracket, Back to main menu"""
-    global TO_SHOW
-    what_to_view = inquirer.list_input("Choose what to view", choices=["Groups", "Bracket", "Players", "Back"])
-    match what_to_view:
-        case "Players":
-            show_players_table()
-        case "Groups":
-            TO_SHOW = "Groups"
-            singles_doubles_mixed_choice()
-        case "Bracket":
-            TO_SHOW = "Bracket"
-            singles_doubles_mixed_choice()
-        case "Back":
-            show_main_menu()
-
-
-def singles_doubles_mixed_choice():
-    """Choose between Singles, Doubles, Mixed, Back to previous menu"""
-    s_d_m = inquirer.list_input("Choose what to view", choices=["Singles", "Doubles", "Mixed", "Back"])
-    match s_d_m:
-        case "Singles":
-            if TO_SHOW == "Bracket":
-                choices = list(singles_brackets.keys())
-            else:
-                choices = list(singles_groups.keys())
-            groups_choice("S", choices)
-        case "Doubles":
-            if TO_SHOW == "Bracket":
-                choices = list(doubles_brackets.keys())
-            else:
-                choices = list(doubles_groups.keys())
-            groups_choice("D", choices)
-        case "Mixed":
-            if TO_SHOW == "Bracket":
-                choices = list(mixed_brackets.keys())
-            else:
-                choices = list(mixed_groups.keys())
-            groups_choice("M", choices)
-        case "Back":
-            view_choice()
-
-
-def groups_choice(s_d_m, choices):
-    """Choose competition class to view groups or bracket, or go back"""
-    global TO_SHOW
-    choices.sort()
-    choices.append("Back")
-    competition_class = inquirer.list_input("Choose a competition class", choices=choices)
-    match competition_class:
-        case "Back":
-            view_choice()
-        case _:
-            match (s_d_m, TO_SHOW):
-                case ("S", "Groups"):
-                    show_groups(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        groups=singles_groups[competition_class]["group"],
-                        snapshots=singles_groups[competition_class]["snapshots"],
-                    )
-                case ("S", "Bracket"):
-                    show_bracket(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        bracket=singles_brackets.get(competition_class, {}),
-                    )
-                case ("D", "Groups"):
-                    show_groups(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        groups=doubles_groups[competition_class]["group"],
-                        snapshots=doubles_groups[competition_class]["snapshots"],
-                    )
-                case ("D", "Bracket"):
-                    show_bracket(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        bracket=doubles_brackets.get(competition_class, {}),
-                    )
-                case ("M", "Groups"):
-                    show_groups(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        groups=mixed_groups[competition_class]["group"],
-                        snapshots=mixed_groups[competition_class]["snapshots"],
-                    )
-                case ("M", "Bracket"):
-                    show_bracket(
-                        competition=s_d_m,
-                        competition_class=competition_class,
-                        bracket=mixed_brackets.get(competition_class, {}),
-                    )
-                case _:
+def _view_menu(results):
+    """Choose Players, Groups or Bracket. Returns to the main menu after showing something."""
+    while True:
+        what_to_view = inquirer.list_input("Choose what to view", choices=["Groups", "Bracket", "Players", "Back"])
+        match what_to_view:
+            case "Back":
+                return
+            case "Players":
+                show_players_table()
+                return
+            case _:
+                if _show_competition(results, what_to_view):
                     return
+
+
+def _show_competition(results, what_to_view):
+    """Choose a competition and a class, then open it. Returns False when the user went back."""
+    labels = {label: code for code, label in COMPETITIONS}
+    label = inquirer.list_input("Choose what to view", choices=[*labels, "Back"])
+    if label == "Back":
+        return False
+    code = labels[label]
+    drawn = results.brackets[code] if what_to_view == "Bracket" else results.groups[code]
+
+    competition_class = inquirer.list_input("Choose a competition class", choices=[*sorted(drawn), "Back"])
+    if competition_class == "Back":
+        return False
+    if what_to_view == "Bracket":
+        show_bracket(competition=code, competition_class=competition_class, bracket=drawn.get(competition_class, {}))
+    else:
+        show_groups(
+            competition=code,
+            competition_class=competition_class,
+            groups=drawn[competition_class]["group"],
+            snapshots=drawn[competition_class]["snapshots"],
+        )
+    return True

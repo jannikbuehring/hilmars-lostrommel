@@ -3,7 +3,7 @@ import os
 import sys
 
 from misc.config import initialize_config
-from misc.initializer import initialize_data
+from misc.initializer import DrawResults, initialize_data
 from misc.menu import show_main_menu
 from misc.startup_info import print_startup_info
 
@@ -32,19 +32,20 @@ def print_incomplete_run_banner():
 
 def main():
     """Main function to initialize and start the application."""
+    results = DrawResults()
     try:
         print_startup_info()
         initialize_config(BASE_DIR)
-        completed = initialize_data()
+        completed = initialize_data(results)
         if not completed:
             print_incomplete_run_banner()
 
         print("")
-        show_main_menu()
+        show_main_menu(results)
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e} - Returning to main menu\n")
         print_incomplete_run_banner()
-        show_main_menu()
+        show_main_menu(results)
 
 
 if __name__ == "__main__":

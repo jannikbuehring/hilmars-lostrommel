@@ -4,7 +4,7 @@ import os
 
 import inquirer
 
-from misc.config import config
+from misc.config import settings
 from viewer.bracket_html_exporter import bracket_html_path, export_bracket_html
 from viewer.viewer_shared import open_in_browser
 
@@ -34,7 +34,7 @@ def show_bracket(competition, competition_class, bracket):
         # A failed draw keeps only its snapshots; no HTML was written for it.
         print("The draw of this bracket failed - no HTML was written.")
         return
-    output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
+    output_dir = settings.files.bracket_html_output_dir
     # Brackets are pre-exported during initialization; open the existing file.
     path = bracket_html_path(competition, competition_class, bracket_type, output_dir)
     if os.path.exists(path):
