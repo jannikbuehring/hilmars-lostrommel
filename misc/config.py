@@ -1,10 +1,12 @@
 """Module for configuration management."""
+
 import configparser
-import random
-import os
 import logging
+import os
+import random
 
 config = configparser.ConfigParser()
+
 
 def initialize_config(base_dir):
     """Initialize configuration settings from config.ini file."""
@@ -18,12 +20,12 @@ def initialize_config(base_dir):
     log_level = config["settings"]["log_level"]
     random_seed = config["settings"]["random_seed"]
 
-    if random_seed != '':
+    if random_seed != "":
         random.seed(random_seed)
 
     # Basic configuration
     logging.basicConfig(
-        level=int(log_level),                                   # minimum level to log
-        format="%(asctime)s [%(levelname)s] %(message)s",       # log format
-        datefmt="%Y-%m-%d %H:%M:%S"                             # timestamp format
+        level=int(log_level),  # minimum level to log
+        format="%(asctime)s [%(levelname)s] %(message)s",  # log format
+        datefmt="%Y-%m-%d %H:%M:%S",  # timestamp format
     )

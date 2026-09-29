@@ -1,0 +1,47 @@
+[project]
+name = "hilmars-lostrommel"
+description = "CLI tool for table-tennis group draws and knock-out brackets"
+requires-python = ">=3.14"
+dynamic = ["version"]
+dependencies = [
+    "inquirer>=3.4",
+    "tabulate>=0.9",
+    "yaspin>=3.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1",
+    "ruff>=0.16",
+]
+build = [
+    "pyinstaller>=6",
+]
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["checks", "data_io", "draw", "misc", "models", "viewer"]
+py-modules = ["hilmars_lostrommel"]
+
+[tool.setuptools.dynamic]
+version = { attr = "misc.version.__version__" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "slow: full-size draws that take seconds each; skip with -m 'not slow'",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+extend-exclude = ["builds"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# Long strings and comments the formatter cannot wrap.
+ignore = ["E501"]

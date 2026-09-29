@@ -2,14 +2,15 @@ import logging
 import os
 import sys
 
-from misc.menu import show_main_menu
-from misc.initializer import initialize_data
 from misc.config import initialize_config
+from misc.initializer import initialize_data
+from misc.menu import show_main_menu
 from misc.startup_info import print_startup_info
+
 
 def get_base_dir():
     """Get the base directory of the application."""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     else:
         return os.path.dirname(os.path.abspath(__file__))
@@ -44,6 +45,7 @@ def main():
         logging.error(f"An unexpected error occurred: {e} - Returning to main menu\n")
         print_incomplete_run_banner()
         show_main_menu()
+
 
 if __name__ == "__main__":
     main()

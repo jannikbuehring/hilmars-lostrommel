@@ -1,6 +1,7 @@
 """Tests for data_io/input_reader.py."""
-from misc.config import config
+
 from data_io.input_reader import read_draw_data, read_players
+from misc.config import config
 
 HEADER = "S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B\n"
 
@@ -8,10 +9,7 @@ HEADER = "S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_cons
 def test_read_draw_data_parses_main_and_consolation_round_flags(tmp_path):
     csv_file = tmp_path / "draw_input.csv"
     csv_file.write_text(
-        HEADER
-        + "S;M1;1;1000;1;1;1;;1001;\n"
-        + "S;M1;1;999;1;2;;1;1002;\n"
-        + "S;M1;1;998;1;3;0;0;1003;\n",
+        HEADER + "S;M1;1;1000;1;1;1;;1001;\n" + "S;M1;1;999;1;2;;1;1002;\n" + "S;M1;1;998;1;3;0;0;1003;\n",
         encoding="utf-8",
     )
 

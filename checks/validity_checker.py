@@ -1,7 +1,7 @@
-import logging
 from collections import defaultdict
-from models.player import players_by_start_number
-from models.player import players_list
+
+from models.player import players_by_start_number, players_list
+
 
 def check_all_players_only_exist_once() -> set:
     """Check that all players only exist once in players_list and populate players_by_start_number."""
@@ -13,30 +13,22 @@ def check_all_players_only_exist_once() -> set:
             players_by_start_number[player.start_number] = player
     return set(wrongful_player_data)
 
+
 def find_missing_players(draw_data) -> set:
     """Find players that are referenced in draw_data but not in players_by_start_number."""
     # collect both start_number_a and start_number_b from draw_data
-    referenced_players = {
-        num
-        for d in draw_data
-        for num in (d.start_number_a, d.start_number_b)
-        if num is not None
-    }
+    referenced_players = {num for d in draw_data for num in (d.start_number_a, d.start_number_b) if num is not None}
 
     # check missing players
     all_players = set(players_by_start_number.keys())
     missing_players = referenced_players - all_players
     return missing_players
 
+
 def find_players_not_in_draw_data(draw_data) -> set:
     """Find players that are in players_by_start_number but not referenced in draw_data."""
     # collect both start_number_a and start_number_b from draw_data
-    referenced_players = {
-        num
-        for d in draw_data
-        for num in (d.start_number_a, d.start_number_b)
-        if num is not None
-    }
+    referenced_players = {num for d in draw_data for num in (d.start_number_a, d.start_number_b) if num is not None}
 
     all_players = set(players_by_start_number.keys())
     unreferenced_players = all_players - referenced_players
@@ -45,11 +37,15 @@ def find_players_not_in_draw_data(draw_data) -> set:
 
 def find_players_in_wrong_competition(draw_data) -> list:
     """Check if all players are in the correct competition based on their gender."""
-    female_players = set({start_number: player for start_number, player in players_by_start_number.items() if player.gender == 'F'})
-    male_players = set({start_number: player for start_number, player in players_by_start_number.items() if player.gender == 'M'})
+    female_players = set(
+        {start_number: player for start_number, player in players_by_start_number.items() if player.gender == "F"}
+    )
+    male_players = set(
+        {start_number: player for start_number, player in players_by_start_number.items() if player.gender == "M"}
+    )
 
-    female_competitions = [row for row in draw_data if 'W' in row.competition_class]
-    male_competitions   = [row for row in draw_data if 'M' in row.competition_class]
+    female_competitions = [row for row in draw_data if "W" in row.competition_class]
+    male_competitions = [row for row in draw_data if "M" in row.competition_class]
 
     errors = []
 
@@ -82,7 +78,9 @@ def find_invalid_round_flags(draw_data) -> list:
     for row in draw_data:
         flag_count = int(row.main_round) + int(row.consolation_round)
         if row.group_pos is not None and flag_count != 1:
-            errors.append(f"{_entry_label(row)} must be flagged for exactly one of main round / consolation (has {flag_count})")
+            errors.append(
+                f"{_entry_label(row)} must be flagged for exactly one of main round / consolation (has {flag_count})"
+            )
         elif row.group_pos is None and flag_count != 0:
             errors.append(f"{_entry_label(row)} has no group_pos but is flagged for a bracket")
     return errors
@@ -93,7 +91,9 @@ def find_group_no_pos_mismatch(draw_data) -> list:
     errors = []
     for row in draw_data:
         if (row.group_no is None) != (row.group_pos is None):
-            errors.append(f"{_entry_label(row)} has group_no={row.group_no} but group_pos={row.group_pos}; both must be set or both blank")
+            errors.append(
+                f"{_entry_label(row)} has group_no={row.group_no} but group_pos={row.group_pos}; both must be set or both blank"
+            )
     return errors
 
 
@@ -108,7 +108,9 @@ def find_duplicate_players_in_class(draw_data) -> list:
             if sn is None:
                 continue
             if sn in seen[key]:
-                errors.append(f"Start number {sn} appears more than once in {row.competition} {row.competition_class} ({stage})")
+                errors.append(
+                    f"Start number {sn} appears more than once in {row.competition} {row.competition_class} ({stage})"
+                )
             seen[key].add(sn)
     return errors
 
@@ -122,7 +124,9 @@ def find_duplicate_group_positions(draw_data) -> list:
             continue
         key = (row.competition, row.competition_class, row.group_no, row.group_pos)
         if key in seen:
-            errors.append(f"{row.competition} {row.competition_class} group {row.group_no} has group_pos {row.group_pos} more than once")
+            errors.append(
+                f"{row.competition} {row.competition_class} group {row.group_no} has group_pos {row.group_pos} more than once"
+            )
         seen.add(key)
     return errors
 
@@ -131,9 +135,9 @@ def find_invalid_pairs(draw_data) -> list:
     """Check that doubles/mixed rows have a partner, singles rows have none, and nobody is paired with themselves."""
     errors = []
     for row in draw_data:
-        if row.competition in ('D', 'M') and row.start_number_b is None:
+        if row.competition in ("D", "M") and row.start_number_b is None:
             errors.append(f"{_entry_label(row)} has no partner")
-        elif row.competition == 'S' and row.start_number_b is not None:
+        elif row.competition == "S" and row.start_number_b is not None:
             errors.append(f"{_entry_label(row)} is a singles entry with a partner")
         if row.start_number_a == row.start_number_b:
             errors.append(f"{_entry_label(row)} pairs a player with themselves")
@@ -144,10 +148,10 @@ def find_invalid_mixed_pairs(draw_data) -> list:
     """Check that every mixed pair consists of one male and one female player."""
     errors = []
     for row in draw_data:
-        if row.competition != 'M' or row.start_number_b is None:
+        if row.competition != "M" or row.start_number_b is None:
             continue
         genders = sorted(players_by_start_number[sn].gender for sn in (row.start_number_a, row.start_number_b))
-        if genders != ['F', 'M']:
+        if genders != ["F", "M"]:
             errors.append(f"{_entry_label(row)} is not a male/female pair (genders: {'/'.join(genders)})")
     return errors
 
@@ -169,11 +173,7 @@ def find_inconsistent_group_counts(draw_data) -> list:
 
 def find_missing_group_seedings(draw_data) -> list:
     """Check that every group-stage row has a seeding, which the group draw sorts by."""
-    return [
-        f"{_entry_label(row)} has no seeding"
-        for row in draw_data
-        if row.group_pos is None and row.seeding is None
-    ]
+    return [f"{_entry_label(row)} has no seeding" for row in draw_data if row.group_pos is None and row.seeding is None]
 
 
 def find_too_few_group_entries(draw_data) -> list:
@@ -191,7 +191,9 @@ def find_too_few_group_entries(draw_data) -> list:
         if amount_of_groups < 1:
             errors.append(f"{competition} {competition_class} has #groups={amount_of_groups}; it must be at least 1")
         elif len(rows) < amount_of_groups:
-            errors.append(f"{competition} {competition_class} has {len(rows)} group-stage entries for {amount_of_groups} groups; at least one group would be empty")
+            errors.append(
+                f"{competition} {competition_class} has {len(rows)} group-stage entries for {amount_of_groups} groups; at least one group would be empty"
+            )
     return errors
 
 

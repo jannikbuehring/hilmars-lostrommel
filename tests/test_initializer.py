@@ -1,4 +1,5 @@
 """Tests for misc/initializer.py's failure path (review finding H3)."""
+
 import pytest
 
 import misc.initializer as initializer

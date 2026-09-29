@@ -1,13 +1,34 @@
 """Module for writing output data to CSV files."""
+
 import csv
 import glob
 import os
 import shutil
 from types import SimpleNamespace
-from models.player import players_by_start_number
-from misc.config import config
 
-HEADERS = ["S_D_M","class","seeding","group_no","group_pos","for_main_round","for_consolation","draw_number","startnumber_A","last_name_A","country_A","PPP_chapter_A","startnumber_B","last_name_B","country_B","PPP_chapter_B","is_bye"]
+from misc.config import config
+from models.player import players_by_start_number
+
+HEADERS = [
+    "S_D_M",
+    "class",
+    "seeding",
+    "group_no",
+    "group_pos",
+    "for_main_round",
+    "for_consolation",
+    "draw_number",
+    "startnumber_A",
+    "last_name_A",
+    "country_A",
+    "PPP_chapter_A",
+    "startnumber_B",
+    "last_name_B",
+    "country_B",
+    "PPP_chapter_B",
+    "is_bye",
+]
+
 
 def _set_pair_fields(row, start_number_a, start_number_b):
     """Fill the eight A/B player columns on `row` from `players_by_start_number`.
@@ -19,14 +40,16 @@ def _set_pair_fields(row, start_number_a, start_number_b):
     """
     for suffix, start_number in (("A", start_number_a), ("B", start_number_b)):
         player = players_by_start_number.get(start_number) if start_number is not None else None
-        setattr(row, f"startnumber_{suffix}", start_number if start_number is not None else '')
-        setattr(row, f"last_name_{suffix}", player.last_name if player is not None else '')
-        setattr(row, f"country_{suffix}", player.country if player is not None else '')
-        setattr(row, f"PPP_chapter_{suffix}", player.base if player is not None else '')
+        setattr(row, f"startnumber_{suffix}", start_number if start_number is not None else "")
+        setattr(row, f"last_name_{suffix}", player.last_name if player is not None else "")
+        setattr(row, f"country_{suffix}", player.country if player is not None else "")
+        setattr(row, f"PPP_chapter_{suffix}", player.base if player is not None else "")
+
 
 def _clear_pair_fields(row):
     """Blank all eight A/B player columns (used for BYE slots)."""
     _set_pair_fields(row, None, None)
+
 
 def _iter_bracket_slots(matches):
     """Yield (slot_number, participant_or_None) for every slot in Rasterzahl order.
@@ -42,34 +65,36 @@ def _iter_bracket_slots(matches):
             value = participants[side] if side < len(participants) else None
             yield 2 * match_index - 1 + side, value
 
+
 def prepare_export_from_group_draw(groups):
     """Prepare export data from group draw data."""
     export = []
 
     for _, competition_classes in groups.items():
-            for _, items in sorted(competition_classes.items()):
-                for group_number, members in items["group"].items():
-                    for member in members:
-                        # group_drawer strips its EmptySlot placeholders before
-                        # returning, so this only guards against a leak.
-                        if member.start_number_a == "EMPTY":
-                            continue
+        for _, items in sorted(competition_classes.items()):
+            for group_number, members in items["group"].items():
+                for member in members:
+                    # group_drawer strips its EmptySlot placeholders before
+                    # returning, so this only guards against a leak.
+                    if member.start_number_a == "EMPTY":
+                        continue
 
-                        export_line_to_add = SimpleNamespace()
-                        export_line_to_add.S_D_M = member.competition
-                        setattr(export_line_to_add, "class", member.competition_class)
-                        export_line_to_add.seeding = member.seeding
-                        export_line_to_add.group_no = group_number
-                        export_line_to_add.group_pos = None
-                        export_line_to_add.for_main_round = None
-                        export_line_to_add.for_consolation = None
-                        export_line_to_add.draw_number = None
-                        export_line_to_add.is_bye = ''
-                        _set_pair_fields(export_line_to_add, member.start_number_a, member.start_number_b)
+                    export_line_to_add = SimpleNamespace()
+                    export_line_to_add.S_D_M = member.competition
+                    setattr(export_line_to_add, "class", member.competition_class)
+                    export_line_to_add.seeding = member.seeding
+                    export_line_to_add.group_no = group_number
+                    export_line_to_add.group_pos = None
+                    export_line_to_add.for_main_round = None
+                    export_line_to_add.for_consolation = None
+                    export_line_to_add.draw_number = None
+                    export_line_to_add.is_bye = ""
+                    _set_pair_fields(export_line_to_add, member.start_number_a, member.start_number_b)
 
-                        export.append(export_line_to_add)
+                    export.append(export_line_to_add)
 
     return export
+
 
 def prepare_export_from_bracket_draw(draw_data):
     """Prepare export data from bracket draw data.
@@ -86,11 +111,11 @@ def prepare_export_from_bracket_draw(draw_data):
     export = []
     for comp_type, classes in draw_data.items():
         for competition_class, bracket_payload in classes.items():
-            for bracket_type in ('main', 'consolation'):
+            for bracket_type in ("main", "consolation"):
                 section = bracket_payload.get(bracket_type)
                 if not section:
                     continue
-                matches = section.get('matches') if isinstance(section, dict) else section
+                matches = section.get("matches") if isinstance(section, dict) else section
                 if not matches:
                     continue
                 for draw_number, participant in _iter_bracket_slots(matches):
@@ -101,20 +126,20 @@ def prepare_export_from_bracket_draw(draw_data):
                     export_line = SimpleNamespace()
                     export_line.S_D_M = comp_type
                     setattr(export_line, "class", competition_class)
-                    export_line.for_main_round = bracket_type == 'main'
-                    export_line.for_consolation = bracket_type == 'consolation'
+                    export_line.for_main_round = bracket_type == "main"
+                    export_line.for_consolation = bracket_type == "consolation"
                     export_line.draw_number = draw_number
 
                     if participant == "BYE":
-                        export_line.seeding = ''
-                        export_line.group_no = ''
-                        export_line.group_pos = ''
+                        export_line.seeding = ""
+                        export_line.group_no = ""
+                        export_line.group_pos = ""
                         export_line.is_bye = True
                         _clear_pair_fields(export_line)
                     else:
-                        export_line.seeding = getattr(participant, 'seeding', '')
-                        export_line.group_no = getattr(participant, 'group_no', '')
-                        export_line.group_pos = getattr(participant, 'group_pos', '')
+                        export_line.seeding = getattr(participant, "seeding", "")
+                        export_line.group_no = getattr(participant, "group_no", "")
+                        export_line.group_pos = getattr(participant, "group_pos", "")
                         export_line.is_bye = False
                         _set_pair_fields(export_line, participant.start_number_a, participant.start_number_b)
 
@@ -122,7 +147,18 @@ def prepare_export_from_bracket_draw(draw_data):
 
     return export
 
-REPORT_HEADERS = ["S_D_M","class","draw","status","half_group_separation","quarter_group_separation","first_vs_first","other_violations","details"]
+
+REPORT_HEADERS = [
+    "S_D_M",
+    "class",
+    "draw",
+    "status",
+    "half_group_separation",
+    "quarter_group_separation",
+    "first_vs_first",
+    "other_violations",
+    "details",
+]
 
 PREVIOUS_DIR_NAME = "previous"
 
@@ -149,7 +185,7 @@ def _write_csv_atomically(path, headers, rows):
         # utf-8-sig so the German names survive a double-click into Excel,
         # matching the BOM the input files are written with.
         with open(tmp_path, "w", newline="", encoding="utf-8-sig") as file:
-            writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
+            writer = csv.DictWriter(file, fieldnames=headers, delimiter=";")
             writer.writeheader()
             for row in rows:
                 writer.writerow(row)
@@ -176,7 +212,8 @@ def prepare_report(groups, group_failures, bracket_payload):
     sections carry a `quality` entry (see `bracket_drawer.bracket_quality`, or
     `{"failed": True, "message": ...}`).
     """
-    def row(competition, competition_class, draw, status, hard=None, other=0, details=''):
+
+    def row(competition, competition_class, draw, status, hard=None, other=0, details=""):
         hard = hard or {}
         return {
             "S_D_M": competition,
@@ -195,21 +232,21 @@ def prepare_report(groups, group_failures, bracket_payload):
         for competition_class in sorted(classes):
             # Set by the initializer's group validation stage.
             count = classes[competition_class].get("violation_count", 0)
-            rows.append(row(competition, competition_class, "groups",
-                            "violations" if count else "ok", other=count))
+            rows.append(row(competition, competition_class, "groups", "violations" if count else "ok", other=count))
     for competition, competition_class, message in group_failures:
         rows.append(row(competition, competition_class, "groups", "failed", details=message))
 
     for competition, classes in bracket_payload.items():
         for competition_class in sorted(classes):
-            for bracket_type in ('main', 'consolation'):
+            for bracket_type in ("main", "consolation"):
                 section = classes[competition_class].get(bracket_type) or {}
-                quality = section.get('quality')
+                quality = section.get("quality")
                 if quality is None:
                     continue
                 if quality.get("failed"):
-                    rows.append(row(competition, competition_class, bracket_type, "failed",
-                                    details=quality.get("message", '')))
+                    rows.append(
+                        row(competition, competition_class, bracket_type, "failed", details=quality.get("message", ""))
+                    )
                     continue
                 hard = quality["hard"]
                 balance = quality.get("balance", [])
@@ -232,8 +269,17 @@ def prepare_report(groups, group_failures, bracket_payload):
                 if forced_count:
                     note = f"{forced_count} unavoidable first_vs_first"
                     details = f"{details} | {note}" if details else note
-                rows.append(row(competition, competition_class, bracket_type, status,
-                                hard=hard, other=quality["soft_count"], details=details))
+                rows.append(
+                    row(
+                        competition,
+                        competition_class,
+                        bracket_type,
+                        status,
+                        hard=hard,
+                        other=quality["soft_count"],
+                        details=details,
+                    )
+                )
     return rows
 
 
@@ -261,11 +307,7 @@ def archive_previous_outputs():
     bracket_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
     group_dir = config["files"].get("group_html_output_dir", "output/groups")
 
-    moves = [
-        (path, previous_dir)
-        for path in (output_file_path, report_file_path())
-        if os.path.isfile(path)
-    ]
+    moves = [(path, previous_dir) for path in (output_file_path, report_file_path()) if os.path.isfile(path)]
     for directory, pattern, target in (
         (bracket_dir, "*_bracket.html", os.path.join(previous_dir, "brackets")),
         (group_dir, "*_groups.html", os.path.join(previous_dir, "groups")),

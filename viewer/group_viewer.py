@@ -1,8 +1,10 @@
 """Module for opening a class's group draw as its HTML page."""
+
 import os
-from viewer.viewer_shared import open_in_browser
-from viewer.group_html_exporter import export_group_html, group_html_path
+
 from misc.config import config
+from viewer.group_html_exporter import export_group_html, group_html_path
+from viewer.viewer_shared import open_in_browser
 
 
 def show_groups(competition, competition_class, groups, snapshots):
@@ -12,8 +14,7 @@ def show_groups(competition, competition_class, groups, snapshots):
     path = group_html_path(competition, competition_class, output_dir)
     if not os.path.exists(path):
         # Fallback: export on demand if the pre-exported file is missing.
-        path = export_group_html(
-            competition, competition_class, groups, snapshots, output_dir)
+        path = export_group_html(competition, competition_class, groups, snapshots, output_dir)
     if path:
         open_in_browser(path)
     else:

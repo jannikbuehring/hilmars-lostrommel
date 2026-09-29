@@ -1,43 +1,43 @@
 """Module to handle drawing of single-elimination brackets with country conflict avoidance."""
+
+import configparser
+import copy
+import itertools
+import logging
 import math
 import random
-import logging
-import itertools
-import configparser
 from typing import List
-from models.draw_data import DrawDataRow
-from models.draw_data import seeding_by_start_numbers
-from models.player import players_by_start_number
-from models.snapshot import Snapshot
-from models.bracket_geometry import BracketGeometry, allowed_quarters
+
 from checks.bracket_checker import (
-    score_bracket,
-    score_bracket_tiers,
-    check_half_group_separation,
-    check_quarter_group_separation,
-    check_no_first_vs_first,
-    check_top_easy_first_round,
-    check_no_bottom_vs_bottom,
-    check_country_conflicts_first_round,
-    check_country_balance_halves,
-    check_country_balance_quarters,
-    check_bye_balance_halves,
-    check_bye_seeding_order,
-    check_base_conflicts_first_round,
-    check_placement_balance_quarters,
-    check_placement_balance_halves,
-    check_round_two_matchups,
-    forced_first_vs_first,
-    split_first_vs_first,
-    score_round_two,
-    validate_bracket_weights,
     BALANCED_TIERS_BELOW_TOP,
     DEFAULT_BRACKET_WEIGHTS,
     ROUND_TWO_DEFAULT_WEIGHTS,
+    check_base_conflicts_first_round,
+    check_bye_balance_halves,
+    check_bye_seeding_order,
+    check_country_balance_halves,
+    check_country_balance_quarters,
+    check_country_conflicts_first_round,
+    check_half_group_separation,
+    check_no_bottom_vs_bottom,
+    check_no_first_vs_first,
+    check_placement_balance_halves,
+    check_placement_balance_quarters,
+    check_quarter_group_separation,
+    check_round_two_matchups,
+    check_top_easy_first_round,
+    forced_first_vs_first,
+    score_bracket,
+    score_bracket_tiers,
+    score_round_two,
+    split_first_vs_first,
+    validate_bracket_weights,
 )
 from misc.config import config
-import copy
-
+from models.bracket_geometry import BracketGeometry, allowed_quarters
+from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.player import players_by_start_number
+from models.snapshot import Snapshot
 
 # Rank 4 of the Phase-1 penalty ladder (see placement_penalty): a placement tier
 # must not be lopsided between the two quarters of ONE half.  Deliberately NOT a
@@ -131,6 +131,7 @@ def _describe_hard_violation(rule, violation):
 
         def who(p):
             return f"#{p.start_number_a} (group {p.group_no}, pos {p.group_pos})"
+
         return f"match {match_idx}: {who(a)} vs {who(b)}"
     group_no, text = violation
     return f"group {group_no}: {text}"
@@ -158,23 +159,27 @@ def bracket_quality(snapshots):
     final_matches = (snapshots[-1].initial_groups or {}) if snapshots else {}
     hard = {
         rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
-        for rule in HARD_BRACKET_RULES if violations.get(rule)
+        for rule in HARD_BRACKET_RULES
+        if violations.get(rule)
     }
     forced = {
         rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
-        for rule in FORCED_BRACKET_RULES if violations.get(rule)
+        for rule in FORCED_BRACKET_RULES
+        if violations.get(rule)
     }
-    balance = [
-        _describe_half_balance(rule, v)
-        for rule in HALF_BALANCE_RULES for v in violations.get(rule) or []
-    ]
+    balance = [_describe_half_balance(rule, v) for rule in HALF_BALANCE_RULES for v in violations.get(rule) or []]
     soft_count = sum(
-        len(value) for key, value in violations.items()
-        if key not in HARD_BRACKET_RULES and key not in FORCED_BRACKET_RULES
-        and key not in HALF_BALANCE_RULES and isinstance(value, list)
+        len(value)
+        for key, value in violations.items()
+        if key not in HARD_BRACKET_RULES
+        and key not in FORCED_BRACKET_RULES
+        and key not in HALF_BALANCE_RULES
+        and isinstance(value, list)
     )
     group_positions = [
-        p.group_pos for participants in final_matches.values() for p in participants
+        p.group_pos
+        for participants in final_matches.values()
+        for p in participants
         if p not in (None, "BYE") and p.group_pos is not None
     ]
     bye_order = [
@@ -185,8 +190,14 @@ def bracket_quality(snapshots):
         )
     ]
     degraded = any(s.action == "quarter_capacity_degrade" for s in snapshots) and bool(hard or bye_order)
-    return {"degraded": degraded, "hard": hard, "forced": forced, "bye_order": bye_order,
-            "balance": balance, "soft_count": soft_count}
+    return {
+        "degraded": degraded,
+        "hard": hard,
+        "forced": forced,
+        "bye_order": bye_order,
+        "balance": balance,
+        "soft_count": soft_count,
+    }
 
 
 def _took_degrade_path(snapshots):
@@ -222,7 +233,9 @@ def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False, pro
     by _result_rank is kept: a separation is never paid for an even split.
     """
     rng_state = random.getstate()
-    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True, phase1_only=phase1_only, progress=progress)
+    matches, snapshots = _draw_bracket_attempt(
+        class_subset, half_balance=True, phase1_only=phase1_only, progress=progress
+    )
     if not _took_degrade_path(snapshots):
         return matches, snapshots
     balanced_rng_state = random.getstate()
@@ -243,7 +256,9 @@ def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False, pro
     return matches, snapshots
 
 
-def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, phase1_only: bool = False, progress=None):
+def _draw_bracket_attempt(
+    class_subset: list[DrawDataRow], half_balance: bool, phase1_only: bool = False, progress=None
+):
     """One full draw.  *half_balance* False drops the bye/tier half balance
     from Phase 1 (projected_half_balance_units, the lookahead), which leaves
     the pre-N2 objective: only the byes already on the board are balanced.
@@ -260,9 +275,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         groups: List[List[int]] = [[1], [num_slots]]
 
         for level in range(1, levels):
-            block = num_slots // (2 ** level)
+            block = num_slots // (2**level)
             group: List[int] = []
-            for idx in range(1, 2 ** level):
+            for idx in range(1, 2**level):
                 if idx % 2 == 1:
                     boundary = idx * block
                     group.append(boundary)
@@ -334,8 +349,12 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             forced_first_vs_first(bracket_top_count, number_of_matches),
         )
         return {
-            "quarter_group_separation": check_quarter_group_separation(current_matches, number_of_matches, bounds=bracket_bounds),
-            "half_group_separation": check_half_group_separation(current_matches, number_of_matches, bounds=bracket_bounds),
+            "quarter_group_separation": check_quarter_group_separation(
+                current_matches, number_of_matches, bounds=bracket_bounds
+            ),
+            "half_group_separation": check_half_group_separation(
+                current_matches, number_of_matches, bounds=bracket_bounds
+            ),
             "first_vs_first": first_vs_first,
             "first_vs_first_forced": first_vs_first_forced,
             "top_easy_opponent": check_top_easy_first_round(current_matches),
@@ -360,7 +379,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     max_attempts = 2000
     try:
         max_attempts = config.getint("bracket_draw", "max_attempts", fallback=max_attempts)
-    except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+    except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
         pass
 
     # Evaluation budget for the joint per-batch assignment in Phase 1/1b.  A batch
@@ -373,7 +392,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         joint_batch_max_evaluations = config.getint(
             "bracket_draw", "joint_batch_max_evaluations", fallback=joint_batch_max_evaluations
         )
-    except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+    except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
         pass
 
     # Uses the shared global `random` module (seeded once from
@@ -396,8 +415,10 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         ("base_first", "base_first_weight"),
     ):
         try:
-            bracket_weights[weight_key] = config.getint("bracket_draw", config_key, fallback=bracket_weights[weight_key])
-        except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+            bracket_weights[weight_key] = config.getint(
+                "bracket_draw", config_key, fallback=bracket_weights[weight_key]
+            )
+        except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
             pass
 
     # weights for bracket_checker.score_round_two (round-two matchup quality)
@@ -407,7 +428,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             round_two_weights[weight_key] = config.getint(
                 "bracket_draw", f"{weight_key}_weight", fallback=round_two_weights[weight_key]
             )
-        except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
+        except TypeError, ValueError, KeyError, AttributeError, configparser.Error:
             pass
     for problem in validate_bracket_weights(bracket_weights, round_two_weights):
         logging.warning("bracket_draw weights: %s", problem)
@@ -472,6 +493,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         if group_no is None:
             return 1
         return group_opp_load.get(group_no, 0) - group_same_load.get(group_no, 0) - 1
+
     slot_state = empty_slot_state()
     locked_slots = set()
     hierarchy_groups = bye_hierarchy(bracket_size)
@@ -555,12 +577,12 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         countries = []
         try:
             countries.append(players_by_start_number[participant.start_number_a].country)
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError:
             pass
         try:
             if getattr(participant, "start_number_b", None) is not None:
                 countries.append(players_by_start_number[participant.start_number_b].country)
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError:
             pass
         return countries
 
@@ -596,8 +618,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         # quarter_remaining tracks how many free slots each quarter still has.
         # Initialise from total slots, then subtract already-locked slots.
         quarter_remaining: dict = {
-            q: sum(1 for s in range(1, bracket_size + 1) if slot_quarter(s) == q)
-            for q in range(4)
+            q: sum(1 for s in range(1, bracket_size + 1) if slot_quarter(s) == q) for q in range(4)
         }
         for s in locked_slots:
             quarter_remaining[slot_quarter(s)] -= 1
@@ -811,10 +832,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         swap_candidates = []
         for members in members_by_group.values():
             bottom_members = [p for p in members if p.group_pos == bottom_pos]
-            other_members = [
-                p for p in members
-                if p.group_pos != bottom_pos and p.group_pos - top_group_pos in (1, 2)
-            ]
+            other_members = [p for p in members if p.group_pos != bottom_pos and p.group_pos - top_group_pos in (1, 2)]
             for low in bottom_members:
                 for high in other_members:
                     if required_quarter.get(id(low)) != required_quarter.get(id(high)):
@@ -850,8 +868,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         # Combined (tops + byes) per quarter in the trial state.
         tops_in_q_now = {q: sum(1 for gq in trial_tops.values() if gq == q) for q in range(num_quarters)}
         combined_in_q = {
-            q: (tops_in_q_now[q] +
-                sum(1 for s in trial_locked if trial_state[s] == "BYE" and slot_quarter(s) == q))
+            q: (tops_in_q_now[q] + sum(1 for s in trial_locked if trial_state[s] == "BYE" and slot_quarter(s) == q))
             for q in range(num_quarters)
         }
         min_combined = min(combined_in_q.values())
@@ -932,8 +949,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     winner_groups = {p.group_no for p in top_participants if getattr(p, "group_no", None) is not None}
     balanced_tiers = range(top_group_pos, top_group_pos + BALANCED_TIERS_BELOW_TOP + 1)
     half_tracked = [
-        p for p in class_subset
-        if id(p) in bye_recipient_ids or getattr(p, "group_pos", None) in balanced_tiers
+        p for p in class_subset if id(p) in bye_recipient_ids or getattr(p, "group_pos", None) in balanced_tiers
     ]
 
     # The same projection per group, for winner_country_lookahead's hypothetical
@@ -948,7 +964,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     free_half_slack = dict.fromkeys(half_balance_keys, 0)
     for _p in half_tracked:
         _keys = [
-            _key for _key in (("bye",) if id(_p) in bye_recipient_ids else ()) + (_p.group_pos,)
+            _key
+            for _key in (("bye",) if id(_p) in bye_recipient_ids else ()) + (_p.group_pos,)
             if _key in half_balance_keys
         ]
         _delta = _p.group_pos - top_group_pos
@@ -1014,6 +1031,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
 
         def excess(counts, slack):
             return max(0, abs(counts[0] - counts[1]) - slack - 1)
+
         return excess(byes, bye_slack), sum(excess(tiers[pos], tier_slack[pos]) for pos in tiers)
 
     # ---------------------------------------------------------------------------
@@ -1043,7 +1061,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         # round-two violation for it.  Round two needs no such guard: it is
         # already fully determined (see score_round_two).
         tier_units = sum(
-            v[-1] for v in check_placement_balance_quarters(trial_matches, number_of_matches)
+            v[-1]
+            for v in check_placement_balance_quarters(trial_matches, number_of_matches)
             if sum(v[1]) == tier_totals.get(v[0], 0)
         )
         # The half terms need no "fully placed" guard: they already count every
@@ -1084,14 +1103,12 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     winner_level_slots = {}
     _start = 0
     for _hierarchy_group in hierarchy_groups:
-        for _p in top_sorted[_start:_start + len(_hierarchy_group)]:
+        for _p in top_sorted[_start : _start + len(_hierarchy_group)]:
             winner_level_slots[id(_p)] = _hierarchy_group
         _start += len(_hierarchy_group)
     winner_countries = {id(p): _participant_countries(p) for p in top_participants}
     # Same slack as check_country_balance_halves: a team carries two countries.
-    winner_country_slack = 2 if any(
-        getattr(p, "start_number_b", None) is not None for p in top_participants
-    ) else 1
+    winner_country_slack = 2 if any(getattr(p, "start_number_b", None) is not None for p in top_participants) else 1
     winner_lookahead_cache: dict = {}
 
     def winner_country_lookahead(trial_state, trial_tops):
@@ -1125,9 +1142,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
 
         def balance_cost(slack):
             return sum(
-                half_balance_weight[key] * max(0, abs(balance[key]) - slack[key] - 1)
-                for key in half_balance_keys
+                half_balance_weight[key] * max(0, abs(balance[key]) - slack[key] - 1) for key in half_balance_keys
             )
+
         # What projected_half_balance_units already charges for this state.
         projected = balance_cost({key: free_half_slack[key] + pending_slack[key] for key in half_balance_keys})
         # Room per (level, half) for the pending winners.
@@ -1249,7 +1266,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                 _apply_placement(participant, slot, step_state, step_locked, step_tops, needs_bye)
                 step_matches = slots_to_matches(step_state)
                 cost += half_load_cost(step_tops) + winner_country_lookahead(step_state, step_tops)
-                cost += score_bracket(step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
+                cost += score_bracket(
+                    step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                )
                 cost += assignment_quality_cost(step_matches, step_tops)
                 if best is None or cost < best[0]:
                     best = (cost, slot)
@@ -1274,7 +1293,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             needs_bye = id(participant) in bye_recipient_ids
             allowed = allowed_slots[id(participant)] if allowed_slots is not None else None
             candidates[id(participant)] = {
-                slot for slot in pool
+                slot
+                for slot in pool
                 if (allowed is None or slot in allowed)
                 and slot_state[slot] is None
                 and not (needs_bye and slot_state[opponent_slot(slot)] is not None)
@@ -1390,7 +1410,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                     None,
                     [participant],
                     get_bracket_violations(step_matches),
-                    score_bracket(step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                    score_bracket(
+                        step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                    ),
                     initial_groups=copy.deepcopy(step_matches),
                 )
             )
@@ -1418,7 +1440,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         if batch_start >= n_top:
             break
         batch_end = batch_start + len(hierarchy_group)
-        batch_players = top_sorted[batch_start:min(batch_end, n_top)]
+        batch_players = top_sorted[batch_start : min(batch_end, n_top)]
 
         if len(hierarchy_group) == 1 and len(batch_players) == 1:
             # Completely deterministic: single slot, single player — no scoring.
@@ -1458,7 +1480,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                     None,
                     [participant],
                     get_bracket_violations(trial_matches_det),
-                    score_bracket(trial_matches_det, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                    score_bracket(
+                        trial_matches_det, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                    ),
                     initial_groups=copy.deepcopy(trial_matches_det),
                 )
             )
@@ -1537,8 +1561,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             # Every phase-1b participant is a bye recipient and occupies the whole
             # match, so a slot whose partner is already taken cannot host one.
             free_in_group = [
-                s for s in hierarchy_group
-                if slot_state[s] is None and slot_state[opponent_slot(s)] is None
+                s for s in hierarchy_group if slot_state[s] is None and slot_state[opponent_slot(s)] is None
             ]
             if not free_in_group:
                 break
@@ -1602,12 +1625,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         quarter_tier = [s for s in any_slot_tier if slot_quarter(s) in allowed_qs]
         required_half = required_half_for_participant(participant)
         half_tier = (
-            [s for s in any_slot_tier if slot_half(s) == required_half]
-            if required_half is not None else any_slot_tier
+            [s for s in any_slot_tier if slot_half(s) == required_half] if required_half is not None else any_slot_tier
         )
-        chosen = place_bye_greedy(
-            participant, [quarter_tier, half_tier, any_slot_tier], action_name="bye_assign"
-        )
+        chosen = place_bye_greedy(participant, [quarter_tier, half_tier, any_slot_tier], action_name="bye_assign")
         if chosen is None:
             raise_with_failure_snapshot(
                 "bye_slot_failure",
@@ -1657,13 +1677,15 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     # ---------------------------------------------------------------------------
     def repair_bye_placements():
         """Swap or move placed non-top bye recipients while it strictly improves the layout."""
+
         # Top-placed participants are filtered out HERE rather than skipped per pair
         # inside the sweep: a swap moves both of its participants, so a group winner
         # must not be a partner either, and dropping them up front shrinks the
         # quadratic sweep instead of paying for them on every iteration.
         def bye_recipient_slots():
             return sorted(
-                s for s in locked_slots
+                s
+                for s in locked_slots
                 if slot_state[s] not in (None, "BYE")
                 and slot_state[s].group_pos != top_group_pos
                 and slot_state[opponent_slot(s)] == "BYE"
@@ -1674,10 +1696,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             return
 
         def state_cost(trial_matches):
-            return (
-                score_bracket(trial_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
-                + assignment_quality_cost(trial_matches)
-            )
+            return score_bracket(
+                trial_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+            ) + assignment_quality_cost(trial_matches)
 
         def separation_counts(trial_matches):
             return (
@@ -1770,7 +1791,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             candidates = bye_recipient_slots()
             best_step = None
             for index, slot_a in enumerate(candidates):
-                for slot_b in candidates[index + 1:]:
+                for slot_b in candidates[index + 1 :]:
                     participant_a, participant_b = slot_state[slot_a], slot_state[slot_b]
                     slot_state[slot_a], slot_state[slot_b] = participant_b, participant_a
                     trial_matches = slots_to_matches(slot_state)
@@ -1783,10 +1804,15 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                             best_step = (trial_key, trial_separations, "bye_swap", slot_a, slot_b)
                     slot_state[slot_a], slot_state[slot_b] = participant_a, participant_b
 
-            free_matches = [
-                m for m in range(1, number_of_matches + 1)
-                if slot_state[2 * m - 1] is None and slot_state[2 * m] is None
-            ] if best_key[0] > 0 else []
+            free_matches = (
+                [
+                    m
+                    for m in range(1, number_of_matches + 1)
+                    if slot_state[2 * m - 1] is None and slot_state[2 * m] is None
+                ]
+                if best_key[0] > 0
+                else []
+            )
             for slot_from in candidates:
                 bye_from = opponent_slot(slot_from)
                 quarter_from = slot_quarter(slot_from)
@@ -1838,7 +1864,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                     None,
                     moved,
                     get_bracket_violations(stepped_matches),
-                    score_bracket(stepped_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                    score_bracket(
+                        stepped_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                    ),
                     initial_groups=copy.deepcopy(stepped_matches),
                 )
             )
@@ -1858,7 +1886,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                 None,
                 list(top_sorted) + list(non_top_bye_recipients),
                 get_bracket_violations(seeded_bye_matches),
-                score_bracket(seeded_bye_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                score_bracket(
+                    seeded_bye_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                ),
                 initial_groups=copy.deepcopy(seeded_bye_matches),
             )
         )
@@ -1869,10 +1899,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     # already balanced above, the residual demand is small.
     # ---------------------------------------------------------------------------
     report("placing the remaining players into the quarters...")
-    residual_non_top = [
-        p for p in class_subset
-        if p.group_pos != top_group_pos and id(p) not in bye_recipient_ids
-    ]
+    residual_non_top = [p for p in class_subset if p.group_pos != top_group_pos and id(p) not in bye_recipient_ids]
     required_quarter = assign_quarter_buckets(residual_non_top)
     # Capacity-neutral repair pass so each quarter can actually serve its non-bye
     # group winners a bottom-tier opponent.  Runs before the capacity check below,
@@ -1930,7 +1957,10 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         def _key(trial_state):
             trial_matches = slots_to_matches(trial_state)
             hard, matchup, distribution = score_bracket_tiers(
-                trial_matches, number_of_matches, weights=bracket_weights, bounds=bracket_bounds,
+                trial_matches,
+                number_of_matches,
+                weights=bracket_weights,
+                bounds=bracket_bounds,
                 top_count=bracket_top_count,
             )
             return (
@@ -1969,8 +1999,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         best_state = dict(state)
         current_key = best_key
         winner_free_matches = [
-            m for m in range(1, number_of_matches + 1)
-            if not _is_top(state[2 * m - 1]) and not _is_top(state[2 * m])
+            m for m in range(1, number_of_matches + 1) if not _is_top(state[2 * m - 1]) and not _is_top(state[2 * m])
         ]
         player_slots = [s for s in range(1, bracket_size + 1) if state[s] != "BYE" and not _is_top(state[s])]
         # 4x the phase-5 budget: a move costs one scoring pass, which is small next
@@ -1988,15 +2017,15 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                 # Bye relocation.  Recipients are non-winners (the winners' byes
                 # stay with their seeded slot).
                 bye_slots = [
-                    s for s in range(1, bracket_size + 1)
-                    if state[s] == "BYE" and not _is_top(state[opponent_slot(s)])
+                    s for s in range(1, bracket_size + 1) if state[s] == "BYE" and not _is_top(state[opponent_slot(s)])
                 ]
                 if not bye_slots:
                     return None
                 bye_slot = random.choice(bye_slots)
                 recipient = state[opponent_slot(bye_slot)]
                 targets = [
-                    s for s in player_slots
+                    s
+                    for s in player_slots
                     if s != opponent_slot(bye_slot)
                     and state[opponent_slot(s)] not in (None, "BYE")
                     and state[opponent_slot(s)].group_pos == recipient.group_pos
@@ -2075,7 +2104,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
                             None,
                             None,
                             get_bracket_violations(m_try),
-                            score_bracket(m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
+                            score_bracket(
+                                m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+                            ),
                             initial_groups=copy.deepcopy(m_try),
                         )
                     )
@@ -2111,20 +2142,14 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         return best_matches, snapshots
 
     free_after_byes = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
-    free_slots_by_quarter_cap = {
-        q: [s for s in free_after_byes if slot_quarter(s) == q]
-        for q in range(4)
-    }
+    free_slots_by_quarter_cap = {q: [s for s in free_after_byes if slot_quarter(s) == q] for q in range(4)}
     required_counts_by_quarter: dict = {q: 0 for q in range(4)}
     for p in residual_non_top:
         rq = required_quarter.get(id(p))
         if rq is not None:
             required_counts_by_quarter[rq] += 1
 
-    over_capacity = [
-        q for q in range(4)
-        if required_counts_by_quarter[q] > len(free_slots_by_quarter_cap[q])
-    ]
+    over_capacity = [q for q in range(4) if required_counts_by_quarter[q] > len(free_slots_by_quarter_cap[q])]
     if over_capacity:
         # Structurally tight, near-full bracket: the residual non-bye players
         # cannot be packed into their required quarters without overflow (e.g.
@@ -2138,16 +2163,10 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     # ---------------------------------------------------------------------------
     # Phase 4: Build quarter pools from the remaining (non-bye, non-top) players.
     # ---------------------------------------------------------------------------
-    remaining = [
-        p for p in class_subset
-        if id(p) not in bye_recipient_ids and p.group_pos != top_group_pos
-    ]
+    remaining = [p for p in class_subset if id(p) not in bye_recipient_ids and p.group_pos != top_group_pos]
 
     free_slots = [s for s in range(1, bracket_size + 1) if slot_state[s] is None]
-    free_slots_by_quarter = {
-        q: [s for s in free_slots if slot_quarter(s) == q]
-        for q in range(4)
-    }
+    free_slots_by_quarter = {q: [s for s in free_slots if slot_quarter(s) == q] for q in range(4)}
 
     def build_matches_from_quarter_pools(pools):
         """Assign each quarter pool (in slot order) and return a matches dict."""
@@ -2181,7 +2200,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     if not remaining:
         first_full_matches = slots_to_matches(dict(slot_state))
         first_full_violations = get_bracket_violations(first_full_matches)
-        first_full_score = score_bracket(first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
+        first_full_score = score_bracket(
+            first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+        )
         snapshots.append(
             Snapshot(
                 "final",
@@ -2202,7 +2223,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
 
     first_full_matches = build_matches_from_quarter_pools(current_pools)
     first_full_violations = get_bracket_violations(first_full_matches)
-    first_full_score = score_bracket(first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
+    first_full_score = score_bracket(
+        first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+    )
 
     snapshots.append(
         Snapshot(
@@ -2219,7 +2242,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     best_score = first_full_score
     # Compared as score_bracket_tiers tuples, not the summed score: a weighted
     # sum would trade one winner-vs-runner-up for a few same-country pairings.
-    best_key = score_bracket_tiers(first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
+    best_key = score_bracket_tiers(
+        first_full_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+    )
     best_matches = copy.deepcopy(first_full_matches)
     best_pools = {q: list(current_pools[q]) for q in range(4)}
 
@@ -2253,7 +2278,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
             trial_pools = dict(best_pools)
             trial_pools[active_q] = trial_pool
             m_try = build_matches_from_quarter_pools(trial_pools)
-            trial_key = score_bracket_tiers(m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count)
+            trial_key = score_bracket_tiers(
+                m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
+            )
             score = sum(trial_key)
 
             if trial_key < best_key:

@@ -13,6 +13,7 @@ print the final line without it.
 On a non-TTY stream (output piped or redirected) the detail is never drawn, so
 no cursor escape codes end up in a file.
 """
+
 from yaspin.core import Yaspin
 
 
@@ -39,7 +40,7 @@ class DetailSpinner(Yaspin):
         if max_len < 1:
             return ""
         if len(detail) > max_len:
-            detail = detail[:max(0, max_len - len(self._ellipsis))] + self._ellipsis
+            detail = detail[: max(0, max_len - len(self._ellipsis))] + self._ellipsis
         return f"\n  {detail}"
 
     def _compose_out(self, frame, mode=None):

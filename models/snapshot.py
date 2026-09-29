@@ -1,5 +1,6 @@
 class Snapshot:
     """Snapshot for Monte Carlo group assignment optimization."""
+
     def __init__(self, action, groups, index, participants, violations, violation_score, initial_groups=None):
         self.action = action  # e.g. 'swap', 'revert'
         self.groups = groups  # list of group numbers involved
@@ -10,5 +11,7 @@ class Snapshot:
         self.initial_groups = initial_groups  # Optional initial group state for reference
 
     def __repr__(self):
-        return (f"Snapshot(action={self.action!r}, groups={self.groups!r}, "
-                f"participants={self.participants!r}, violation_score={self.violation_score!r})")
+        return (
+            f"Snapshot(action={self.action!r}, groups={self.groups!r}, "
+            f"participants={self.participants!r}, violation_score={self.violation_score!r})"
+        )

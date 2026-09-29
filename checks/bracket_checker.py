@@ -1,9 +1,10 @@
 """Checks related to single-elimination bracket assignments."""
+
 from collections import defaultdict
 from typing import Dict, List
-from models.player import players_by_start_number
-from models.bracket_geometry import BracketGeometry, allowed_quarters
 
+from models.bracket_geometry import BracketGeometry, allowed_quarters
+from models.player import players_by_start_number
 
 # Weights for score_round_two.  See its docstring for why the three tier weights
 # must live in the 36..49 band and the country one below round one's.
@@ -95,10 +96,14 @@ def quarter_misfits(matches: Dict[int, List], geometry: BracketGeometry, top: in
     for group_no, group_members in members.items():
         anchor = next((q for delta, q in group_members if delta == 0), None)
         for index, (delta, quarter) in enumerate(group_members):
-            sibling = next(
-                (q for other, (d, q) in enumerate(group_members) if other != index and d in (1, 2)),
-                None,
-            ) if delta in (1, 2) else None
+            sibling = (
+                next(
+                    (q for other, (d, q) in enumerate(group_members) if other != index and d in (1, 2)),
+                    None,
+                )
+                if delta in (1, 2)
+                else None
+            )
             allowed = allowed_quarters(delta, anchor, geometry, sibling)
             if quarter not in allowed:
                 misfits.append((group_no, delta, quarter, allowed))
@@ -137,8 +142,11 @@ def check_quarter_group_separation(matches: Dict[int, List], number_of_matches: 
     for group_no, delta, quarter, _allowed in misfits:
         group_quarters = quarters_by_group[group_no]
         if delta in (1, 2):
-            if group_quarters.get(1) is not None and group_quarters.get(1) == group_quarters.get(2) \
-                    and group_no not in reported_pairs:
+            if (
+                group_quarters.get(1) is not None
+                and group_quarters.get(1) == group_quarters.get(2)
+                and group_no not in reported_pairs
+            ):
                 reported_pairs.add(group_no)
                 violations.append((group_no, "positions 2nd/3rd in same quarter"))
         elif delta == 3:
@@ -249,12 +257,12 @@ def _participant_countries(participant):
     countries = []
     try:
         countries.append(players_by_start_number[participant.start_number_a].country)
-    except (KeyError, AttributeError):
+    except KeyError, AttributeError:
         pass
     try:
         if getattr(participant, "start_number_b", None) is not None:
             countries.append(players_by_start_number[participant.start_number_b].country)
-    except (KeyError, AttributeError):
+    except KeyError, AttributeError:
         pass
     return countries
 
@@ -561,7 +569,7 @@ def check_placement_balance_quarters(matches: Dict[int, List], number_of_matches
     for group_pos, quarter_counts in sorted(counts.items()):
         violation_amount = 0
         for half_start in range(0, num_quarters, quarters_per_half):
-            half_quarters = quarter_counts[half_start:half_start + quarters_per_half]
+            half_quarters = quarter_counts[half_start : half_start + quarters_per_half]
             violation_amount += max(0, max(half_quarters) - min(half_quarters) - 1)
         if violation_amount > 0:
             violations.append((group_pos, list(quarter_counts), violation_amount))
@@ -755,9 +763,7 @@ def score_round_two(matches: Dict[int, List], weights: Dict[str, int] = None, bo
         ("bottom_vs_bottom", "round_two_bottom_vs_bottom"),
         ("country_first", "round_two_country_first"),
     ):
-        score += len(violations[violation_key]) * weights.get(
-            weight_key, ROUND_TWO_DEFAULT_WEIGHTS[weight_key]
-        )
+        score += len(violations[violation_key]) * weights.get(weight_key, ROUND_TWO_DEFAULT_WEIGHTS[weight_key])
     return score
 
 
@@ -816,10 +822,9 @@ def score_bracket_tiers(
         + len(check_half_group_separation(matches, number_of_matches, bounds=bounds)) * w("half_split")
         + len(first_vs_first) * w("first_vs_first")
     )
-    matchup = (
-        len(check_top_easy_first_round(matches)) * w("top_easy_opponent")
-        + len(check_no_bottom_vs_bottom(matches)) * w("bottom_vs_bottom")
-    )
+    matchup = len(check_top_easy_first_round(matches)) * w("top_easy_opponent") + len(
+        check_no_bottom_vs_bottom(matches)
+    ) * w("bottom_vs_bottom")
     # country_balance entries are (country, c0, c1, violation_amount); both
     # spreads are scored by magnitude.  The quarter spread is deliberately
     # weighted below country_half so balancing the halves stays more important.
@@ -885,8 +890,7 @@ def validate_bracket_weights(weights: Dict[str, int] = None, round_two_weights: 
 
     if not w["top_easy_opponent"] > w["bottom_vs_bottom"]:
         problems.append(
-            f"top_easy_opponent ({w['top_easy_opponent']}) must be above "
-            f"bottom_vs_bottom ({w['bottom_vs_bottom']})"
+            f"top_easy_opponent ({w['top_easy_opponent']}) must be above bottom_vs_bottom ({w['bottom_vs_bottom']})"
         )
     if not w["country_first"] > w["country_half"] > w["country_quarter"]:
         problems.append(
@@ -909,4 +913,3 @@ def validate_bracket_weights(weights: Dict[str, int] = None, round_two_weights: 
             f"country_quarter ({w['country_quarter']}) and country_half ({w['country_half']})"
         )
     return problems
-

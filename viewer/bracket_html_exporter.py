@@ -6,6 +6,7 @@ through the draw algorithm's history entirely offline, with no server and no
 network requests. Only first-round pairings are real data (this app never
 simulates match winners), so no later-round tree is drawn.
 """
+
 import html
 import json
 import os
@@ -21,7 +22,7 @@ def _participant_key(p):
     if p is None or p == "BYE":
         return None
     key = str(p.start_number_a)
-    if getattr(p, 'start_number_b', None) is not None:
+    if getattr(p, "start_number_b", None) is not None:
         key += "/" + str(p.start_number_b)
     return key
 
@@ -48,8 +49,8 @@ def _top25_keys(first_round_matches):
     top_count = (len(first_round_matches) * 2) // 4
 
     def sort_key(p):
-        gp = getattr(p, 'group_pos', None)
-        seed = getattr(p, 'seeding', None)
+        gp = getattr(p, "group_pos", None)
+        seed = getattr(p, "seeding", None)
         return (gp if gp is not None else 999, -(seed if seed is not None else 0))
 
     sorted_participants = sorted(all_participants, key=sort_key)
@@ -62,10 +63,7 @@ def _serialize_participant(p):
     if fields is None or fields in ("BYE", "ERR"):
         return fields
     return {
-        "key": "/".join(
-            str(name.get("start_number", name.get("unknown")))
-            for name in fields["names"]
-        ),
+        "key": "/".join(str(name.get("start_number", name.get("unknown"))) for name in fields["names"]),
         "seeding": fields["seeding"],
         "group_no": fields["group_no"],
         "group_pos": fields["group_pos"],
@@ -103,18 +101,20 @@ def _build_bracket_payload(bracket_type, matches, snapshots):
             violations = {}
             violation_score = None
         else:
-            state = snapshot.initial_groups if getattr(snapshot, 'initial_groups', None) is not None else matches
+            state = snapshot.initial_groups if getattr(snapshot, "initial_groups", None) is not None else matches
             action = snapshot.action
             violations = snapshot.violations
             violation_score = snapshot.violation_score
 
-        snapshot_entries.append({
-            "index": index,
-            "action": action,
-            "violation_score": violation_score,
-            "violations": violations,
-            "matches": _serialize_matches(state),
-        })
+        snapshot_entries.append(
+            {
+                "index": index,
+                "action": action,
+                "violation_score": violation_score,
+                "violations": violations,
+                "matches": _serialize_matches(state),
+            }
+        )
 
     return {
         "bracket_type": bracket_type,
@@ -138,12 +138,10 @@ def _render_match_row(match_idx):
     for side in (0, 1):
         pos = (match_idx - 1) * 2 + side + 1
         slots.append(
-            f'<div class="slot-box" id="slot-{pos}">'
-            f'<span class="pos">{pos}</span><span class="name"></span></div>'
+            f'<div class="slot-box" id="slot-{pos}"><span class="pos">{pos}</span><span class="name"></span></div>'
         )
     return (
-        f'<div class="match"><span class="match-no">#{match_idx}</span>'
-        f'<div class="slots">{"".join(slots)}</div></div>'
+        f'<div class="match"><span class="match-no">#{match_idx}</span><div class="slots">{"".join(slots)}</div></div>'
     )
 
 
@@ -183,7 +181,7 @@ def _render_bracket_list(number_of_matches):
                 f'<div class="segment">'
                 f'<div class="segment-label">{segment + 1} / {total_segments}</div>'
                 f'<div class="segment-body">{"".join(_render_match_row(m) for m in segments[segment])}</div>'
-                f'</div>'
+                f"</div>"
                 for segment in sorted(segments)
             )
             body_class = "quarter-body segmented"
@@ -528,7 +526,7 @@ def _render_footer(heading, draw_seconds, run_meta):
     optional and simply omitted when its value is missing.
     """
     meta = run_meta or {}
-    version = meta.get('version', __version__)
+    version = meta.get("version", __version__)
 
     parts = [f"{APP_NAME} v{version}"]
 
@@ -536,11 +534,11 @@ def _render_footer(heading, draw_seconds, run_meta):
     if draw_text:
         parts.append(f"{heading} drawn in {draw_text}")
 
-    total_text = _format_duration(meta.get('total_seconds'))
+    total_text = _format_duration(meta.get("total_seconds"))
     if total_text:
         parts.append(f"total run {total_text}")
 
-    seed = meta.get('random_seed')
+    seed = meta.get("random_seed")
     if seed:
         parts.append(f"seed {seed}")
 
@@ -565,10 +563,7 @@ def _quality_notice(quality):
         parts.append(f"{hard_count} hard-rule violation{'s' if hard_count != 1 else ''}")
     bye_order_count = len(quality.get("bye_order", []))
     if bye_order_count:
-        parts.append(
-            f"byes out of seeding order ({bye_order_count} "
-            f"pair{'s' if bye_order_count != 1 else ''})"
-        )
+        parts.append(f"byes out of seeding order ({bye_order_count} pair{'s' if bye_order_count != 1 else ''})")
     balance = quality.get("balance", [])
     if balance:
         parts.append(f"unbalanced halves ({', '.join(balance)})")
@@ -589,14 +584,14 @@ def _render_html_document(title, heading, payload, list_markup, footer_markup, n
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="generator" content="{html.escape(f'{APP_NAME} {__version__}')}">
+<meta name="generator" content="{html.escape(f"{APP_NAME} {__version__}")}">
 <title>{html.escape(title)}</title>
 <style>{_CSS}</style>
 </head>
 <body>
 <div class="controls">
   <span class="class-title">{html.escape(heading)}</span>
-  {f'<span class="quality-notice">{html.escape(notice)}</span>' if notice else ''}
+  {f'<span class="quality-notice">{html.escape(notice)}</span>' if notice else ""}
   <button id="btn-prev">&larr; Prev</button>
   <button id="btn-next">Next &rarr;</button>
   <button id="btn-first">Show first snapshot</button>
@@ -645,14 +640,14 @@ def export_bracket_html(competition, competition_class, bracket, output_dir, run
     os.makedirs(output_dir, exist_ok=True)
     written = []
 
-    for bracket_type in ('main', 'consolation'):
+    for bracket_type in ("main", "consolation"):
         selected = bracket.get(bracket_type)
-        if not selected or not selected.get('matches'):
+        if not selected or not selected.get("matches"):
             continue
 
-        matches = selected['matches']
-        snapshots = selected.get('snapshots', [])
-        draw_seconds = selected.get('draw_seconds')
+        matches = selected["matches"]
+        snapshots = selected.get("snapshots", [])
+        draw_seconds = selected.get("draw_seconds")
         payload = _build_bracket_payload(bracket_type, matches, snapshots)
         list_markup = _render_bracket_list(payload["number_of_matches"])
         heading = _class_display_name(competition, competition_class, bracket_type)
@@ -660,13 +655,13 @@ def export_bracket_html(competition, competition_class, bracket, output_dir, run
         # Same provenance as the footer, but machine-readable for anything that
         # parses the embedded JSON instead of the rendered page.
         payload["meta"] = {
-            "version": (run_meta or {}).get('version', __version__),
+            "version": (run_meta or {}).get("version", __version__),
             "draw_seconds": draw_seconds,
-            "total_seconds": (run_meta or {}).get('total_seconds'),
-            "generated_at": (run_meta or {}).get('generated_at'),
-            "random_seed": (run_meta or {}).get('random_seed'),
+            "total_seconds": (run_meta or {}).get("total_seconds"),
+            "generated_at": (run_meta or {}).get("generated_at"),
+            "random_seed": (run_meta or {}).get("random_seed"),
         }
-        notice = _quality_notice(selected.get('quality'))
+        notice = _quality_notice(selected.get("quality"))
         if notice:
             payload["meta"]["quality"] = notice
         footer_markup = _render_footer(heading, draw_seconds, run_meta)

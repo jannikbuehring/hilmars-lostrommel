@@ -1,7 +1,8 @@
 """
-Initializer module for setting up configuration, reading data, 
+Initializer module for setting up configuration, reading data,
 performing draws, and exporting results.
 """
+
 import logging
 import time
 import traceback
@@ -9,25 +10,33 @@ from datetime import datetime
 
 from yaspin import yaspin
 
-from data_io.input_reader import read_players, read_draw_data
-from data_io.output_writer import (
-    write_to_csv,
-    write_report_csv,
-    prepare_report,
-    prepare_export_from_group_draw,
-    prepare_export_from_bracket_draw,
-    archive_previous_outputs,
+from checks.group_checker import (
+    check_base_uniqueness,
+    check_country_distribution,
+    check_team_country_distribution,
+    get_qttr_violations,
 )
-
+from checks.validity_checker import (
+    check_all_players_only_exist_once,
+    find_draw_data_errors,
+    find_missing_players,
+    find_players_in_wrong_competition,
+    find_players_not_in_draw_data,
+)
+from data_io.input_reader import read_draw_data, read_players
+from data_io.output_writer import (
+    archive_previous_outputs,
+    prepare_export_from_bracket_draw,
+    prepare_export_from_group_draw,
+    prepare_report,
+    write_report_csv,
+    write_to_csv,
+)
+from draw.bracket_drawer import bracket_quality, draw_bracket
 from draw.group_drawer import draw_groups_monte_carlo
-from draw.bracket_drawer import draw_bracket, bracket_quality
-
 from misc.config import config
-from misc.version import __version__
 from misc.progress_spinner import detail_spinner
-
-from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition, find_draw_data_errors
-from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
+from misc.version import __version__
 
 _RED = "\033[91m"
 _RESET = "\033[0m"
@@ -39,6 +48,7 @@ mixed_groups = {}
 singles_brackets = {}
 doubles_brackets = {}
 mixed_brackets = {}
+
 
 def initialize_data():
     """Initialize data by reading players and draw data, performing draws, and preparing export.
@@ -57,8 +67,10 @@ def initialize_data():
 
     def detail_reporter(spinner, label):
         """Progress callback for a drawer: shows `label - message` below the spinner."""
+
         def report(message):
             spinner.detail = f"{label} - {message}"
+
         return report
 
     def draw_bracket_with_snapshot_fallback(spinner, class_subset, competition, competition_class, bracket_kind):
@@ -86,8 +98,12 @@ def initialize_data():
                 bracket_problems.append(f"{label}: bye_order: {line}")
             for line in quality["balance"]:
                 bracket_problems.append(f"{label}: imbalanced: {line}")
-            return {'matches': matches, 'snapshots': snapshots,
-                    'draw_seconds': time.perf_counter() - start, 'quality': quality}
+            return {
+                "matches": matches,
+                "snapshots": snapshots,
+                "draw_seconds": time.perf_counter() - start,
+                "quality": quality,
+            }
         except Exception as exc:
             snapshots = getattr(exc, "snapshots", [])
             failure_snapshot = getattr(exc, "failure_snapshot", snapshots[-1] if snapshots else None)
@@ -108,9 +124,12 @@ def initialize_data():
             )
             # Keep matches empty so failed brackets are not exported as real draws.
             # Snapshots are preserved for interactive debugging.
-            return {'matches': {}, 'snapshots': snapshots,
-                    'draw_seconds': time.perf_counter() - start,
-                    'quality': {"failed": True, "message": failure_message}}
+            return {
+                "matches": {},
+                "snapshots": snapshots,
+                "draw_seconds": time.perf_counter() - start,
+                "quality": {"failed": True, "message": failure_message},
+            }
 
     def draw_groups_with_fallback(spinner, class_subset, competition, competition_class, class_no, class_count):
         """Draw the groups of one class, returning (group, snapshots, elapsed_seconds), or None on failure.
@@ -124,7 +143,9 @@ def initialize_data():
             group, snapshots = draw_groups_monte_carlo(
                 class_subset=class_subset,
                 amount_of_groups=class_subset[0].amount_of_groups,
-                progress=detail_reporter(spinner, f"{competition} {competition_class} (class {class_no} of {class_count})"),
+                progress=detail_reporter(
+                    spinner, f"{competition} {competition_class} (class {class_no} of {class_count})"
+                ),
             )
             return group, snapshots, time.perf_counter() - start
         except Exception as exc:
@@ -140,7 +161,9 @@ def initialize_data():
             spinner.text = f"{label} group draw completed with {len(section_failures)} failure(s): {section_failures}"
             spinner.ok("WARN")
         else:
-            spinner.text = f"Successfully created {label.lower()} groups for competition classes {list(competition_classes)}"
+            spinner.text = (
+                f"Successfully created {label.lower()} groups for competition classes {list(competition_classes)}"
+            )
             spinner.ok()
 
     def report_bracket_section(spinner, label, problems_start, competition_classes):
@@ -154,7 +177,9 @@ def initialize_data():
             for problem in section_problems:
                 print(f"{_RED}    {problem}{_RESET}")
         else:
-            spinner.text = f"Successfully created {label.lower()} bracket for competition classes {list(competition_classes)}"
+            spinner.text = (
+                f"Successfully created {label.lower()} bracket for competition classes {list(competition_classes)}"
+            )
             spinner.ok()
 
     ########################################################################################
@@ -194,22 +219,21 @@ def initialize_data():
         try:
             # Read draw data from CSV file
             draw_data = read_draw_data()
-            
+
             # Filter out single draw data
-            singles_draw_data = [data for data in draw_data if data.competition == 'S']
+            singles_draw_data = [data for data in draw_data if data.competition == "S"]
             singles_group_draw_data = [data for data in singles_draw_data if data.group_pos is None]
             singles_bracket_draw_data = [data for data in singles_draw_data if data.group_pos is not None]
 
             # Filter out doubles draw data
-            doubles_draw_data = [data for data in draw_data if data.competition == 'D']
+            doubles_draw_data = [data for data in draw_data if data.competition == "D"]
             doubles_group_draw_data = [data for data in doubles_draw_data if data.group_pos is None]
             doubles_bracket_draw_data = [data for data in doubles_draw_data if data.group_pos is not None]
 
             # Filter out mixed draw data
-            mixed_draw_data = [data for data in draw_data if data.competition == 'M']
+            mixed_draw_data = [data for data in draw_data if data.competition == "M"]
             mixed_group_draw_data = [data for data in mixed_draw_data if data.group_pos is None]
             mixed_bracket_draw_data = [data for data in mixed_draw_data if data.group_pos is not None]
-
 
             spinner.text = f"Successfully imported {len(draw_data)} ({len(singles_draw_data)} single, {len(doubles_draw_data)} double, {len(mixed_draw_data)} mixed) draw data objects"
             spinner.ok()
@@ -243,8 +267,10 @@ def initialize_data():
 
             players_not_in_draw_data = find_players_not_in_draw_data(draw_data)
             if players_not_in_draw_data:
-                spinner.text = f"There were players imported that are not partaking in any competition: {players_not_in_draw_data}"
-                spinner.ok("WARN")    
+                spinner.text = (
+                    f"There were players imported that are not partaking in any competition: {players_not_in_draw_data}"
+                )
+                spinner.ok("WARN")
 
             errors = find_players_in_wrong_competition(draw_data)
             if errors:
@@ -266,13 +292,11 @@ def initialize_data():
 
             spinner.text = "The imported data seems valid"
             spinner.ok()
-                
 
         except Exception:
             spinner.fail()
             logging.error("Exception occurred:\n%s", traceback.format_exc())
             return False
-
 
     ########################################################################################
     with detail_spinner("Drawing singles groups...") as spinner:
@@ -285,14 +309,21 @@ def initialize_data():
                 failures_start = len(group_failures)
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
                 for class_no, competition_class in enumerate(singles_competition_classes, start=1):
-                    class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
+                    class_subset = [
+                        data for data in singles_group_draw_data if data.competition_class == competition_class
+                    ]
                     result = draw_groups_with_fallback(
-                        spinner, class_subset, 'S', competition_class, class_no, len(singles_competition_classes)
+                        spinner, class_subset, "S", competition_class, class_no, len(singles_competition_classes)
                     )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
-                    singles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds, "original_data": class_subset}
+                    singles_groups[competition_class] = {
+                        "group": group,
+                        "snapshots": snapshots,
+                        "draw_seconds": draw_seconds,
+                        "original_data": class_subset,
+                    }
 
                 report_group_section(spinner, "Singles", failures_start, singles_competition_classes)
 
@@ -312,14 +343,20 @@ def initialize_data():
                 failures_start = len(group_failures)
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
                 for class_no, competition_class in enumerate(doubles_competition_classes, start=1):
-                    class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
+                    class_subset = [
+                        data for data in doubles_group_draw_data if data.competition_class == competition_class
+                    ]
                     result = draw_groups_with_fallback(
-                        spinner, class_subset, 'D', competition_class, class_no, len(doubles_competition_classes)
+                        spinner, class_subset, "D", competition_class, class_no, len(doubles_competition_classes)
                     )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
-                    doubles_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds}
+                    doubles_groups[competition_class] = {
+                        "group": group,
+                        "snapshots": snapshots,
+                        "draw_seconds": draw_seconds,
+                    }
 
                 report_group_section(spinner, "Doubles", failures_start, doubles_competition_classes)
 
@@ -327,7 +364,6 @@ def initialize_data():
             spinner.fail()
             print("An error occurred:", e)
             return False
-
 
     ########################################################################################
     with detail_spinner("Drawing mixed groups...") as spinner:
@@ -340,14 +376,20 @@ def initialize_data():
                 failures_start = len(group_failures)
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
                 for class_no, competition_class in enumerate(mixed_competition_classes, start=1):
-                    class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
+                    class_subset = [
+                        data for data in mixed_group_draw_data if data.competition_class == competition_class
+                    ]
                     result = draw_groups_with_fallback(
-                        spinner, class_subset, 'M', competition_class, class_no, len(mixed_competition_classes)
+                        spinner, class_subset, "M", competition_class, class_no, len(mixed_competition_classes)
                     )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
-                    mixed_groups[competition_class] = {"group": group, "snapshots": snapshots, "draw_seconds": draw_seconds}
+                    mixed_groups[competition_class] = {
+                        "group": group,
+                        "snapshots": snapshots,
+                        "draw_seconds": draw_seconds,
+                    }
 
                 report_group_section(spinner, "Mixed", failures_start, mixed_competition_classes)
 
@@ -360,17 +402,21 @@ def initialize_data():
     with yaspin(text="Validating group draws...", color="cyan") as spinner:
         try:
             invalid_groups = []
-            for group_type, group_dict in [('S', singles_groups), ('D', doubles_groups), ('M', mixed_groups)]:
+            for group_type, group_dict in [("S", singles_groups), ("D", doubles_groups), ("M", mixed_groups)]:
                 for competition_class, group_data in group_dict.items():
                     country_violations = check_country_distribution(group_type, group_data["group"])
                     base_violations = check_base_uniqueness(group_data["group"])
-                    team_country_violations = check_team_country_distribution(group_data["group"]) if group_type in ('D', 'M') else []
-                    qttr_violations = get_qttr_violations(group_data["group"]) if group_type == 'S' else []
+                    team_country_violations = (
+                        check_team_country_distribution(group_data["group"]) if group_type in ("D", "M") else []
+                    )
+                    qttr_violations = get_qttr_violations(group_data["group"]) if group_type == "S" else []
 
                     # Carried into the draw report next to the bracket rows.
                     group_data["violation_count"] = (
-                        len(country_violations) + len(base_violations)
-                        + len(team_country_violations) + len(qttr_violations)
+                        len(country_violations)
+                        + len(base_violations)
+                        + len(team_country_violations)
+                        + len(qttr_violations)
                     )
                     if group_data["violation_count"]:
                         invalid_groups.append((group_type, competition_class, group_data["group"]))
@@ -379,22 +425,30 @@ def initialize_data():
                         spinner.text = f"Country distribution violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in country_violations:
-                            print(f"Country distribution violation in {group_type}: class={competition_class}, country={v[0]}, max={v[1]}, min={v[2]}, group_counts={v[3]}")
+                            print(
+                                f"Country distribution violation in {group_type}: class={competition_class}, country={v[0]}, max={v[1]}, min={v[2]}, group_counts={v[3]}"
+                            )
                     if base_violations:
                         spinner.text = f"Base uniqueness violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in base_violations:
-                            print(f"Base uniqueness violation in {group_type}: class={competition_class}, group={v[0]}, base={v[1]}, count={v[2]}")
+                            print(
+                                f"Base uniqueness violation in {group_type}: class={competition_class}, group={v[0]}, base={v[1]}, count={v[2]}"
+                            )
                     if team_country_violations:
                         spinner.text = f"Team country distribution violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in team_country_violations:
-                            print(f"Team country distribution violation in {group_type}: class={competition_class}, team_type={v[0]}, country={v[1]}, max={v[3]}, min={v[2]}, group_counts={v[4]}")
+                            print(
+                                f"Team country distribution violation in {group_type}: class={competition_class}, team_type={v[0]}, country={v[1]}, max={v[3]}, min={v[2]}, group_counts={v[4]}"
+                            )
                     if qttr_violations:
                         spinner.text = f"QTTR distribution violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in qttr_violations:
-                            print(f"Distribution of players without QTTR rating in {group_type}: class={competition_class}, group={v[0]} - {v[1]} players without QTTR. Distribution: {v[2]}")
+                            print(
+                                f"Distribution of players without QTTR rating in {group_type}: class={competition_class}, group={v[0]} - {v[1]} players without QTTR. Distribution: {v[2]}"
+                            )
 
             if not invalid_groups:
                 spinner.text = "All group draws passed validation checks."
@@ -415,24 +469,26 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_bracket_draw_data))
                 for competition_class in singles_competition_classes:
-                    class_subset = [data for data in singles_bracket_draw_data if data.competition_class == competition_class]
-                    main_round_participants = [data for data in class_subset if data.main_round == True]
-                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+                    class_subset = [
+                        data for data in singles_bracket_draw_data if data.competition_class == competition_class
+                    ]
+                    main_round_participants = [data for data in class_subset if data.main_round]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round]
 
                     singles_brackets[competition_class] = {
-                        'main': draw_bracket_with_snapshot_fallback(
+                        "main": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=main_round_participants,
-                            competition='S',
+                            competition="S",
                             competition_class=competition_class,
-                            bracket_kind='main',
+                            bracket_kind="main",
                         ),
-                        'consolation': draw_bracket_with_snapshot_fallback(
+                        "consolation": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=consolation_round_participants,
-                            competition='S',
+                            competition="S",
                             competition_class=competition_class,
-                            bracket_kind='consolation',
+                            bracket_kind="consolation",
                         ),
                     }
 
@@ -454,24 +510,26 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_bracket_draw_data))
                 for competition_class in doubles_competition_classes:
-                    class_subset = [data for data in doubles_bracket_draw_data if data.competition_class == competition_class]
-                    main_round_participants = [data for data in class_subset if data.main_round == True]
-                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+                    class_subset = [
+                        data for data in doubles_bracket_draw_data if data.competition_class == competition_class
+                    ]
+                    main_round_participants = [data for data in class_subset if data.main_round]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round]
 
                     doubles_brackets[competition_class] = {
-                        'main': draw_bracket_with_snapshot_fallback(
+                        "main": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=main_round_participants,
-                            competition='D',
+                            competition="D",
                             competition_class=competition_class,
-                            bracket_kind='main',
+                            bracket_kind="main",
                         ),
-                        'consolation': draw_bracket_with_snapshot_fallback(
+                        "consolation": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=consolation_round_participants,
-                            competition='D',
+                            competition="D",
                             competition_class=competition_class,
-                            bracket_kind='consolation',
+                            bracket_kind="consolation",
                         ),
                     }
 
@@ -493,24 +551,26 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_bracket_draw_data))
                 for competition_class in mixed_competition_classes:
-                    class_subset = [data for data in mixed_bracket_draw_data if data.competition_class == competition_class]
-                    main_round_participants = [data for data in class_subset if data.main_round == True]
-                    consolation_round_participants = [data for data in class_subset if data.consolation_round == True]
+                    class_subset = [
+                        data for data in mixed_bracket_draw_data if data.competition_class == competition_class
+                    ]
+                    main_round_participants = [data for data in class_subset if data.main_round]
+                    consolation_round_participants = [data for data in class_subset if data.consolation_round]
 
                     mixed_brackets[competition_class] = {
-                        'main': draw_bracket_with_snapshot_fallback(
+                        "main": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=main_round_participants,
-                            competition='M',
+                            competition="M",
                             competition_class=competition_class,
-                            bracket_kind='main',
+                            bracket_kind="main",
                         ),
-                        'consolation': draw_bracket_with_snapshot_fallback(
+                        "consolation": draw_bracket_with_snapshot_fallback(
                             spinner,
                             class_subset=consolation_round_participants,
-                            competition='M',
+                            competition="M",
                             competition_class=competition_class,
-                            bracket_kind='consolation',
+                            bracket_kind="consolation",
                         ),
                     }
 
@@ -523,16 +583,16 @@ def initialize_data():
 
     ########################################################################################
     bracket_payload = {
-        'S': singles_brackets,
-        'D': doubles_brackets,
-        'M': mixed_brackets,
+        "S": singles_brackets,
+        "D": doubles_brackets,
+        "M": mixed_brackets,
     }
 
     export_data = []
 
     with yaspin(text="Preparing data for export...", color="cyan") as spinner:
         try:
-            groups = {'S': singles_groups, 'D': doubles_groups, 'M': mixed_groups}
+            groups = {"S": singles_groups, "D": doubles_groups, "M": mixed_groups}
             export_data.extend(prepare_export_from_group_draw(groups))
             export_data.extend(prepare_export_from_bracket_draw(bracket_payload))
 
@@ -567,6 +627,7 @@ def initialize_data():
     with yaspin(text="Exporting groups and brackets to HTML...", color="cyan") as spinner:
         from viewer.bracket_html_exporter import export_bracket_html
         from viewer.group_html_exporter import export_group_html
+
         bracket_output_dir = config["files"].get("bracket_html_output_dir", "output/brackets")
         group_output_dir = config["files"].get("group_html_output_dir", "output/groups")
         html_failures = []
@@ -578,10 +639,10 @@ def initialize_data():
         # reports the same run duration and none of them include the cost of
         # writing the HTML itself.
         run_meta = {
-            'version': __version__,
-            'total_seconds': time.perf_counter() - pipeline_start,
-            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-            'random_seed': config["settings"].get("random_seed") or None,
+            "version": __version__,
+            "total_seconds": time.perf_counter() - pipeline_start,
+            "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "random_seed": config["settings"].get("random_seed") or None,
         }
         # Each class is exported on its own, so one failing file does not skip
         # every later one.
@@ -600,7 +661,12 @@ def initialize_data():
                     )
                 except Exception:
                     html_failures.append(f"{competition} {competition_class} groups")
-                    logging.error("Group HTML export failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
+                    logging.error(
+                        "Group HTML export failed for %s %s:\n%s",
+                        competition,
+                        competition_class,
+                        traceback.format_exc(),
+                    )
 
         for competition, brackets in bracket_payload.items():
             for competition_class, bracket in brackets.items():
@@ -608,7 +674,12 @@ def initialize_data():
                     export_bracket_html(competition, competition_class, bracket, bracket_output_dir, run_meta=run_meta)
                 except Exception:
                     html_failures.append(f"{competition} {competition_class} brackets")
-                    logging.error("Bracket HTML export failed for %s %s:\n%s", competition, competition_class, traceback.format_exc())
+                    logging.error(
+                        "Bracket HTML export failed for %s %s:\n%s",
+                        competition,
+                        competition_class,
+                        traceback.format_exc(),
+                    )
 
         if html_failures:
             spinner.text = f"HTML export completed with {len(html_failures)} failure(s): {html_failures}"

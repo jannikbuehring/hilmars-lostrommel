@@ -4,6 +4,7 @@ Kept in a module of its own so the group and bracket sides can both use them
 without importing each other (the bracket viewer and its HTML exporter used to
 form an import cycle around participant_display_fields).
 """
+
 import webbrowser
 from pathlib import Path
 
@@ -44,7 +45,7 @@ def participant_display_fields(p, include_qttr=False):
 
     try:
         names = []
-        for start_number in (p.start_number_a, getattr(p, 'start_number_b', None)):
+        for start_number in (p.start_number_a, getattr(p, "start_number_b", None)):
             if start_number is None:
                 continue
             pl = players_by_start_number.get(start_number)
@@ -63,9 +64,9 @@ def participant_display_fields(p, include_qttr=False):
                 names.append(name)
 
         return {
-            "seeding": getattr(p, 'seeding', None),
-            "group_no": getattr(p, 'group_no', None),
-            "group_pos": getattr(p, 'group_pos', None),
+            "seeding": getattr(p, "seeding", None),
+            "group_no": getattr(p, "group_no", None),
+            "group_pos": getattr(p, "group_pos", None),
             "names": names,
         }
     except Exception:

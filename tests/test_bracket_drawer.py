@@ -1,38 +1,43 @@
 """Tests for draw/bracket_drawer.py, converted from the original run_bracket_smoke.py script."""
+
 import random
 
 import pytest
 
-from models.player import Player, players_list, players_by_start_number
-from models.draw_data import DrawDataRow, seeding_by_start_numbers
-from models.snapshot import Snapshot
-from draw.bracket_drawer import (
-    draw_bracket, bracket_quality, HARD_BRACKET_RULES, TIER_QUARTER_BALANCE_WEIGHT,
-    _draw_bracket_attempt, _result_rank,
-)
 from checks.bracket_checker import (
     check_bye_balance_halves,
     check_half_group_separation,
-    check_quarter_group_separation,
-    quarter_misfits,
-    check_top_easy_first_round,
     check_no_bottom_vs_bottom,
-    check_placement_balance_quarters,
     check_placement_balance_halves,
+    check_placement_balance_quarters,
+    check_quarter_group_separation,
     check_round_two_matchups,
+    check_top_easy_first_round,
+    quarter_misfits,
     score_bracket,
     score_bracket_tiers,
     score_round_two,
 )
+from draw.bracket_drawer import (
+    HARD_BRACKET_RULES,
+    TIER_QUARTER_BALANCE_WEIGHT,
+    _draw_bracket_attempt,
+    _result_rank,
+    bracket_quality,
+    draw_bracket,
+)
 from misc.config import config
 from models.bracket_geometry import BracketGeometry
+from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.player import Player, players_by_start_number, players_list
+from models.snapshot import Snapshot
 
 
 def participant_slots(match_map):
     slot_by_start_number = {}
     for bracket_match_idx, bracket_participants in match_map.items():
         for side_idx, participant in enumerate(bracket_participants):
-            if participant in (None, 'BYE'):
+            if participant in (None, "BYE"):
                 continue
             slot = ((bracket_match_idx - 1) * 2) + side_idx + 1
             slot_by_start_number[participant.start_number_a] = slot
@@ -46,10 +51,10 @@ def assert_group_half_relations(match_map, top_group_pos):
     for rel_match_idx, rel_participants in match_map.items():
         rel_half = 0 if rel_match_idx <= (number_of_matches // 2) else 1
         for participant in rel_participants:
-            if participant in (None, 'BYE'):
+            if participant in (None, "BYE"):
                 continue
-            rel_group_no = getattr(participant, 'group_no', None)
-            rel_group_pos = getattr(participant, 'group_pos', None)
+            rel_group_no = getattr(participant, "group_no", None)
+            rel_group_pos = getattr(participant, "group_pos", None)
             if rel_group_no is None or rel_group_pos is None:
                 continue
             group_pos_halves.setdefault(rel_group_no, {}).setdefault(rel_group_pos, set()).add(rel_half)
@@ -58,43 +63,45 @@ def assert_group_half_relations(match_map, top_group_pos):
         top_halves = positions.get(top_group_pos)
         if not top_halves:
             continue
-        assert len(top_halves) == 1, f'Group {rel_group_no} top position {top_group_pos} split across halves: {top_halves}'
+        assert len(top_halves) == 1, (
+            f"Group {rel_group_no} top position {top_group_pos} split across halves: {top_halves}"
+        )
 
         top_half = next(iter(top_halves))
         checks = {
-            top_group_pos + 1: 'opposite',
-            top_group_pos + 2: 'opposite',
-            top_group_pos + 3: 'same',
+            top_group_pos + 1: "opposite",
+            top_group_pos + 2: "opposite",
+            top_group_pos + 3: "same",
         }
 
         for rel_group_pos, relation in checks.items():
             halves = positions.get(rel_group_pos)
             if not halves:
                 continue
-            assert len(halves) == 1, f'Group {rel_group_no} position {rel_group_pos} split across halves: {halves}'
+            assert len(halves) == 1, f"Group {rel_group_no} position {rel_group_pos} split across halves: {halves}"
 
             pos_half = next(iter(halves))
-            if relation == 'opposite':
+            if relation == "opposite":
                 assert pos_half != top_half, (
-                    f'Group {rel_group_no} position {rel_group_pos} should be opposite half to top position {top_group_pos}.'
+                    f"Group {rel_group_no} position {rel_group_pos} should be opposite half to top position {top_group_pos}."
                 )
-            if relation == 'same':
+            if relation == "same":
                 assert pos_half == top_half, (
-                    f'Group {rel_group_no} position {rel_group_pos} should be in same half as top position {top_group_pos}.'
+                    f"Group {rel_group_no} position {rel_group_pos} should be in same half as top position {top_group_pos}."
                 )
 
 
 @pytest.fixture
 def eight_players():
     """Create 8 female players (start numbers 1-8) and populate players_by_start_number."""
-    Player(1, 'Alice', 'Alpha', 'GER', 'Base1', 'F', 1200)
-    Player(2, 'Betty', 'Bravo', 'SWE', 'Base2', 'F', 1100)
-    Player(3, 'Cara', 'Charlie', 'GER', 'Base1', 'F', 1150)
-    Player(4, 'Dora', 'Delta', 'SWE', 'Base3', 'F', 1050)
-    Player(5, 'Eve', 'Echo', 'NOR', 'Base4', 'F', 1000)
-    Player(6, 'Fay', 'Foxtrot', 'FIN', 'Base5', 'F', 980)
-    Player(7, 'Gina', 'Golf', 'SWE', 'Base2', 'F', 970)
-    Player(8, 'Hana', 'Hotel', 'GER', 'Base6', 'F', 950)
+    Player(1, "Alice", "Alpha", "GER", "Base1", "F", 1200)
+    Player(2, "Betty", "Bravo", "SWE", "Base2", "F", 1100)
+    Player(3, "Cara", "Charlie", "GER", "Base1", "F", 1150)
+    Player(4, "Dora", "Delta", "SWE", "Base3", "F", 1050)
+    Player(5, "Eve", "Echo", "NOR", "Base4", "F", 1000)
+    Player(6, "Fay", "Foxtrot", "FIN", "Base5", "F", 980)
+    Player(7, "Gina", "Golf", "SWE", "Base2", "F", 970)
+    Player(8, "Hana", "Hotel", "GER", "Base6", "F", 950)
     for p in players_list:
         players_by_start_number[p.start_number] = p
     seeding_by_start_numbers.clear()
@@ -117,7 +124,7 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
         (8, 2, 4),
     ]
     rows = [
-        DrawDataRow('S', 'M1', seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, '')
+        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, "")
         for sn, group_no, group_pos in group_layout
     ]
 
@@ -126,14 +133,16 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
     assert_group_half_relations(matches, min(r.group_pos for r in rows if r.group_pos is not None))
 
     half_sep_violations = check_half_group_separation(matches, len(matches))
-    assert not half_sep_violations, f'Half-group-separation violations in main bracket: {half_sep_violations}'
+    assert not half_sep_violations, f"Half-group-separation violations in main bracket: {half_sep_violations}"
 
-    top_rows = sorted([row for row in rows if row.group_pos == min(r.group_pos for r in rows)], key=lambda row: -row.seeding)
+    top_rows = sorted(
+        [row for row in rows if row.group_pos == min(r.group_pos for r in rows)], key=lambda row: -row.seeding
+    )
     final_slots = participant_slots(matches)
     expected_top_slots = {top_rows[0].start_number_a: 1, top_rows[1].start_number_a: 8}
     for start_number, expected_slot in expected_top_slots.items():
         assert final_slots.get(start_number) == expected_slot, (
-            f'Top seeded participant {start_number} expected in slot {expected_slot}, got {final_slots.get(start_number)}.'
+            f"Top seeded participant {start_number} expected in slot {expected_slot}, got {final_slots.get(start_number)}."
         )
 
     locked_top_ids = {row.start_number_a for row in top_rows}
@@ -144,25 +153,30 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
             continue
         current_slots = participant_slots(state)
         current_top_slots = {start_number: current_slots.get(start_number) for start_number in locked_top_ids}
-        if seeded_snapshot_slots is None and snapshot.action == 'top_seed_complete':
+        if seeded_snapshot_slots is None and snapshot.action == "top_seed_complete":
             seeded_snapshot_slots = current_top_slots
         elif seeded_snapshot_slots is not None and snapshot.action in (
-            'initial_fill',
-            'quarter0_mc_start', 'quarter1_mc_start', 'quarter2_mc_start', 'quarter3_mc_start',
-            'improvement', 'progress', 'final',
+            "initial_fill",
+            "quarter0_mc_start",
+            "quarter1_mc_start",
+            "quarter2_mc_start",
+            "quarter3_mc_start",
+            "improvement",
+            "progress",
+            "final",
         ):
             assert current_top_slots == seeded_snapshot_slots, (
-                f'Top seeded participants moved after anchoring: {seeded_snapshot_slots} -> {current_top_slots}'
+                f"Top seeded participants moved after anchoring: {seeded_snapshot_slots} -> {current_top_slots}"
             )
 
 
 def test_bye_distribution_is_balanced_and_separates_group_top_two(eight_players):
     small_rows = [
-        DrawDataRow('S', 'M1', 100, 2, 1, 1, True, False, 1, ''),
-        DrawDataRow('S', 'M1', 95, 2, 2, 1, True, False, 2, ''),
-        DrawDataRow('S', 'M1', 90, 2, 1, 2, True, False, 3, ''),
-        DrawDataRow('S', 'M1', 85, 2, 2, 5, True, False, 4, ''),
-        DrawDataRow('S', 'M1', 80, 2, 1, 5, True, False, 5, ''),
+        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, ""),
+        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, ""),
+        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, ""),
+        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, ""),
+        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, ""),
     ]
 
     for row in small_rows:
@@ -173,32 +187,36 @@ def test_bye_distribution_is_balanced_and_separates_group_top_two(eight_players)
     bye_half_counts = {0: 0, 1: 0}
     byes_in_half = {}
     for match_idx, participants in bye_matches.items():
-        if 'BYE' in participants:
+        if "BYE" in participants:
             half = 0 if match_idx <= (len(bye_matches) // 2) else 1
             bye_half_counts[half] += 1
             byes_in_half[match_idx] = half
 
-    assert abs(bye_half_counts[0] - bye_half_counts[1]) <= 1, f'Byes are not evenly distributed across halves: {bye_half_counts}'
+    assert abs(bye_half_counts[0] - bye_half_counts[1]) <= 1, (
+        f"Byes are not evenly distributed across halves: {bye_half_counts}"
+    )
 
     bye_positions = {}
     for match_idx, participants in bye_matches.items():
         for p in participants:
-            if p != 'BYE' and getattr(p, 'group_no', None) == 1 and p.group_pos in (1, 2):
+            if p != "BYE" and getattr(p, "group_no", None) == 1 and p.group_pos in (1, 2):
                 bye_positions[p.group_pos] = 0 if match_idx <= (len(bye_matches) // 2) else 1
 
-    assert bye_positions.get(1) != bye_positions.get(2), 'Group 1 first and second bye recipients ended up in the same half.'
+    assert bye_positions.get(1) != bye_positions.get(2), (
+        "Group 1 first and second bye recipients ended up in the same half."
+    )
 
 
 def test_relative_top_half_relation_for_consolation_like_bracket(eight_players):
     relative_rows = [
-        DrawDataRow('S', 'M1', 400, 2, 1, 2, True, False, 1, ''),
-        DrawDataRow('S', 'M1', 390, 2, 1, 3, True, False, 2, ''),
-        DrawDataRow('S', 'M1', 380, 2, 1, 4, True, False, 3, ''),
-        DrawDataRow('S', 'M1', 370, 2, 1, 5, True, False, 4, ''),
-        DrawDataRow('S', 'M1', 360, 2, 2, 2, True, False, 5, ''),
-        DrawDataRow('S', 'M1', 350, 2, 2, 3, True, False, 6, ''),
-        DrawDataRow('S', 'M1', 340, 2, 2, 4, True, False, 7, ''),
-        DrawDataRow('S', 'M1', 330, 2, 2, 5, True, False, 8, ''),
+        DrawDataRow("S", "M1", 400, 2, 1, 2, True, False, 1, ""),
+        DrawDataRow("S", "M1", 390, 2, 1, 3, True, False, 2, ""),
+        DrawDataRow("S", "M1", 380, 2, 1, 4, True, False, 3, ""),
+        DrawDataRow("S", "M1", 370, 2, 1, 5, True, False, 4, ""),
+        DrawDataRow("S", "M1", 360, 2, 2, 2, True, False, 5, ""),
+        DrawDataRow("S", "M1", 350, 2, 2, 3, True, False, 6, ""),
+        DrawDataRow("S", "M1", 340, 2, 2, 4, True, False, 7, ""),
+        DrawDataRow("S", "M1", 330, 2, 2, 5, True, False, 8, ""),
     ]
 
     for row in relative_rows:
@@ -220,7 +238,7 @@ def test_five_groups_three_positions_no_capacity_degrade():
     seeding_by_start_numbers.clear()
     # Fresh players so country/base don't manufacture unrelated violations.
     for sn in range(101, 116):
-        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500 - sn)
+        Player(sn, f"Last{sn}", f"First{sn}", f"C{sn}", f"Base{sn}", "F", 1500 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -233,7 +251,7 @@ def test_five_groups_three_positions_no_capacity_degrade():
             for group_pos in range(1, 4):
                 sn = start_numbers.pop(0)
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow('S', 'W1', seed, 5, group_no, group_pos, True, False, sn, ''))
+                rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, ""))
                 seed -= 1
         return rows
 
@@ -244,12 +262,14 @@ def test_five_groups_three_positions_no_capacity_degrade():
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_rows())
 
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 15-player / 1-bye layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable 15-player / 1-bye layout."
+            )
 
             half_sep_violations = check_half_group_separation(matches, len(matches))
-            assert not half_sep_violations, \
-                f'Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}'
+            assert not half_sep_violations, (
+                f"Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}"
+            )
 
             assert_group_half_relations(matches, 1)
     finally:
@@ -268,7 +288,7 @@ def test_uneven_consolation_layout_no_capacity_degrade():
     """
     seeding_by_start_numbers.clear()
     for sn in range(101, 115):  # 14 players
-        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500 - sn)
+        Player(sn, f"Last{sn}", f"First{sn}", f"C{sn}", f"Base{sn}", "F", 1500 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -281,7 +301,7 @@ def test_uneven_consolation_layout_no_capacity_degrade():
         sn = 101
         for group_no, group_pos in layout:
             seeding_by_start_numbers[str(sn)] = seed
-            rows.append(DrawDataRow('S', 'W1', seed, 5, group_no, group_pos, True, False, sn, ''))
+            rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, ""))
             seed -= 1
             sn += 1
         return rows
@@ -291,12 +311,14 @@ def test_uneven_consolation_layout_no_capacity_degrade():
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_rows())
 
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable uneven consolation layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable uneven consolation layout."
+            )
 
             half_sep_violations = check_half_group_separation(matches, len(matches))
-            assert not half_sep_violations, \
-                f'Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}'
+            assert not half_sep_violations, (
+                f"Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}"
+            )
 
             assert_group_half_relations(matches, 4)
     finally:
@@ -315,7 +337,7 @@ def test_phase_1c_keeps_consolation_half_separation():
     """
     seeding_by_start_numbers.clear()
     for sn in range(101, 110):
-        Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500 - sn)
+        Player(sn, f"Last{sn}", f"First{sn}", f"C{sn}", f"Base{sn}", "F", 1500 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -326,7 +348,7 @@ def test_phase_1c_keeps_consolation_half_separation():
         for group_no in range(1, 4):
             for group_pos in (4, 5, 6):
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow('S', 'M1', seed, 3, group_no, group_pos, False, True, sn, ''))
+                rows.append(DrawDataRow("S", "M1", seed, 3, group_no, group_pos, False, True, sn, ""))
                 seed -= 1
                 sn += 1
         return rows
@@ -336,15 +358,16 @@ def test_phase_1c_keeps_consolation_half_separation():
         for rng_seed in range(11):
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_rows())
-            if any(s.action == 'quarter_capacity_degrade' for s in snapshots):
+            if any(s.action == "quarter_capacity_degrade" for s in snapshots):
                 continue
             structured_draws += 1
 
             half_sep_violations = check_half_group_separation(matches, len(matches))
-            assert not half_sep_violations, \
-                f'Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}'
+            assert not half_sep_violations, (
+                f"Half-group-separation violations (rng_seed={rng_seed}): {half_sep_violations}"
+            )
             assert_group_half_relations(matches, 4)
-        assert structured_draws > 0, 'Every seed degraded; the test no longer covers Phase 1c.'
+        assert structured_draws > 0, "Every seed degraded; the test no longer covers Phase 1c."
     finally:
         seeding_by_start_numbers.clear()
 
@@ -366,12 +389,13 @@ def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
 
     def winner_slots(match_map):
         return {
-            p.start_number_a: slot for slot, p in (
+            p.start_number_a: slot
+            for slot, p in (
                 (((index - 1) * 2) + side + 1, p)
                 for index, participants in match_map.items()
                 for side, p in enumerate(participants)
             )
-            if p not in (None, 'BYE') and p.group_pos == 1
+            if p not in (None, "BYE") and p.group_pos == 1
         }
 
     try:
@@ -380,15 +404,15 @@ def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_tiered_rows(4, (1, 2, 3), short_groups=(2,)))
             seeding_by_start_numbers.clear()
-            degrade = next((s for s in snapshots if s.action == 'quarter_capacity_degrade'), None)
+            degrade = next((s for s in snapshots if s.action == "quarter_capacity_degrade"), None)
             if degrade is None:
                 continue
             degraded_draws += 1
 
             quality = bracket_quality(snapshots)
-            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
-            assert winner_slots(matches) == winner_slots(degrade.initial_groups), f'rng_seed={rng_seed}'
-        assert degraded_draws > 0, 'No seed degrades any more; the test lost its subject.'
+            assert not quality["hard"], f"rng_seed={rng_seed}: {quality['hard']}"
+            assert winner_slots(matches) == winner_slots(degrade.initial_groups), f"rng_seed={rng_seed}"
+        assert degraded_draws > 0, "No seed degrades any more; the test lost its subject."
     finally:
         seeding_by_start_numbers.clear()
 
@@ -401,10 +425,10 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     the snapshots (half/quarter separation become soft, heavily weighted goals).
     """
     over_constrained_rows = [
-        DrawDataRow('S', 'M1', 500, 1, 1, 1, True, False, 1, ''),
-        DrawDataRow('S', 'M1', 490, 1, 1, 2, True, False, 2, ''),
-        DrawDataRow('S', 'M1', 480, 1, 1, 2, True, False, 3, ''),
-        DrawDataRow('S', 'M1', 470, 1, 1, 3, True, False, 4, ''),
+        DrawDataRow("S", "M1", 500, 1, 1, 1, True, False, 1, ""),
+        DrawDataRow("S", "M1", 490, 1, 1, 2, True, False, 2, ""),
+        DrawDataRow("S", "M1", 480, 1, 1, 2, True, False, 3, ""),
+        DrawDataRow("S", "M1", 470, 1, 1, 3, True, False, 4, ""),
     ]
 
     for row in over_constrained_rows:
@@ -414,22 +438,19 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
 
     # Every participant is placed — the draw is never aborted.
     placed = sorted(
-        p.start_number_a
-        for participants in matches.values()
-        for p in participants
-        if p is not None and p != 'BYE'
+        p.start_number_a for participants in matches.values() for p in participants if p is not None and p != "BYE"
     )
     assert placed == [1, 2, 3, 4]
 
     # The graceful-degradation path was taken and a final bracket produced.
-    assert any(s.action == 'quarter_capacity_degrade' for s in snapshots)
-    assert snapshots[-1].action == 'final'
+    assert any(s.action == "quarter_capacity_degrade" for s in snapshots)
+    assert snapshots[-1].action == "final"
 
     # Review finding C2: the degrade and the broken separations are surfaced.
     quality = bracket_quality(snapshots)
-    assert quality['degraded']
-    assert quality['hard'], 'Two 2nd places of one group cannot both be separated from each other.'
-    assert set(quality['hard']) <= set(HARD_BRACKET_RULES)
+    assert quality["degraded"]
+    assert quality["hard"], "Two 2nd places of one group cannot both be separated from each other."
+    assert set(quality["hard"]) <= set(HARD_BRACKET_RULES)
 
 
 def test_bracket_quality_only_flags_an_unrepaired_degrade():
@@ -438,28 +459,28 @@ def test_bracket_quality_only_flags_an_unrepaired_degrade():
     seeding_by_start_numbers.clear()
     try:
         for sn in (901, 902, 903, 904):
-            Player(sn, f'Last{sn}', f'First{sn}', f'C{sn}', f'Base{sn}', 'F', 1500)
+            Player(sn, f"Last{sn}", f"First{sn}", f"C{sn}", f"Base{sn}", "F", 1500)
             players_by_start_number[sn] = players_list[-1]
-        winner_a = DrawDataRow('S', 'M1', 300, 2, 1, 1, True, False, 901, '')
-        winner_b = DrawDataRow('S', 'M1', 299, 2, 2, 1, True, False, 902, '')
-        second_high = DrawDataRow('S', 'M1', 290, 2, 2, 2, True, False, 903, '')
-        second_low = DrawDataRow('S', 'M1', 280, 2, 1, 2, True, False, 904, '')
+        winner_a = DrawDataRow("S", "M1", 300, 2, 1, 1, True, False, 901, "")
+        winner_b = DrawDataRow("S", "M1", 299, 2, 2, 1, True, False, 902, "")
+        second_high = DrawDataRow("S", "M1", 290, 2, 2, 2, True, False, 903, "")
+        second_low = DrawDataRow("S", "M1", 280, 2, 1, 2, True, False, 904, "")
 
         def quality_of(final_matches):
-            return bracket_quality([
-                Snapshot('quarter_capacity_degrade', [], None, [], {}, 0, initial_groups={}),
-                Snapshot('final', None, None, None, {}, 0, initial_groups=final_matches),
-            ])
+            return bracket_quality(
+                [
+                    Snapshot("quarter_capacity_degrade", [], None, [], {}, 0, initial_groups={}),
+                    Snapshot("final", None, None, None, {}, 0, initial_groups=final_matches),
+                ]
+            )
 
-        in_order = quality_of({1: [winner_a, 'BYE'], 2: [second_high, 'BYE'], 3: [second_low, winner_b], 4: []})
-        assert not in_order['degraded']
-        assert in_order['bye_order'] == []
+        in_order = quality_of({1: [winner_a, "BYE"], 2: [second_high, "BYE"], 3: [second_low, winner_b], 4: []})
+        assert not in_order["degraded"]
+        assert in_order["bye_order"] == []
 
-        out_of_order = quality_of({1: [winner_a, 'BYE'], 2: [second_low, 'BYE'], 3: [second_high, winner_b], 4: []})
-        assert out_of_order['degraded']
-        assert out_of_order['bye_order'] == [
-            'pos 2: #903 (seeding 290) has no bye, #904 (seeding 280) has one'
-        ]
+        out_of_order = quality_of({1: [winner_a, "BYE"], 2: [second_low, "BYE"], 3: [second_high, winner_b], 4: []})
+        assert out_of_order["degraded"]
+        assert out_of_order["bye_order"] == ["pos 2: #903 (seeding 290) has no bye, #904 (seeding 280) has one"]
     finally:
         seeding_by_start_numbers.clear()
 
@@ -470,21 +491,21 @@ def test_bracket_quality_reads_the_returned_state(eight_players):
     rows = []
     for index, sn in enumerate(range(1, 9)):
         seeding_by_start_numbers[str(sn)] = 300 - index
-        rows.append(DrawDataRow('S', 'M1', 300 - index, 2, 1 if index < 4 else 2, index % 4 + 1, True, False, sn, ''))
+        rows.append(DrawDataRow("S", "M1", 300 - index, 2, 1 if index < 4 else 2, index % 4 + 1, True, False, sn, ""))
 
     random.seed(0)
     matches, snapshots = draw_bracket(rows)
 
     def keys(match_map):
         return {
-            idx: [p if p in (None, 'BYE') else p.start_number_a for p in participants]
+            idx: [p if p in (None, "BYE") else p.start_number_a for p in participants]
             for idx, participants in match_map.items()
         }
 
     assert keys(snapshots[-1].initial_groups) == keys(matches)
     quality = bracket_quality(snapshots)
-    assert not quality['degraded']
-    assert quality['hard'] == {}
+    assert not quality["degraded"]
+    assert quality["hard"] == {}
 
 
 def _quarter_of(match_idx, number_of_matches):
@@ -496,7 +517,7 @@ def _winner_quarters_by_country(matches, country):
     quarters = []
     for match_idx, participants in matches.items():
         for p in participants:
-            if p in (None, 'BYE') or p.group_pos != 1:
+            if p in (None, "BYE") or p.group_pos != 1:
                 continue
             if players_by_start_number[p.start_number_a].country == country:
                 quarters.append(_quarter_of(match_idx, len(matches)))
@@ -516,11 +537,11 @@ def test_group_winner_countries_spread_across_quarters():
     seeding_by_start_numbers.clear()
     # 8 groups x pos {1,2} = 16 players in a 16-slot bracket.
     # Winners alternate GER/SWE; the rest get unique countries so they add no noise.
-    winner_countries = ['GER', 'SWE', 'GER', 'SWE', 'GER', 'SWE', 'GER', 'SWE']
+    winner_countries = ["GER", "SWE", "GER", "SWE", "GER", "SWE", "GER", "SWE"]
     for group_no in range(1, 9):
-        Player(group_no, f'W{group_no}', f'Win{group_no}', winner_countries[group_no - 1], f'B{group_no}', 'F', 1500)
+        Player(group_no, f"W{group_no}", f"Win{group_no}", winner_countries[group_no - 1], f"B{group_no}", "F", 1500)
     for sn in range(9, 17):
-        Player(sn, f'R{sn}', f'Rest{sn}', f'C{sn}', f'B{sn}', 'F', 1000)
+        Player(sn, f"R{sn}", f"Rest{sn}", f"C{sn}", f"B{sn}", "F", 1000)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -531,7 +552,7 @@ def test_group_winner_countries_spread_across_quarters():
             for group_no in range(1, 9):
                 sn = group_no if group_pos == 1 else group_no + 8
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow('S', 'M1', seed, 8, group_no, group_pos, True, False, sn, ''))
+                rows.append(DrawDataRow("S", "M1", seed, 8, group_no, group_pos, True, False, sn, ""))
                 seed -= 1
         return rows
 
@@ -540,10 +561,10 @@ def test_group_winner_countries_spread_across_quarters():
             random.seed(rng_seed)
             matches, _ = draw_bracket(build_rows())
 
-            for country in ('GER', 'SWE'):
+            for country in ("GER", "SWE"):
                 quarters = sorted(_winner_quarters_by_country(matches, country))
                 assert quarters == [0, 1, 2, 3], (
-                    f'{country} group winners should sit one per quarter, got {quarters} (rng_seed={rng_seed}).'
+                    f"{country} group winners should sit one per quarter, got {quarters} (rng_seed={rng_seed})."
                 )
     finally:
         seeding_by_start_numbers.clear()
@@ -573,16 +594,16 @@ def test_batch_is_assigned_jointly_not_player_by_player():
     assignment tightly enough that player-by-player reaches the joint optimum on
     its own, and the fixture stops discriminating.
     """
-    countries = ('GER', 'SWE', 'NOR')
+    countries = ("GER", "SWE", "NOR")
 
     def phase1_objective(budget, rng_seed):
         players_list.clear()
         players_by_start_number.clear()
         seeding_by_start_numbers.clear()
         for sn in range(1, 13):
-            Player(sn, f'W{sn}', f'Win{sn}', countries[(sn - 1) % 3], f'B{sn}', 'F', 1500 - sn)
+            Player(sn, f"W{sn}", f"Win{sn}", countries[(sn - 1) % 3], f"B{sn}", "F", 1500 - sn)
         for sn in range(13, 18):
-            Player(sn, f'R{sn}', f'Rest{sn}', 'FIN', f'B{sn}', 'F', 1000)
+            Player(sn, f"R{sn}", f"Rest{sn}", "FIN", f"B{sn}", "F", 1000)
         for p in players_list:
             players_by_start_number[p.start_number] = p
 
@@ -590,24 +611,26 @@ def test_batch_is_assigned_jointly_not_player_by_player():
         seed = 300
         for group_no in range(1, 13):
             seeding_by_start_numbers[str(group_no)] = seed
-            rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 1, True, False, group_no, ''))
+            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 1, True, False, group_no, ""))
             seed -= 1
         for offset, group_no in enumerate((1, 2, 3, 4, 5)):
             sn = 13 + offset
             seeding_by_start_numbers[str(sn)] = seed
-            rows.append(DrawDataRow('S', 'M1', seed, 12, group_no, 2, True, False, sn, ''))
+            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 2, True, False, sn, ""))
             seed -= 1
 
-        config.read_dict({'bracket_draw': {
-            'joint_batch_max_evaluations': str(budget),
-        }})
+        config.read_dict(
+            {
+                "bracket_draw": {
+                    "joint_batch_max_evaluations": str(budget),
+                }
+            }
+        )
         random.seed(rng_seed)
         # phase1_only returns the bracket with only the winners placed.
         matches, _snapshots = draw_bracket(rows, phase1_only=True)
         number_of_matches = len(matches)
-        tier_units = sum(
-            v[-1] for v in check_placement_balance_quarters(matches, number_of_matches)
-        )
+        tier_units = sum(v[-1] for v in check_placement_balance_quarters(matches, number_of_matches))
         return (
             score_bracket(matches, number_of_matches)
             + tier_units * TIER_QUARTER_BALANCE_WEIGHT
@@ -619,11 +642,11 @@ def test_batch_is_assigned_jointly_not_player_by_player():
             player_by_player = phase1_objective(0, rng_seed)
             joint = phase1_objective(5000, rng_seed)
             assert joint < player_by_player, (
-                f'Joint batch assignment scored {joint}, no better than the player-by-player '
-                f'{player_by_player} (rng_seed={rng_seed}).'
+                f"Joint batch assignment scored {joint}, no better than the player-by-player "
+                f"{player_by_player} (rng_seed={rng_seed})."
             )
     finally:
-        config.remove_section('bracket_draw')
+        config.remove_section("bracket_draw")
         seeding_by_start_numbers.clear()
 
 
@@ -644,7 +667,7 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
     """
     seeding_by_start_numbers.clear()
     for sn in range(1, 21):
-        Player(sn, f'P{sn}', f'L{sn}', f'C{sn}', f'B{sn}', 'F', 1500 - sn)
+        Player(sn, f"P{sn}", f"L{sn}", f"C{sn}", f"B{sn}", "F", 1500 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -656,7 +679,7 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
             for group_no in range(1, 11):
                 sn = group_no if group_pos == 1 else group_no + 10
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow('S', 'M1', seed, 10, group_no, group_pos, True, False, sn, ''))
+                rows.append(DrawDataRow("S", "M1", seed, 10, group_no, group_pos, True, False, sn, ""))
                 seed -= 1
         return rows
 
@@ -668,17 +691,14 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
             _matches, snapshots = draw_bracket(build_rows())
 
             bye_assign_slots = [
-                slot
-                for snapshot in snapshots
-                if snapshot.action == 'bye_assign'
-                for slot in (snapshot.groups or [])
+                slot for snapshot in snapshots if snapshot.action == "bye_assign" for slot in (snapshot.groups or [])
             ]
-            assert bye_assign_slots, 'Phase 1b did not run — the fixture no longer exercises it.'
+            assert bye_assign_slots, "Phase 1b did not run — the fixture no longer exercises it."
 
             for slot in bye_assign_slots:
                 assert slot in batch4_slots, (
-                    f'Phase 1b placed a bye recipient in slot {slot}, outside the leftover '
-                    f'hierarchy batch {sorted(batch4_slots)} (rng_seed={rng_seed}).'
+                    f"Phase 1b placed a bye recipient in slot {slot}, outside the leftover "
+                    f"hierarchy batch {sorted(batch4_slots)} (rng_seed={rng_seed})."
                 )
     finally:
         seeding_by_start_numbers.clear()
@@ -695,8 +715,10 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
 # rule-A violations across the singles draws; after it, zero.
 # ---------------------------------------------------------------------------
 
-def build_tiered_rows(number_of_groups, positions, competition_class='M1', first_start_number=201,
-                      short_groups=(), country_for=None):
+
+def build_tiered_rows(
+    number_of_groups, positions, competition_class="M1", first_start_number=201, short_groups=(), country_for=None
+):
     """Register fresh players and return rows for number_of_groups x positions.
 
     Unique countries and bases per player so the country/base terms cannot
@@ -716,14 +738,12 @@ def build_tiered_rows(number_of_groups, positions, competition_class='M1', first
     # Countries are decided per (group_no, group_pos), so resolve the layout before
     # registering the players -- start numbers are handed out in that same order.
     layout = [
-        (group_no, group_pos)
-        for group_no in range(1, number_of_groups + 1)
-        for group_pos in group_positions[group_no]
+        (group_no, group_pos) for group_no in range(1, number_of_groups + 1) for group_pos in group_positions[group_no]
     ]
     for offset, (group_no, group_pos) in enumerate(layout):
         sn = first_start_number + offset
         country = country_for(group_no, group_pos) if country_for is not None else None
-        Player(sn, f'Last{sn}', f'First{sn}', country or f'C{sn}', f'Base{sn}', 'F', 2000 - sn)
+        Player(sn, f"Last{sn}", f"First{sn}", country or f"C{sn}", f"Base{sn}", "F", 2000 - sn)
     for p in players_list:
         players_by_start_number[p.start_number] = p
 
@@ -733,7 +753,7 @@ def build_tiered_rows(number_of_groups, positions, competition_class='M1', first
         sn = first_start_number + offset
         seeding_by_start_numbers[str(sn)] = seed
         rows.append(
-            DrawDataRow('S', competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, '')
+            DrawDataRow("S", competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, "")
         )
         seed -= 1
     return rows
@@ -755,11 +775,12 @@ def test_group_winners_get_bye_or_bottom_opponent():
 
             violations = check_top_easy_first_round(matches)
             assert not violations, (
-                f'Group winner without a BYE or lowest-placed opponent '
-                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+                f"Group winner without a BYE or lowest-placed opponent "
+                f"(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}"
             )
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 30-player layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable 30-player layout."
+            )
             assert not check_half_group_separation(matches, len(matches))
             assert not check_quarter_group_separation(matches, len(matches))
     finally:
@@ -777,11 +798,11 @@ def test_small_bracket_group_winners_get_bottom_opponents():
     try:
         for rng_seed in range(50):
             random.seed(rng_seed)
-            matches, _ = draw_bracket(build_tiered_rows(5, (1, 2, 3), competition_class='W1'))
+            matches, _ = draw_bracket(build_tiered_rows(5, (1, 2, 3), competition_class="W1"))
             violations = check_top_easy_first_round(matches)
             assert not violations, (
-                f'Group winner without a BYE or lowest-placed opponent '
-                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+                f"Group winner without a BYE or lowest-placed opponent "
+                f"(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}"
             )
     finally:
         seeding_by_start_numbers.clear()
@@ -794,11 +815,11 @@ def test_consolation_tiers_are_relative():
     try:
         for rng_seed in range(20):
             random.seed(rng_seed)
-            matches, _ = draw_bracket(build_tiered_rows(5, (4, 5, 6), competition_class='W2'))
+            matches, _ = draw_bracket(build_tiered_rows(5, (4, 5, 6), competition_class="W2"))
             violations = check_top_easy_first_round(matches)
             assert not violations, (
-                f'4th place without a BYE or 6th-place opponent '
-                f'(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}'
+                f"4th place without a BYE or 6th-place opponent "
+                f"(rng_seed={rng_seed}): {[(v[0], v[1].group_pos, v[2].group_pos) for v in violations]}"
             )
     finally:
         seeding_by_start_numbers.clear()
@@ -814,19 +835,22 @@ def test_two_tier_draw_reports_no_new_placement_violations():
     try:
         for rng_seed in range(10):
             random.seed(rng_seed)
-            matches, _ = draw_bracket(build_tiered_rows(7, (1, 2), competition_class='M3'))
+            matches, _ = draw_bracket(build_tiered_rows(7, (1, 2), competition_class="M3"))
             assert check_top_easy_first_round(matches) == []
             assert check_no_bottom_vs_bottom(matches) == []
     finally:
         seeding_by_start_numbers.clear()
 
 
-@pytest.mark.parametrize('number_of_groups, positions, short_groups', [
-    # 12 players, 16 slots: the last two winners used to share a half (4/2).
-    (6, (1, 2), ()),
-    # 25 players, 32 slots: winners 6/4 and runners-up 4/6.
-    (10, (1, 2, 3), (1, 2, 3, 4, 5)),
-])
+@pytest.mark.parametrize(
+    "number_of_groups, positions, short_groups",
+    [
+        # 12 players, 16 slots: the last two winners used to share a half (4/2).
+        (6, (1, 2), ()),
+        # 25 players, 32 slots: winners 6/4 and runners-up 4/6.
+        (10, (1, 2, 3), (1, 2, 3, 4, 5)),
+    ],
+)
 @pytest.mark.slow
 def test_byes_and_tiers_split_evenly_across_halves(number_of_groups, positions, short_groups):
     """Review finding N2: "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte
@@ -844,13 +868,13 @@ def test_byes_and_tiers_split_evenly_across_halves(number_of_groups, positions, 
             rows = build_tiered_rows(number_of_groups, positions, short_groups=short_groups)
             matches, snapshots = draw_bracket(rows)
             number_of_matches = len(matches)
-            assert not check_bye_balance_halves(matches, number_of_matches), f'rng_seed={rng_seed}'
+            assert not check_bye_balance_halves(matches, number_of_matches), f"rng_seed={rng_seed}"
             assert not check_placement_balance_halves(matches, number_of_matches), (
-                f'rng_seed={rng_seed}: {check_placement_balance_halves(matches, number_of_matches)}'
+                f"rng_seed={rng_seed}: {check_placement_balance_halves(matches, number_of_matches)}"
             )
             quality = bracket_quality(snapshots)
-            assert quality['balance'] == [] and not quality['hard'] and not quality['degraded'], (
-                f'rng_seed={rng_seed}: {quality}'
+            assert quality["balance"] == [] and not quality["hard"] and not quality["degraded"], (
+                f"rng_seed={rng_seed}: {quality}"
             )
     finally:
         seeding_by_start_numbers.clear()
@@ -868,8 +892,8 @@ def test_forced_half_imbalance_is_reported_not_hidden():
         random.seed(0)
         matches, snapshots = draw_bracket(build_tiered_rows(3, (3, 4), short_groups=(1,)))
         quality = bracket_quality(snapshots)
-        assert not quality['hard'] and not quality['degraded']
-        assert quality['balance'] in (['pos 4: 2/0 over the halves'], ['pos 4: 0/2 over the halves'])
+        assert not quality["hard"] and not quality["degraded"]
+        assert quality["balance"] in (["pos 4: 2/0 over the halves"], ["pos 4: 0/2 over the halves"])
     finally:
         seeding_by_start_numbers.clear()
 
@@ -889,7 +913,7 @@ def test_half_balance_never_costs_a_hard_rule():
             _, snapshots = draw_bracket(rows)
             random.seed(rng_seed)
             _, unbalanced_snapshots = _draw_bracket_attempt(rows, half_balance=False)
-            assert _result_rank(snapshots) <= _result_rank(unbalanced_snapshots), f'rng_seed={rng_seed}'
+            assert _result_rank(snapshots) <= _result_rank(unbalanced_snapshots), f"rng_seed={rng_seed}"
     finally:
         seeding_by_start_numbers.clear()
 
@@ -915,16 +939,17 @@ def test_byes_split_evenly_across_halves_in_uneven_class():
 
             bye_half_counts = {0: 0, 1: 0}
             for match_idx, participants in matches.items():
-                if 'BYE' in participants:
+                if "BYE" in participants:
                     bye_half_counts[0 if match_idx <= (len(matches) // 2) else 1] += 1
             assert sum(bye_half_counts.values()) == 6
             assert not check_bye_balance_halves(matches, len(matches)), (
-                f'Byes unevenly spread across the halves (rng_seed={rng_seed}): {bye_half_counts}'
+                f"Byes unevenly spread across the halves (rng_seed={rng_seed}): {bye_half_counts}"
             )
             # Bye balance is ranked below both feasibility penalties, so it must
             # never be what pushes a placeable layout onto the degrade path.
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 26-player layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable 26-player layout."
+            )
     finally:
         seeding_by_start_numbers.clear()
 
@@ -936,7 +961,7 @@ def winner_country_halves(matches, top_group_pos=1):
     for match_idx, participants in matches.items():
         half = 0 if match_idx <= (number_of_matches // 2) else 1
         for participant in participants:
-            if participant in (None, 'BYE') or participant.group_pos != top_group_pos:
+            if participant in (None, "BYE") or participant.group_pos != top_group_pos:
                 continue
             country = players_by_start_number[participant.start_number_a].country
             counts.setdefault(country, [0, 0])[half] += 1
@@ -963,10 +988,19 @@ def test_group_winners_are_country_balanced_across_the_halves():
     winners' spread alone -- which is the thing no aggregate country check can
     see once the lower tiers arrive and cancel it out.
     """
-    winner_countries = {1: 'GER', 5: 'GER', 7: 'GER', 9: 'GER',
-                        2: 'CRO', 6: 'CRO',
-                        4: 'SLO', 10: 'SLO',
-                        8: 'ENG', 11: 'CZE', 3: 'ISR'}
+    winner_countries = {
+        1: "GER",
+        5: "GER",
+        7: "GER",
+        9: "GER",
+        2: "CRO",
+        6: "CRO",
+        4: "SLO",
+        10: "SLO",
+        8: "ENG",
+        11: "CZE",
+        3: "ISR",
+    }
 
     def country_for(group_no, group_pos):
         return winner_countries.get(group_no) if group_pos == 1 else None
@@ -983,8 +1017,7 @@ def test_group_winners_are_country_balanced_across_the_halves():
             assert sum(sum(v) for v in counts.values()) == 11
             lopsided = {c: v for c, v in counts.items() if abs(v[0] - v[1]) > 1}
             assert not lopsided, (
-                f'Group winners of one country piled into a half '
-                f'(rng_seed={rng_seed}): {lopsided} of {counts}'
+                f"Group winners of one country piled into a half (rng_seed={rng_seed}): {lopsided} of {counts}"
             )
     finally:
         seeding_by_start_numbers.clear()
@@ -998,7 +1031,7 @@ def quarter_tier_counts(matches):
     for match_idx, participants in matches.items():
         quarter = min(3, (match_idx - 1) // matches_per_quarter)
         for participant in participants:
-            if participant in (None, 'BYE'):
+            if participant in (None, "BYE"):
                 continue
             counts.setdefault(participant.group_pos, [0, 0, 0, 0])[quarter] += 1
     return counts
@@ -1032,10 +1065,9 @@ def test_tiers_spread_evenly_across_the_quarters_of_each_half():
                 per_quarter = counts[group_pos]
                 assert sum(per_quarter) == 11
                 for half_start in (0, 2):
-                    low, high = sorted(per_quarter[half_start:half_start + 2])
+                    low, high = sorted(per_quarter[half_start : half_start + 2])
                     assert high - low <= 1, (
-                        f'group_pos {group_pos} split {per_quarter} across the quarters '
-                        f'(rng_seed={rng_seed}).'
+                        f"group_pos {group_pos} split {per_quarter} across the quarters (rng_seed={rng_seed})."
                     )
     finally:
         seeding_by_start_numbers.clear()
@@ -1070,12 +1102,12 @@ def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
             random.seed(rng_seed)
             matches, _snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
             round_two = check_round_two_matchups(matches, bounds=(1, 3))
-            assert len(round_two['top_easy_opponent']) <= 3, (
-                f'{len(round_two["top_easy_opponent"])} group winners meet a runner-up in '
-                f'round two (rng_seed={rng_seed}); at most three are expected.'
+            assert len(round_two["top_easy_opponent"]) <= 3, (
+                f"{len(round_two['top_easy_opponent'])} group winners meet a runner-up in "
+                f"round two (rng_seed={rng_seed}); at most three are expected."
             )
-            assert round_two['first_vs_first'] == []
-            assert round_two['bottom_vs_bottom'] == []
+            assert round_two["first_vs_first"] == []
+            assert round_two["bottom_vs_bottom"] == []
     finally:
         seeding_by_start_numbers.clear()
 
@@ -1095,17 +1127,17 @@ def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
         for rng_seed in range(6):
             random.seed(rng_seed)
             matches, snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
-            swaps = [s for s in snapshots if s.action == 'bye_swap']
-            before = next(s for s in snapshots if s.action == 'top_seed_complete')
-            after = next(s for s in snapshots if s.action == 'seeded_byes')
+            swaps = [s for s in snapshots if s.action == "bye_swap"]
+            before = next(s for s in snapshots if s.action == "top_seed_complete")
+            after = next(s for s in snapshots if s.action == "seeded_byes")
 
-            for key in ('half_group_separation', 'quarter_group_separation'):
+            for key in ("half_group_separation", "quarter_group_separation"):
                 assert len(after.violations[key]) <= max(
                     len(before.violations[key]),
                     max((len(s.violations[key]) for s in swaps), default=0),
-                ), f'{key} grew across Phase 1c (rng_seed={rng_seed}).'
+                ), f"{key} grew across Phase 1c (rng_seed={rng_seed})."
             assert not check_bye_balance_halves(matches, len(matches)), (
-                f'Phase 1c unbalanced the byes across the halves (rng_seed={rng_seed}).'
+                f"Phase 1c unbalanced the byes across the halves (rng_seed={rng_seed})."
             )
             # Every accepted swap must strictly improve, so none may repeat a state.
             assert len({tuple(s.groups) for s in swaps}) == len(swaps)
@@ -1135,29 +1167,28 @@ def test_phase_1c_never_moves_a_group_winner():
                 rows = build_tiered_rows(group_count, (1, 2, 3))
                 top_group_pos = min(r.group_pos for r in rows)
                 matches, snapshots = draw_bracket(rows)
-                case = f'{group_count} groups, rng_seed={rng_seed}'
+                case = f"{group_count} groups, rng_seed={rng_seed}"
 
-                for snapshot in (s for s in snapshots if s.action == 'bye_swap'):
-                    assert all(
-                        getattr(p, 'group_pos', None) != top_group_pos
-                        for p in snapshot.participants
-                    ), f'Phase 1c swapped a group winner ({case}).'
+                for snapshot in (s for s in snapshots if s.action == "bye_swap"):
+                    assert all(getattr(p, "group_pos", None) != top_group_pos for p in snapshot.participants), (
+                        f"Phase 1c swapped a group winner ({case})."
+                    )
 
                 # Structural check on the result rather than the trace: a swap always
                 # changes a candidate's match, so every winner must still sit in the
                 # match Phase 1 gave it.
-                after_phase_1 = next(s for s in snapshots if s.action == 'top_seed_complete')
+                after_phase_1 = next(s for s in snapshots if s.action == "top_seed_complete")
 
                 def winner_matches(match_dict):
                     return {
                         p.start_number_a: index
                         for index, participants in match_dict.items()
                         for p in participants
-                        if p not in (None, 'BYE') and p.group_pos == top_group_pos
+                        if p not in (None, "BYE") and p.group_pos == top_group_pos
                     }
 
                 assert winner_matches(matches) == winner_matches(after_phase_1.initial_groups), (
-                    f'A group winner changed match after Phase 1 ({case}).'
+                    f"A group winner changed match after Phase 1 ({case})."
                 )
                 seeding_by_start_numbers.clear()
     finally:
@@ -1178,11 +1209,15 @@ def test_phase_1c_is_deterministic_and_consumes_no_randomness():
         for _ in range(2):
             random.seed(4)
             matches, snapshots = draw_bracket(build_tiered_rows(11, (1, 2, 3)))
-            drawn.append((
-                {i: [p if p == 'BYE' else p.start_number_a for p in ps if p is not None]
-                 for i, ps in matches.items()},
-                sum(1 for s in snapshots if s.action == 'bye_swap'),
-            ))
+            drawn.append(
+                (
+                    {
+                        i: [p if p == "BYE" else p.start_number_a for p in ps if p is not None]
+                        for i, ps in matches.items()
+                    },
+                    sum(1 for s in snapshots if s.action == "bye_swap"),
+                )
+            )
             seeding_by_start_numbers.clear()
         assert drawn[0] == drawn[1]
     finally:
@@ -1206,9 +1241,7 @@ def test_residual_third_avoids_the_quarter_its_runner_up_already_took():
             random.seed(rng_seed)
             matches, _snapshots = draw_bracket(build_tiered_rows(12, (1, 2, 3)))
             violations = check_quarter_group_separation(matches, len(matches))
-            assert not violations, (
-                f'2nd/3rd of a group share a quarter (rng_seed={rng_seed}): {violations}'
-            )
+            assert not violations, f"2nd/3rd of a group share a quarter (rng_seed={rng_seed}): {violations}"
     finally:
         seeding_by_start_numbers.clear()
 
@@ -1227,30 +1260,34 @@ def test_bottom_players_not_paired_when_avoidable():
             random.seed(rng_seed)
             matches, _ = draw_bracket(build_tiered_rows(10, (1, 2, 3)))
             violations = check_no_bottom_vs_bottom(matches)
-            assert not violations, \
-                f'Avoidable lowest-vs-lowest pairing (rng_seed={rng_seed}): {[v[0] for v in violations]}'
+            assert not violations, (
+                f"Avoidable lowest-vs-lowest pairing (rng_seed={rng_seed}): {[v[0] for v in violations]}"
+            )
     finally:
         seeding_by_start_numbers.clear()
 
 
-@pytest.mark.parametrize('number_of_groups, positions, short_groups, expected_forced', [
-    # 8 groups of 3, top two advance: the consolation holds only the 8 thirds.
-    (8, (3,), (), 4),
-    # 10 thirds + 6 fourths in 16 slots: two thirds must meet.
-    (10, (3, 4), (7, 8, 9, 10), 2),
-])
+@pytest.mark.parametrize(
+    "number_of_groups, positions, short_groups, expected_forced",
+    [
+        # 8 groups of 3, top two advance: the consolation holds only the 8 thirds.
+        (8, (3,), (), 4),
+        # 10 thirds + 6 fourths in 16 slots: two thirds must meet.
+        (10, (3, 4), (7, 8, 9, 10), 2),
+    ],
+)
 def test_unavoidable_first_vs_first_is_forced_not_hard(number_of_groups, positions, short_groups, expected_forced):
     seeding_by_start_numbers.clear()
     try:
         for rng_seed in range(5):
             random.seed(rng_seed)
-            rows = build_tiered_rows(number_of_groups, positions, competition_class='W3', short_groups=short_groups)
+            rows = build_tiered_rows(number_of_groups, positions, competition_class="W3", short_groups=short_groups)
             matches, snapshots = draw_bracket(rows)
             quality = bracket_quality(snapshots)
             # Only first-vs-first is asserted: the uneven 3rd/4th layout can
             # still break half separation on some seeds, independently of this.
-            assert 'first_vs_first' not in quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
-            assert len(quality['forced']['first_vs_first_forced']) == expected_forced
+            assert "first_vs_first" not in quality["hard"], f"rng_seed={rng_seed}: {quality['hard']}"
+            assert len(quality["forced"]["first_vs_first_forced"]) == expected_forced
     finally:
         seeding_by_start_numbers.clear()
 
@@ -1261,8 +1298,8 @@ def test_all_thirds_consolation_scores_clean():
     seeding_by_start_numbers.clear()
     try:
         random.seed(0)
-        matches, snapshots = draw_bracket(build_tiered_rows(8, (3,), competition_class='W4'))
-        assert bracket_quality(snapshots)['hard'] == {}
+        matches, snapshots = draw_bracket(build_tiered_rows(8, (3,), competition_class="W4"))
+        assert bracket_quality(snapshots)["hard"] == {}
         assert score_bracket_tiers(matches, len(matches))[0] == 0
     finally:
         seeding_by_start_numbers.clear()
@@ -1285,10 +1322,11 @@ def test_consolation_byes_for_second_places_do_not_degrade():
             rows = build_tiered_rows(15, (4, 5, 6), short_groups=(3, 7, 11, 15))
             assert len(rows) == 41
             matches, snapshots = draw_bracket(rows)
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 41-player consolation layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable 41-player consolation layout."
+            )
             quality = bracket_quality(snapshots)
-            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
+            assert not quality["hard"], f"rng_seed={rng_seed}: {quality['hard']}"
     finally:
         seeding_by_start_numbers.clear()
 
@@ -1314,39 +1352,45 @@ def test_full_bracket_moves_a_bye_to_fix_quarter_capacity():
         for rng_seed in (0, 5, 7):
             random.seed(rng_seed)
             rows = build_tiered_rows(
-                50, (1, 2, 3), competition_class='M3',
-                country_for=lambda group_no, group_pos: f'K{(group_no * 3 + group_pos) % 5}',
+                50,
+                (1, 2, 3),
+                competition_class="M3",
+                country_for=lambda group_no, group_pos: f"K{(group_no * 3 + group_pos) % 5}",
             )
             matches, snapshots = draw_bracket(rows)
-            assert not any(s.action == 'quarter_capacity_degrade' for s in snapshots), \
-                f'Bracket degraded (rng_seed={rng_seed}) despite a placeable 150-player / 256-slot layout.'
+            assert not any(s.action == "quarter_capacity_degrade" for s in snapshots), (
+                f"Bracket degraded (rng_seed={rng_seed}) despite a placeable 150-player / 256-slot layout."
+            )
             quality = bracket_quality(snapshots)
-            assert not quality['hard'], f'rng_seed={rng_seed}: {quality["hard"]}'
-            assert not quality['bye_order'], f'rng_seed={rng_seed}: {quality["bye_order"]}'
+            assert not quality["hard"], f"rng_seed={rng_seed}: {quality['hard']}"
+            assert not quality["bye_order"], f"rng_seed={rng_seed}: {quality['bye_order']}"
 
             number_of_matches = len(matches)
-            for snapshot in (s for s in snapshots if s.action == 'bye_move'):
+            for snapshot in (s for s in snapshots if s.action == "bye_move"):
                 moved += 1
                 slot_from, slot_to = snapshot.groups
                 (participant,) = snapshot.participants
-                assert participant.group_pos != 1, f'A group winner was moved (rng_seed={rng_seed}).'
-                half = lambda slot: 0 if (slot + 1) // 2 <= number_of_matches // 2 else 1
-                assert half(slot_from) == half(slot_to), f'A bye move changed halves (rng_seed={rng_seed}).'
+                assert participant.group_pos != 1, f"A group winner was moved (rng_seed={rng_seed})."
+                half_from, half_to = ((slot + 1) // 2 > number_of_matches // 2 for slot in (slot_from, slot_to))
+                assert half_from == half_to, f"A bye move changed halves (rng_seed={rng_seed})."
             seeding_by_start_numbers.clear()
         # Otherwise the layout never needed the repair and the test proves nothing.
-        assert moved, 'No seed exercised the bye move.'
+        assert moved, "No seed exercised the bye move."
     finally:
         seeding_by_start_numbers.clear()
 
 
-@pytest.mark.parametrize('number_of_groups, positions, short_groups', [
-    (4, (1, 2, 3), ()),
-    (5, (1, 2, 3), (1, 3, 5)),
-    (6, (1, 2, 3, 4), (1, 4)),
-    (7, (4, 5, 6), ()),
-    (6, (3, 4), (1, 3, 5)),
-    (11, (1, 2, 3), ()),
-])
+@pytest.mark.parametrize(
+    "number_of_groups, positions, short_groups",
+    [
+        (4, (1, 2, 3), ()),
+        (5, (1, 2, 3), (1, 3, 5)),
+        (6, (1, 2, 3, 4), (1, 4)),
+        (7, (4, 5, 6), ()),
+        (6, (3, 4), (1, 3, 5)),
+        (11, (1, 2, 3), ()),
+    ],
+)
 @pytest.mark.slow
 def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positions, short_groups):
     """The drawer's phases and the checker share allowed_quarters.
@@ -1360,10 +1404,10 @@ def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positi
             random.seed(rng_seed)
             rows = build_tiered_rows(number_of_groups, positions, short_groups=short_groups)
             matches, snapshots = draw_bracket(rows)
-            if bracket_quality(snapshots)['hard']:
+            if bracket_quality(snapshots)["hard"]:
                 continue
             misfits = quarter_misfits(matches, BracketGeometry(len(matches)), positions[0])
-            assert not misfits, f'rng_seed={rng_seed}: {misfits}'
+            assert not misfits, f"rng_seed={rng_seed}: {misfits}"
             seeding_by_start_numbers.clear()
     finally:
         seeding_by_start_numbers.clear()
@@ -1372,11 +1416,11 @@ def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positi
 def test_draw_bracket_reports_its_phases(eight_players):
     """Five players in an 8-slot bracket: three byes, so the bye phase reports too."""
     rows = [
-        DrawDataRow('S', 'M1', 100, 2, 1, 1, True, False, 1, ''),
-        DrawDataRow('S', 'M1', 95, 2, 2, 1, True, False, 2, ''),
-        DrawDataRow('S', 'M1', 90, 2, 1, 2, True, False, 3, ''),
-        DrawDataRow('S', 'M1', 85, 2, 2, 5, True, False, 4, ''),
-        DrawDataRow('S', 'M1', 80, 2, 1, 5, True, False, 5, ''),
+        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, ""),
+        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, ""),
+        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, ""),
+        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, ""),
+        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, ""),
     ]
     for row in rows:
         seeding_by_start_numbers[str(row.start_number_a)] = row.seeding

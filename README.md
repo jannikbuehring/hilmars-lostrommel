@@ -60,9 +60,13 @@ Every bracket (all singles/doubles/mixed classes, main and consolation) is **exp
 
 Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracket phase limits, rule weights) is controlled by `config/config.ini`, created from `config/config_template.ini`. The exe built by CI ships the template unchanged, so a local config with other weights or another seed draws the same input differently. For a reproducible draw, set `random_seed`. Full key reference: [ARCHITECTURE.md § Configuration](ARCHITECTURE.md#8-configuration).
 
-# Tests
+# Development
 
-Install `requirements-dev.txt`, then run `python -m pytest -m "not slow"` for the quick suite (seconds) or `python -m pytest` for everything, including the full-size bracket draws marked `slow` (several minutes). CI runs the full suite.
+Requires Python 3.14. Install the pinned dependencies with `pip install -r requirements-dev.txt` (runtime only: `requirements.txt`).
+
+- **Tests:** `python -m pytest -m "not slow"` for the quick suite (seconds), or `python -m pytest` for everything, including the full-size bracket draws marked `slow` (several minutes). CI runs the full suite.
+- **Lint and format:** `ruff check .` and `ruff format .` (configured in `pyproject.toml`; CI runs both).
+- **Dependencies:** direct dependencies live in `pyproject.toml`. The two requirements files are locks generated from it with [uv](https://docs.astral.sh/uv/); the command is in each file's header. Rerun it after changing `pyproject.toml`, and add `--upgrade` to pick up new versions.
 
 # Known issues
 

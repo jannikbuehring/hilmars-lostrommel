@@ -1,18 +1,27 @@
 """Module to handle drawing of groups with country conflict avoidance."""
+
+import copy
 import logging
 import random
-import copy
+
+from checks.group_checker import (
+    check_base_uniqueness,
+    check_country_distribution,
+    check_team_country_distribution,
+    get_qttr_violations,
+)
+from misc.config import config
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
-from checks.group_checker import check_base_uniqueness, check_country_distribution, get_qttr_violations, check_team_country_distribution
-from misc.config import config
 
 # How often (in swap steps) the optimiser reports its progress.
 PROGRESS_INTERVAL = 250
 
+
 # Define a safe EmptySlot class
 class EmptySlot:
     """A placeholder for empty group slots."""
+
     def __init__(self):
         self.country = None
         self.base = None
@@ -20,11 +29,14 @@ class EmptySlot:
         self.start_number_b = None
         self.competition = None
         self.qttr = None
+
     def __repr__(self):
         return "Empty Slot"
+
     def __deepcopy__(self, memo):
         # EmptySlot is stateless, so just return a new instance
         return type(self)()
+
 
 def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, progress=None):
     """Draw groups for a competition class using Monte Carlo optimization to minimize country conflicts.
@@ -48,7 +60,15 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
         random.seed(seed)
 
         snapshots = []
-        def snapshot_delta(action: str, groups: list[int], index_in_group: int, participants: list[DrawDataRow], violations, violation_score):
+
+        def snapshot_delta(
+            action: str,
+            groups: list[int],
+            index_in_group: int,
+            participants: list[DrawDataRow],
+            violations,
+            violation_score,
+        ):
             snapshots.append(Snapshot(action, groups, index_in_group, participants, violations, violation_score))
 
         def get_violations(groups):
@@ -56,8 +76,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
             violations = {}
             violations["country"] = check_country_distribution(competition, groups)
             violations["base"] = check_base_uniqueness(groups)
-            violations["qttr"] = get_qttr_violations(groups) if (competition == 'S') else []     
-            violations["team_country"] = check_team_country_distribution(groups) if (competition in ('D', 'M')) else []
+            violations["qttr"] = get_qttr_violations(groups) if (competition == "S") else []
+            violations["team_country"] = check_team_country_distribution(groups) if (competition in ("D", "M")) else []
             return violations
 
         def calculate_violation_score(violations):
@@ -78,7 +98,7 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
 
         def calc_max_group_size(num_participants: int, num_groups: int) -> int:
             return -(-num_participants // num_groups)
-        
+
         class_subset.sort(key=lambda d: d.seeding, reverse=True)
         max_group_size = calc_max_group_size(len(class_subset), amount_of_groups)
         groups = {i + 1: [] for i in range(amount_of_groups)}
@@ -86,7 +106,7 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
         # Deterministic batch assignment
         batches = []
         for i in range(0, len(class_subset), amount_of_groups):
-            batch = class_subset[i:i + amount_of_groups]
+            batch = class_subset[i : i + amount_of_groups]
             batches.append(batch)
             for j, participant in enumerate(batch):
                 group_no = j + 1
@@ -102,7 +122,17 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
         # Monte Carlo optimization with escape from local minima
         current_violations = get_violations(groups)
         current_violation_score = calculate_violation_score(current_violations)
-        snapshots.append(Snapshot(None, None, None, None, current_violations, current_violation_score, initial_groups=copy.deepcopy(groups)))
+        snapshots.append(
+            Snapshot(
+                None,
+                None,
+                None,
+                None,
+                current_violations,
+                current_violation_score,
+                initial_groups=copy.deepcopy(groups),
+            )
+        )
 
         # Best state visited in this seed; escapes may walk away from it, so it is
         # what gets returned (and snapshots are cut back to it for the replay).
@@ -205,6 +235,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
     if best_score > 0:
         # Logged, not printed: a print would land inside the draw spinner, and the
         # group validation stage lists the remaining violations anyway.
-        logging.info("Could not achieve perfect group draw after %s seed attempts. Best score: %s", max_seed_retries, best_score)
-    
+        logging.info(
+            "Could not achieve perfect group draw after %s seed attempts. Best score: %s", max_seed_retries, best_score
+        )
+
     return best_groups, best_snapshots

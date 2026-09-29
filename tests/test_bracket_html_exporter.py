@@ -1,31 +1,30 @@
 """Tests for viewer/bracket_html_exporter.py."""
+
 import json
 import re
 
 import pytest
 
-from models.player import Player, players_list, players_by_start_number
-from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
 from misc.version import APP_NAME, __version__
-from viewer.bracket_html_exporter import export_bracket_html, _format_duration, _render_bracket_list
+from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.player import Player, players_by_start_number, players_list
+from viewer.bracket_html_exporter import _format_duration, _render_bracket_list, export_bracket_html
 
-DATA_SCRIPT_RE = re.compile(
-    r'<script type="application/json" id="bracket-data">(.*?)</script>', re.DOTALL
-)
+DATA_SCRIPT_RE = re.compile(r'<script type="application/json" id="bracket-data">(.*?)</script>', re.DOTALL)
 
 
 @pytest.fixture
 def eight_players():
     """Create 8 female players (start numbers 1-8) and populate players_by_start_number."""
-    Player(1, 'Alice', 'Alpha', 'GER', 'Base1', 'F', 1200)
-    Player(2, 'Betty', 'Bravo', 'SWE', 'Base2', 'F', 1100)
-    Player(3, 'Cara', 'Charlie', 'GER', 'Base1', 'F', 1150)
-    Player(4, 'Dora', 'Delta', 'SWE', 'Base3', 'F', 1050)
-    Player(5, 'Eve', 'Echo', 'NOR', 'Base4', 'F', 1000)
-    Player(6, 'Fay', 'Foxtrot', 'FIN', 'Base5', 'F', 980)
-    Player(7, 'Gina', 'Golf', 'SWE', 'Base2', 'F', 970)
-    Player(8, 'Hana', 'Hotel', 'GER', 'Base6', 'F', 950)
+    Player(1, "Alice", "Alpha", "GER", "Base1", "F", 1200)
+    Player(2, "Betty", "Bravo", "SWE", "Base2", "F", 1100)
+    Player(3, "Cara", "Charlie", "GER", "Base1", "F", 1150)
+    Player(4, "Dora", "Delta", "SWE", "Base3", "F", 1050)
+    Player(5, "Eve", "Echo", "NOR", "Base4", "F", 1000)
+    Player(6, "Fay", "Foxtrot", "FIN", "Base5", "F", 980)
+    Player(7, "Gina", "Golf", "SWE", "Base2", "F", 970)
+    Player(8, "Hana", "Hotel", "GER", "Base6", "F", 950)
     for p in players_list:
         players_by_start_number[p.start_number] = p
     seeding_by_start_numbers.clear()
@@ -38,11 +37,17 @@ def _draw_eight_player_bracket():
         seeding_by_start_numbers[str(sn)] = 300 - i
 
     group_layout = [
-        (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 1, 4),
-        (5, 2, 1), (6, 2, 2), (7, 2, 3), (8, 2, 4),
+        (1, 1, 1),
+        (2, 1, 2),
+        (3, 1, 3),
+        (4, 1, 4),
+        (5, 2, 1),
+        (6, 2, 2),
+        (7, 2, 3),
+        (8, 2, 4),
     ]
     rows = [
-        DrawDataRow('S', 'M1', seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, '')
+        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, "")
         for sn, group_no, group_pos in group_layout
     ]
     matches, snapshots = draw_bracket(rows)
@@ -92,8 +97,13 @@ def test_degraded_bracket_shows_a_quality_notice(eight_players, tmp_path):
 
 def test_clean_bracket_has_no_quality_notice(eight_players, tmp_path):
     _, matches, snapshots = _draw_eight_player_bracket()
-    bracket = {"main": {"matches": matches, "snapshots": snapshots,
-                        "quality": {"degraded": False, "hard": {}, "soft_count": 2}}}
+    bracket = {
+        "main": {
+            "matches": matches,
+            "snapshots": snapshots,
+            "quality": {"degraded": False, "hard": {}, "soft_count": 2},
+        }
+    }
 
     html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
 
@@ -102,8 +112,7 @@ def test_clean_bracket_has_no_quality_notice(eight_players, tmp_path):
 
 def test_unavoidable_first_vs_first_is_noted_not_counted(eight_players, tmp_path):
     _, matches, snapshots = _draw_eight_player_bracket()
-    quality = {"degraded": False, "hard": {},
-               "forced": {"first_vs_first_forced": ["a", "b"]}, "soft_count": 0}
+    quality = {"degraded": False, "hard": {}, "forced": {"first_vs_first_forced": ["a", "b"]}, "soft_count": 0}
     bracket = {"main": {"matches": matches, "snapshots": snapshots, "quality": quality}}
 
     html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
@@ -116,8 +125,7 @@ def test_unavoidable_first_vs_first_is_noted_not_counted(eight_players, tmp_path
 def test_unbalanced_halves_are_noted(eight_players, tmp_path):
     """Review finding N2: byes or tiers split unevenly over the halves are marked."""
     _, matches, snapshots = _draw_eight_player_bracket()
-    quality = {"degraded": False, "hard": {}, "soft_count": 0,
-               "balance": ["byes 8/6 over the halves"]}
+    quality = {"degraded": False, "hard": {}, "soft_count": 0, "balance": ["byes 8/6 over the halves"]}
     bracket = {"main": {"matches": matches, "snapshots": snapshots, "quality": quality}}
 
     html = open(export_bracket_html("S", "M1", bracket, str(tmp_path))[0], encoding="utf-8").read()
@@ -193,27 +201,30 @@ def test_export_without_run_meta_still_reports_version(eight_players, tmp_path):
     assert "drawn in" not in html
 
 
-@pytest.mark.parametrize("seconds, expected", [
-    (None, None),
-    (0.0, "0.00 s"),
-    (3.4213, "3.42 s"),
-    (59.994, "59.99 s"),
-    (60.0, "1 min 0.0 s"),
-    (135.5, "2 min 15.5 s"),
-])
+@pytest.mark.parametrize(
+    "seconds, expected",
+    [
+        (None, None),
+        (0.0, "0.00 s"),
+        (3.4213, "3.42 s"),
+        (59.994, "59.99 s"),
+        (60.0, "1 min 0.0 s"),
+        (135.5, "2 min 15.5 s"),
+    ],
+)
 def test_format_duration(seconds, expected):
     assert _format_duration(seconds) == expected
 
 
 def test_brackets_up_to_64_players_have_no_segment_bar():
-    assert 'segment-label' not in _render_bracket_list(32)
+    assert "segment-label" not in _render_bracket_list(32)
 
 
 def test_brackets_over_64_players_get_16_player_segments():
     html_out = _render_bracket_list(64)
 
     labels = re.findall(r'<div class="segment-label">(.*?)</div>', html_out)
-    assert labels == [f'{i} / 8' for i in range(1, 9)]
+    assert labels == [f"{i} / 8" for i in range(1, 9)]
 
     quarters = re.findall(r'<section class="quarter .*?</section>', html_out)
     assert len(quarters) == 4

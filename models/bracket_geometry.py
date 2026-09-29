@@ -6,6 +6,7 @@ The drawer's phases (1b bye distribution, 1c repair, 2 quarter assignment) and
 the checker's quarter separation all derive their verdicts from here, so they
 cannot drift apart.
 """
+
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
@@ -17,6 +18,7 @@ class BracketGeometry:
     At most 4 quarters, at least 2; each half holds quarters_per_half of them.
     A bracket with 2 first-round matches has only 2 quarters (one per half).
     """
+
     number_of_matches: int
 
     @property

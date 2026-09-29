@@ -1,7 +1,7 @@
 import pytest
 
 from misc.config import config
-from models.player import players_list, players_by_start_number
+from models.player import players_by_start_number, players_list
 
 
 @pytest.fixture(autouse=True)

@@ -10,7 +10,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# PyInstaller
+# Packaging / PyInstaller
+*.egg-info/
 build/
 dist/
 *.spec

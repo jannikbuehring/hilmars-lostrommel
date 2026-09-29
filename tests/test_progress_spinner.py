@@ -1,4 +1,5 @@
 """Tests for misc/progress_spinner.py."""
+
 import io
 
 from misc.progress_spinner import DetailSpinner

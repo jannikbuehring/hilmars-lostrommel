@@ -13,13 +13,14 @@ page embeds the roster once, the state the history starts from, and one small
 step object per snapshot, replaying them in JS exactly the way
 _apply_snapshot replays them in Python.
 """
+
 import html
 import json
 import os
 
-from misc.version import APP_NAME, __version__
 from draw.group_drawer import EmptySlot
-from viewer.viewer_shared import participant_display_fields
+from misc.version import APP_NAME, __version__
+
 # Shared with the bracket export so both files carry an identical heading and
 # provenance footer.
 from viewer.bracket_html_exporter import (
@@ -27,6 +28,7 @@ from viewer.bracket_html_exporter import (
     _participant_key,
     _render_footer,
 )
+from viewer.viewer_shared import participant_display_fields
 
 
 def _slot_key(p):
@@ -39,7 +41,7 @@ def _slot_key(p):
     """
     if p is None or isinstance(p, EmptySlot):
         return None
-    if getattr(p, 'start_number_a', None) == "EMPTY":
+    if getattr(p, "start_number_a", None) == "EMPTY":
         return None
     return _participant_key(p)
 
@@ -60,7 +62,7 @@ def _apply_snapshot(state, snapshot, forward=True):
     assignment. Used here to fast-forward the truncated head of a long history;
     the exported JS applies the identical rule.
     """
-    action = getattr(snapshot, 'action', None)
+    action = getattr(snapshot, "action", None)
     if action not in ("swap", "revert"):
         return
     g1, g2 = snapshot.groups
@@ -76,7 +78,7 @@ def _build_group_payload(competition, competition_class, groups, snapshots, max_
     """Build the JSON-serializable payload embedded in the exported HTML."""
     # snapshots[0] holds the padded initial state (empty slots included); the
     # drawn groups are only the fallback for a history-less export.
-    initial_groups = getattr(snapshots[0], 'initial_groups', None) if snapshots else None
+    initial_groups = getattr(snapshots[0], "initial_groups", None) if snapshots else None
     if initial_groups is None:
         initial_groups = groups
 
@@ -105,15 +107,15 @@ def _build_group_payload(competition, competition_class, groups, snapshots, max_
         # Collapse the oldest snapshots into the start state instead of dropping
         # the newest ones, so the page always ends on the real drawn groups.
         first_index = total_snapshots - max_snapshots
-        for snapshot in snapshots[1:first_index + 1]:
+        for snapshot in snapshots[1 : first_index + 1]:
             _apply_snapshot(state, snapshot, forward=True)
 
     steps = []
     for snapshot in snapshots[first_index:]:
-        for p in (snapshot.participants or []):
+        for p in snapshot.participants or []:
             register(p)
         step = {
-            "a": getattr(snapshot, 'action', None),
+            "a": getattr(snapshot, "action", None),
             "s": snapshot.violation_score,
             "v": snapshot.violations,
         }
@@ -169,7 +171,7 @@ def _render_group_cards(group_numbers, max_group_size):
         cards.append(
             f'<section class="group-card">'
             f'<div class="group-label">Group {html.escape(str(group_no))}</div>'
-            f'{"".join(rows)}</section>'
+            f"{''.join(rows)}</section>"
         )
 
     return f'<div class="groups">{"".join(cards)}</div>'
@@ -408,7 +410,7 @@ def _render_html_document(heading, payload, cards_markup, footer_markup):
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="generator" content="{html.escape(f'{APP_NAME} {__version__}')}">
+<meta name="generator" content="{html.escape(f"{APP_NAME} {__version__}")}">
 <title>{html.escape(heading)}</title>
 <style>{_CSS}</style>
 </head>
@@ -450,8 +452,9 @@ def group_html_path(competition, competition_class, output_dir):
     return os.path.join(output_dir, group_html_filename(competition, competition_class))
 
 
-def export_group_html(competition, competition_class, groups, snapshots, output_dir,
-                      run_meta=None, max_snapshots=None, draw_seconds=None):
+def export_group_html(
+    competition, competition_class, groups, snapshots, output_dir, run_meta=None, max_snapshots=None, draw_seconds=None
+):
     """Write one self-contained HTML file for a competition class's group draw.
 
     *run_meta* carries the run-wide provenance shown in the footer (version,
@@ -469,17 +472,16 @@ def export_group_html(competition, competition_class, groups, snapshots, output_
 
     os.makedirs(output_dir, exist_ok=True)
 
-    payload = _build_group_payload(
-        competition, competition_class, groups, snapshots, max_snapshots=max_snapshots)
+    payload = _build_group_payload(competition, competition_class, groups, snapshots, max_snapshots=max_snapshots)
     heading = _class_display_name(competition, competition_class, "groups")
     # Same provenance as the footer, but machine-readable for anything that
     # parses the embedded JSON instead of the rendered page.
     payload["meta"] = {
-        "version": (run_meta or {}).get('version', __version__),
+        "version": (run_meta or {}).get("version", __version__),
         "draw_seconds": draw_seconds,
-        "total_seconds": (run_meta or {}).get('total_seconds'),
-        "generated_at": (run_meta or {}).get('generated_at'),
-        "random_seed": (run_meta or {}).get('random_seed'),
+        "total_seconds": (run_meta or {}).get("total_seconds"),
+        "generated_at": (run_meta or {}).get("generated_at"),
+        "random_seed": (run_meta or {}).get("random_seed"),
         "total_snapshots": payload["total_snapshots"],
         "first_snapshot_index": payload["first_snapshot_index"],
     }
