@@ -208,6 +208,7 @@ def test_relative_top_half_relation_for_consolation_like_bracket(eight_players):
     assert_group_half_relations(relative_matches, 2)
 
 
+@pytest.mark.slow
 def test_five_groups_three_positions_no_capacity_degrade():
     """Regression for the S W1 main case: 5 groups x pos {1,2,3} = 15 players.
 
@@ -255,6 +256,7 @@ def test_five_groups_three_positions_no_capacity_degrade():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_uneven_consolation_layout_no_capacity_degrade():
     """Regression for the S W1 consolation case: groups 1-4 give pos {4,5,6} but
     group 5 only pos {4,5} = 14 players, bracket size 16, 2 byes.
@@ -347,6 +349,7 @@ def test_phase_1c_keeps_consolation_half_separation():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
     """Review finding H4: the degrade fill must end clean and keep the winners.
 
@@ -500,6 +503,7 @@ def _winner_quarters_by_country(matches, country):
     return quarters
 
 
+@pytest.mark.slow
 def test_group_winner_countries_spread_across_quarters():
     """open_questions.md: 4 GER group winners must land one per quarter.
 
@@ -545,6 +549,7 @@ def test_group_winner_countries_spread_across_quarters():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_batch_is_assigned_jointly_not_player_by_player():
     """Each seeding batch is optimised as a whole, beating player-by-player placement.
 
@@ -622,6 +627,7 @@ def test_batch_is_assigned_jointly_not_player_by_player():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_phase_1b_continues_the_seeded_slot_hierarchy():
     """Phase 1b picks up the seeded-slot hierarchy where Phase 1 stopped.
 
@@ -733,6 +739,7 @@ def build_tiered_rows(number_of_groups, positions, competition_class='M1', first
     return rows
 
 
+@pytest.mark.slow
 def test_group_winners_get_bye_or_bottom_opponent():
     """The live S M1 main layout: 10 groups x pos {1,2,3} = 30 players, bracket 32.
 
@@ -759,6 +766,7 @@ def test_group_winners_get_bye_or_bottom_opponent():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_small_bracket_group_winners_get_bottom_opponents():
     """5 groups x pos {1,2,3} = 15 players, bracket 16, 1 bye.
 
@@ -779,6 +787,7 @@ def test_small_bracket_group_winners_get_bottom_opponents():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_consolation_tiers_are_relative():
     """A consolation-style draw runs pos {4,5,6}; the rule follows the bracket's own bounds."""
     seeding_by_start_numbers.clear()
@@ -818,6 +827,7 @@ def test_two_tier_draw_reports_no_new_placement_violations():
     # 25 players, 32 slots: winners 6/4 and runners-up 4/6.
     (10, (1, 2, 3), (1, 2, 3, 4, 5)),
 ])
+@pytest.mark.slow
 def test_byes_and_tiers_split_evenly_across_halves(number_of_groups, positions, short_groups):
     """Review finding N2: "Freilose, Gruppenerste, Gruppenzweite und Gruppendritte
     gleichmaessig auf die Haelften verteilen".
@@ -864,6 +874,7 @@ def test_forced_half_imbalance_is_reported_not_hidden():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_half_balance_never_costs_a_hard_rule():
     """A draw that ends on the degrade path is redrawn without the half balance
     from the same RNG state, i.e. exactly as the pre-N2 objective drew it, and
@@ -883,6 +894,7 @@ def test_half_balance_never_costs_a_hard_rule():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_byes_split_evenly_across_halves_in_uneven_class():
     """The live S M1 consolation layout: 10 groups x pos {4,5,6}, four of them
     without a 6th -> 26 players, 32 slots, 6 byes.
@@ -931,6 +943,7 @@ def winner_country_halves(matches, top_group_pos=1):
     return counts
 
 
+@pytest.mark.slow
 def test_group_winners_are_country_balanced_across_the_halves():
     """The live S M2 main layout and its real winner countries: 11 groups x pos
     {1,2,3} = 33 players, 64 slots, 31 byes, with GER on four group winners, CRO
@@ -991,6 +1004,7 @@ def quarter_tier_counts(matches):
     return counts
 
 
+@pytest.mark.slow
 def test_tiers_spread_evenly_across_the_quarters_of_each_half():
     """The live S M2 main layout: 11 groups x pos {1,2,3} = 33 players, 64 slots.
 
@@ -1027,6 +1041,7 @@ def test_tiers_spread_evenly_across_the_quarters_of_each_half():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
     """With 31 of 32 first-round matches a walkover, round two is the real first round.
 
@@ -1065,6 +1080,7 @@ def test_group_winners_get_an_easy_round_two_opponent_when_byes_dominate():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
     """The repair pass swaps bye recipients, which must stay feasibility-neutral.
 
@@ -1097,6 +1113,7 @@ def test_phase_1c_repairs_without_conceding_a_separation_or_the_bye_balance():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_phase_1c_never_moves_a_group_winner():
     """Phase 1 decides where the group winners sit; Phase 1c may not undo that.
 
@@ -1147,6 +1164,7 @@ def test_phase_1c_never_moves_a_group_winner():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_phase_1c_is_deterministic_and_consumes_no_randomness():
     """Drawing the same layout twice under one seed must give one bracket.
 
@@ -1171,6 +1189,7 @@ def test_phase_1c_is_deterministic_and_consumes_no_randomness():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_residual_third_avoids_the_quarter_its_runner_up_already_took():
     """Phase 2 must see the quarters Phase 1b already used for a group's 2nd.
 
@@ -1194,6 +1213,7 @@ def test_residual_third_avoids_the_quarter_its_runner_up_already_took():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_bottom_players_not_paired_when_avoidable():
     """3rd-vs-3rd must be avoided whenever the geometry allows it.
 
@@ -1248,6 +1268,7 @@ def test_all_thirds_consolation_scores_clean():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_consolation_byes_for_second_places_do_not_degrade():
     """The live S M1 consolation shape: 15 groups x pos {4,5,6}, four of them
     without a 6th -- 41 players, 64 slots, 23 byes (15 winners + 8 fifth places).
@@ -1272,6 +1293,7 @@ def test_consolation_byes_for_second_places_do_not_degrade():
         seeding_by_start_numbers.clear()
 
 
+@pytest.mark.slow
 def test_full_bracket_moves_a_bye_to_fix_quarter_capacity():
     """The live S M3 main shape: 50 groups x pos {1,2,3} -- 150 players, 256 slots,
     106 byes (every winner, every runner-up, the six best 3rd places).
@@ -1325,6 +1347,7 @@ def test_full_bracket_moves_a_bye_to_fix_quarter_capacity():
     (6, (3, 4), (1, 3, 5)),
     (11, (1, 2, 3), ()),
 ])
+@pytest.mark.slow
 def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positions, short_groups):
     """The drawer's phases and the checker share allowed_quarters.
 

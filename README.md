@@ -60,6 +60,10 @@ Every bracket (all singles/doubles/mixed classes, main and consolation) is **exp
 
 Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracket phase limits, rule weights) is controlled by `config/config.ini`, created from `config/config_template.ini`. The exe built by CI ships the template unchanged, so a local config with other weights or another seed draws the same input differently. For a reproducible draw, set `random_seed`. Full key reference: [ARCHITECTURE.md § Configuration](ARCHITECTURE.md#8-configuration).
 
+# Tests
+
+Install `requirements-dev.txt`, then run `python -m pytest -m "not slow"` for the quick suite (seconds) or `python -m pytest` for everything, including the full-size bracket draws marked `slow` (several minutes). CI runs the full suite.
+
 # Known issues
 
 See [ARCHITECTURE.md § Known Issues](ARCHITECTURE.md#9-known-issues) for the current list of known issues.
