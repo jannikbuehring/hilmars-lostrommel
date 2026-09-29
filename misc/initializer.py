@@ -24,6 +24,7 @@ from draw.bracket_drawer import draw_bracket, bracket_quality
 
 from misc.config import config
 from misc.version import __version__
+from misc.progress_spinner import detail_spinner
 
 from checks.validity_checker import check_all_players_only_exist_once, find_missing_players, find_players_not_in_draw_data, find_players_in_wrong_competition, find_draw_data_errors
 from checks.group_checker import check_country_distribution, check_base_uniqueness, get_qttr_violations, check_team_country_distribution
@@ -54,7 +55,13 @@ def initialize_data():
     # and hard-rule violations.
     bracket_problems = []
 
-    def draw_bracket_with_snapshot_fallback(class_subset, competition, competition_class, bracket_kind):
+    def detail_reporter(spinner, label):
+        """Progress callback for a drawer: shows `label - message` below the spinner."""
+        def report(message):
+            spinner.detail = f"{label} - {message}"
+        return report
+
+    def draw_bracket_with_snapshot_fallback(spinner, class_subset, competition, competition_class, bracket_kind):
         """Draw one bracket and return its section dict.
 
         The dict carries `matches`, `snapshots`, `draw_seconds` and `quality`
@@ -65,7 +72,10 @@ def initialize_data():
         label = f"{competition} {competition_class} {bracket_kind}"
         start = time.perf_counter()
         try:
-            matches, snapshots = draw_bracket(class_subset=class_subset)
+            matches, snapshots = draw_bracket(
+                class_subset=class_subset,
+                progress=detail_reporter(spinner, f"{competition} {competition_class} {bracket_kind} bracket"),
+            )
             quality = bracket_quality(snapshots)
             if quality["degraded"]:
                 bracket_problems.append(f"{label}: DEGRADED (best-effort layout, separations were only soft goals)")
@@ -102,15 +112,20 @@ def initialize_data():
                     'draw_seconds': time.perf_counter() - start,
                     'quality': {"failed": True, "message": failure_message}}
 
-    def draw_groups_with_fallback(class_subset, competition, competition_class):
+    def draw_groups_with_fallback(spinner, class_subset, competition, competition_class, class_no, class_count):
         """Draw the groups of one class, returning (group, snapshots, elapsed_seconds), or None on failure.
 
         A failure is recorded in group_failures instead of aborting the run, so the
-        other classes are still drawn and exported.
+        other classes are still drawn and exported.  class_no/class_count only
+        label the progress line below the spinner ("S M1 (class 2 of 4)").
         """
         start = time.perf_counter()
         try:
-            group, snapshots = draw_groups_monte_carlo(class_subset=class_subset, amount_of_groups=class_subset[0].amount_of_groups)
+            group, snapshots = draw_groups_monte_carlo(
+                class_subset=class_subset,
+                amount_of_groups=class_subset[0].amount_of_groups,
+                progress=detail_reporter(spinner, f"{competition} {competition_class} (class {class_no} of {class_count})"),
+            )
             return group, snapshots, time.perf_counter() - start
         except Exception as exc:
             group_failures.append((competition, competition_class, str(exc)))
@@ -119,6 +134,7 @@ def initialize_data():
 
     def report_group_section(spinner, label, failures_start, competition_classes):
         """Finish a group draw spinner, as a warning if any class of this section failed."""
+        spinner.detail = None
         section_failures = [f"{c} {cls}: {msg}" for c, cls, msg in group_failures[failures_start:]]
         if section_failures:
             spinner.text = f"{label} group draw completed with {len(section_failures)} failure(s): {section_failures}"
@@ -130,6 +146,7 @@ def initialize_data():
     def report_bracket_section(spinner, label, problems_start, competition_classes):
         """Finish a bracket draw spinner; WARN and list every failed, degraded or
         rule-breaking bracket of this section in red below it."""
+        spinner.detail = None
         section_problems = bracket_problems[problems_start:]
         if section_problems:
             spinner.text = f"{label} brackets: {len(section_problems)} problem(s), see below"
@@ -258,7 +275,7 @@ def initialize_data():
 
 
     ########################################################################################
-    with yaspin(text="Drawing singles groups...", color="cyan") as spinner:
+    with detail_spinner("Drawing singles groups...") as spinner:
         try:
             if not singles_group_draw_data:
                 spinner.text = "No singles group draw data found - no groups created"
@@ -267,9 +284,11 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 failures_start = len(group_failures)
                 singles_competition_classes = sorted(set(data.competition_class for data in singles_group_draw_data))
-                for competition_class in singles_competition_classes:
+                for class_no, competition_class in enumerate(singles_competition_classes, start=1):
                     class_subset = [data for data in singles_group_draw_data if data.competition_class == competition_class]
-                    result = draw_groups_with_fallback(class_subset, 'S', competition_class)
+                    result = draw_groups_with_fallback(
+                        spinner, class_subset, 'S', competition_class, class_no, len(singles_competition_classes)
+                    )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
@@ -283,7 +302,7 @@ def initialize_data():
             return False
 
     ########################################################################################
-    with yaspin(text="Drawing doubles groups...", color="cyan") as spinner:
+    with detail_spinner("Drawing doubles groups...") as spinner:
         try:
             if not doubles_group_draw_data:
                 spinner.text = "No doubles group draw data found - no groups created"
@@ -292,9 +311,11 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 failures_start = len(group_failures)
                 doubles_competition_classes = sorted(set(data.competition_class for data in doubles_group_draw_data))
-                for competition_class in doubles_competition_classes:
+                for class_no, competition_class in enumerate(doubles_competition_classes, start=1):
                     class_subset = [data for data in doubles_group_draw_data if data.competition_class == competition_class]
-                    result = draw_groups_with_fallback(class_subset, 'D', competition_class)
+                    result = draw_groups_with_fallback(
+                        spinner, class_subset, 'D', competition_class, class_no, len(doubles_competition_classes)
+                    )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
@@ -309,7 +330,7 @@ def initialize_data():
 
 
     ########################################################################################
-    with yaspin(text="Drawing mixed groups...", color="cyan") as spinner:
+    with detail_spinner("Drawing mixed groups...") as spinner:
         try:
             if not mixed_group_draw_data:
                 spinner.text = "No mixed draw group data found - no groups created"
@@ -318,9 +339,11 @@ def initialize_data():
                 # Create data subsets for each distinct competition class
                 failures_start = len(group_failures)
                 mixed_competition_classes = sorted(set(data.competition_class for data in mixed_group_draw_data))
-                for competition_class in mixed_competition_classes:
+                for class_no, competition_class in enumerate(mixed_competition_classes, start=1):
                     class_subset = [data for data in mixed_group_draw_data if data.competition_class == competition_class]
-                    result = draw_groups_with_fallback(class_subset, 'M', competition_class)
+                    result = draw_groups_with_fallback(
+                        spinner, class_subset, 'M', competition_class, class_no, len(mixed_competition_classes)
+                    )
                     if result is None:
                         continue
                     group, snapshots, draw_seconds = result
@@ -382,7 +405,7 @@ def initialize_data():
             return False
 
     ########################################################################################
-    with yaspin(text="Drawing singles bracket...", color="cyan") as spinner:
+    with detail_spinner("Drawing singles bracket...") as spinner:
         try:
             if not singles_bracket_draw_data:
                 spinner.text = "No singles bracket draw data found - no bracket created"
@@ -398,12 +421,14 @@ def initialize_data():
 
                     singles_brackets[competition_class] = {
                         'main': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=main_round_participants,
                             competition='S',
                             competition_class=competition_class,
                             bracket_kind='main',
                         ),
                         'consolation': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=consolation_round_participants,
                             competition='S',
                             competition_class=competition_class,
@@ -419,7 +444,7 @@ def initialize_data():
             return False
 
     ########################################################################################
-    with yaspin(text="Drawing doubles bracket...", color="cyan") as spinner:
+    with detail_spinner("Drawing doubles bracket...") as spinner:
         try:
             if not doubles_bracket_draw_data:
                 spinner.text = "No doubles bracket draw data found - no bracket created"
@@ -435,12 +460,14 @@ def initialize_data():
 
                     doubles_brackets[competition_class] = {
                         'main': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=main_round_participants,
                             competition='D',
                             competition_class=competition_class,
                             bracket_kind='main',
                         ),
                         'consolation': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=consolation_round_participants,
                             competition='D',
                             competition_class=competition_class,
@@ -456,7 +483,7 @@ def initialize_data():
             return False
 
     ########################################################################################
-    with yaspin(text="Drawing mixed bracket...", color="cyan") as spinner:
+    with detail_spinner("Drawing mixed bracket...") as spinner:
         try:
             if not mixed_bracket_draw_data:
                 spinner.text = "No mixed bracket draw data found - no bracket created"
@@ -472,12 +499,14 @@ def initialize_data():
 
                     mixed_brackets[competition_class] = {
                         'main': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=main_round_participants,
                             competition='M',
                             competition_class=competition_class,
                             bracket_kind='main',
                         ),
                         'consolation': draw_bracket_with_snapshot_fallback(
+                            spinner,
                             class_subset=consolation_round_participants,
                             competition='M',
                             competition_class=competition_class,

@@ -84,3 +84,15 @@ def test_one_entry_per_group_does_not_crash(escape_heavy_config):
     assert {g: [p.start_number_a for p in m] for g, m in groups.items()} == {1: [1], 2: [2], 3: [3], 4: [4]}
     assert len(snapshots) == 1  # only the initial placement, no swaps
     seeding_by_start_numbers.clear()
+
+
+def test_reports_progress_in_plain_language(crowded_class, escape_heavy_config):
+    random.seed(1)
+    messages = []
+
+    draw_groups_monte_carlo(crowded_class, 8, progress=messages.append)
+
+    assert messages[0] == "attempt 1 of 1 - arranging players by seeding..."
+    steps = [m for m in messages if ", step " in m]
+    assert steps, "the swap loop never reported its progress"
+    assert all("of 1,500" in m and "(0 = perfect)" in m for m in steps)

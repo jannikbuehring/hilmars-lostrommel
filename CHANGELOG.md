@@ -7,7 +7,11 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+- A live status line below the spinner while groups and brackets are drawn. It shows the class and what the draw is doing right now, and it disappears when the section is done
+
 ### Changed
+
+- The message "Could not achieve perfect group draw" is now written to the log instead of the terminal, where it broke the spinner line. The "Validating group draws" step still lists every remaining violation.
 
 ### Deprecated
 

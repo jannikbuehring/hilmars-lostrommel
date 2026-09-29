@@ -1,10 +1,14 @@
 """Module to handle drawing of groups with country conflict avoidance."""
+import logging
 import random
 import copy
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
 from checks.group_checker import check_base_uniqueness, check_country_distribution, get_qttr_violations, check_team_country_distribution
 from misc.config import config
+
+# How often (in swap steps) the optimiser reports its progress.
+PROGRESS_INTERVAL = 250
 
 # Define a safe EmptySlot class
 class EmptySlot:
@@ -22,10 +26,14 @@ class EmptySlot:
         # EmptySlot is stateless, so just return a new instance
         return type(self)()
 
-def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
+def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, progress=None):
     """Draw groups for a competition class using Monte Carlo optimization to minimize country conflicts.
     Retries with different random seeds if the score is not 0, up to a configurable limit.
+
+    progress: optional callable taking one plain-language status line, called at
+    each attempt start, on every new best score and every PROGRESS_INTERVAL steps.
     """
+    report = progress or (lambda _msg: None)
     max_iterations = int(config["group_draw"]["max_iterations"])
     max_no_improvement_iterations = int(config["group_draw"]["max_no_improvement_iterations"])
     max_escape_attempts = int(config["group_draw"]["max_escape_attempts"])
@@ -35,7 +43,7 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
     best_snapshots = None
     best_score = float("inf")
 
-    for _ in range(max_seed_retries):
+    for attempt_no in range(1, max_seed_retries + 1):
         seed = random.randint(1, 99999999)
         random.seed(seed)
 
@@ -89,6 +97,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
             while len(groups[group_no]) < max_group_size:
                 groups[group_no].append(EmptySlot())
 
+        report(f"attempt {attempt_no} of {max_seed_retries} - arranging players by seeding...")
+
         # Monte Carlo optimization with escape from local minima
         current_violations = get_violations(groups)
         current_violation_score = calculate_violation_score(current_violations)
@@ -107,7 +117,19 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
         # first batch is never touched: keep the deterministic placement as is.
         swappable = len(batches) > 1
 
-        for _ in range(max_iterations if swappable else 0):
+        def report_step(step):
+            best = min(seed_best_score, best_score)
+            report(
+                f"attempt {attempt_no} of {max_seed_retries}, step {step:,} of {max_iterations:,}"
+                f" - current score {current_violation_score}, best so far {best} (0 = perfect)"
+            )
+
+        if not swappable:
+            report("nothing to optimise - groups are fixed by seeding")
+
+        for step in range(1, (max_iterations if swappable else 0) + 1):
+            if step % PROGRESS_INTERVAL == 0:
+                report_step(step)
             # Choose a batch randomly, never swap first batch
             batch_idx = random.randint(1, len(batches) - 1)
             batch = batches[batch_idx]
@@ -141,7 +163,9 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
                     seed_best_groups = {g: list(m) for g, m in groups.items()}
                     seed_best_len = len(snapshots)
                     escape_attempts = 0  # Only reset on a new best, not on climbing back
+                    report_step(step)
                 if current_violation_score == 0:
+                    report("perfect draw found (score 0)")
                     break
             elif new_violation_score == current_violation_score:
                 no_improvement_count += 1
@@ -179,6 +203,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups):
             break  # Early exit if perfect solution found, or if every retry would give the same result
 
     if best_score > 0:
-        print(f"Warning: Could not achieve perfect group draw after {max_seed_retries} seed attempts. Best score: {best_score}")
+        # Logged, not printed: a print would land inside the draw spinner, and the
+        # group validation stage lists the remaining violations anyway.
+        logging.info("Could not achieve perfect group draw after %s seed attempts. Best score: %s", max_seed_retries, best_score)
     
     return best_groups, best_snapshots

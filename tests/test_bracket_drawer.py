@@ -1344,3 +1344,24 @@ def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positi
             seeding_by_start_numbers.clear()
     finally:
         seeding_by_start_numbers.clear()
+
+
+def test_draw_bracket_reports_its_phases(eight_players):
+    """Five players in an 8-slot bracket: three byes, so the bye phase reports too."""
+    rows = [
+        DrawDataRow('S', 'M1', 100, 2, 1, 1, True, False, 1, ''),
+        DrawDataRow('S', 'M1', 95, 2, 2, 1, True, False, 2, ''),
+        DrawDataRow('S', 'M1', 90, 2, 1, 2, True, False, 3, ''),
+        DrawDataRow('S', 'M1', 85, 2, 2, 5, True, False, 4, ''),
+        DrawDataRow('S', 'M1', 80, 2, 1, 5, True, False, 5, ''),
+    ]
+    for row in rows:
+        seeding_by_start_numbers[str(row.start_number_a)] = row.seeding
+    messages = []
+
+    draw_bracket(rows, progress=messages.append)
+
+    assert messages[0] == "placing the group winners on the seeded positions..."
+    assert "distributing byes..." in messages
+    assert "fine-tuning the positions of group winners and byes..." in messages
+    assert "placing the remaining players into the quarters..." in messages

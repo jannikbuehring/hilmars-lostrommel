@@ -205,12 +205,14 @@ def _result_rank(snapshots):
     )
 
 
-def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False):
+def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False, progress=None):
     """
     Build a single-elimination bracket from seeded participants.
     class_subset: players advancing from groups
     phase1_only: stop after Phase 1 and return the partial bracket with only the
     top-group-pos players placed (used by tests to isolate Phase 1)
+    progress: optional callable taking one plain-language status line, called at
+    each phase and every tenth of the long search loops
 
     Phase 1 balances the byes and tiers over the halves (review finding N2).  On
     the tightest shapes that can pick a winner layout Phase 2 cannot fill, where
@@ -220,13 +222,17 @@ def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False):
     by _result_rank is kept: a separation is never paid for an even split.
     """
     rng_state = random.getstate()
-    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True, phase1_only=phase1_only)
+    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True, phase1_only=phase1_only, progress=progress)
     if not _took_degrade_path(snapshots):
         return matches, snapshots
     balanced_rng_state = random.getstate()
     random.setstate(rng_state)
+    if progress is not None:
+        progress("first layout was not clean - trying a second strategy to compare...")
     try:
-        fallback_matches, fallback_snapshots = _draw_bracket_attempt(class_subset, half_balance=False, phase1_only=phase1_only)
+        fallback_matches, fallback_snapshots = _draw_bracket_attempt(
+            class_subset, half_balance=False, phase1_only=phase1_only, progress=progress
+        )
     except Exception as exc:  # the balanced result stands; see N1 for the known crash
         logging.warning("Bracket fallback draw without half balance failed: %s", exc)
         random.setstate(balanced_rng_state)
@@ -237,11 +243,13 @@ def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False):
     return matches, snapshots
 
 
-def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, phase1_only: bool = False):
+def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, phase1_only: bool = False, progress=None):
     """One full draw.  *half_balance* False drops the bye/tier half balance
     from Phase 1 (projected_half_balance_units, the lookahead), which leaves
     the pre-N2 objective: only the byes already on the board are balanced.
+    *progress* is draw_bracket's status callback.
     """
+    report = progress or (lambda _msg: None)
 
     def bye_hierarchy(num_slots: int) -> List[List[int]]:
         """Return hierarchical subdivisions for seeded slot placement."""
@@ -1393,6 +1401,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         chosen = place_batch([participant], slot_pool_tiers, action_name)
         return chosen[0] if chosen else None
 
+    report("placing the group winners on the seeded positions...")
+
     # ---------------------------------------------------------------------------
     # Phase 1: Place top-group-pos participants in strict seeding batches.
     #
@@ -1490,6 +1500,9 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     if phase1_only:
         # Return the partial bracket (only top-group-pos players placed).
         return post_top_matches, snapshots
+
+    if byes:
+        report("distributing byes...")
 
     # ---------------------------------------------------------------------------
     # Phase 1b: When byes outnumber the top-group-pos players, keep distributing
@@ -1611,6 +1624,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         group_no = getattr(participant, "group_no", None)
         if group_no is not None:
             group_opposite_quarter_used.setdefault(group_no, slot_quarter(chosen))
+
+    report("fine-tuning the positions of group winners and byes...")
 
     # ---------------------------------------------------------------------------
     # Phase 1c: repair pass over everything Phase 1/1b locked in.
@@ -1853,6 +1868,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
     # verify there is enough free space in each quarter for them.  With the byes
     # already balanced above, the residual demand is small.
     # ---------------------------------------------------------------------------
+    report("placing the remaining players into the quarters...")
     residual_non_top = [
         p for p in class_subset
         if p.group_pos != top_group_pos and id(p) not in bye_recipient_ids
@@ -1962,6 +1978,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         # 256 slots) only reach zero hard violations with it.
         search_iterations = 4 * max_attempts
         snapshot_interval = max(1, search_iterations // 10)
+        report("no clean layout possible - searching the best possible layout...")
 
         def _random_move():
             """Apply one random move to `state`; return (changed slots, previous
@@ -2021,6 +2038,11 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         for attempt in range(search_iterations):
             if best_key == (0, 0, 0, 0, 0):
                 break
+            if attempt and attempt % snapshot_interval == 0:
+                report(
+                    f"no clean layout possible - searching the best possible layout"
+                    f" (step {attempt:,} of {search_iterations:,})..."
+                )
             if since_best >= stall_limit and best_key[0] > 0:
                 since_best = 0
                 state = dict(best_state)
@@ -2224,6 +2246,8 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, p
         )
 
         for attempt in range(max_attempts):
+            if attempt % snapshot_interval == 0:
+                report(f"fine-tuning quarter {active_q + 1} of 4 (step {attempt:,} of {max_attempts:,})...")
             trial_pool = list(final_pool_quarter[active_q])
             random.shuffle(trial_pool)
             trial_pools = dict(best_pools)
