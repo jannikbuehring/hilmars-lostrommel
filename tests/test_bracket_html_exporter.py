@@ -8,7 +8,7 @@ from models.player import Player, players_list, players_by_start_number
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from draw.bracket_drawer import draw_bracket
 from misc.version import APP_NAME, __version__
-from viewer.bracket_html_exporter import export_bracket_html, _format_duration
+from viewer.bracket_html_exporter import export_bracket_html, _format_duration, _render_bracket_list
 
 DATA_SCRIPT_RE = re.compile(
     r'<script type="application/json" id="bracket-data">(.*?)</script>', re.DOTALL
@@ -203,3 +203,20 @@ def test_export_without_run_meta_still_reports_version(eight_players, tmp_path):
 ])
 def test_format_duration(seconds, expected):
     assert _format_duration(seconds) == expected
+
+
+def test_brackets_up_to_64_players_have_no_segment_bar():
+    assert 'segment-label' not in _render_bracket_list(32)
+
+
+def test_brackets_over_64_players_get_16_player_segments():
+    html_out = _render_bracket_list(64)
+
+    labels = re.findall(r'<div class="segment-label">(.*?)</div>', html_out)
+    assert labels == [f'{i} / 8' for i in range(1, 9)]
+
+    quarters = re.findall(r'<section class="quarter .*?</section>', html_out)
+    assert len(quarters) == 4
+    assert all(q.count('class="segment"') == 2 for q in quarters)
+
+    assert all(f'id="slot-{pos}"' in html_out for pos in range(1, 129))

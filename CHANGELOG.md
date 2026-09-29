@@ -8,6 +8,7 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Added
 
 - A live status line below the spinner while groups and brackets are drawn. It shows the class and what the draw is doing right now, and it disappears when the section is done
+- Bracket HTML pages for brackets with more than 64 players show a second side bar right of the Q1–Q4 bar. It splits the bracket into segments of 16 players, labelled `1 / 8` … `8 / 8` for a 128-player bracket
 
 ### Changed
 

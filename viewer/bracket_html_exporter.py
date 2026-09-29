@@ -127,8 +127,33 @@ def _build_bracket_payload(bracket_type, matches, snapshots):
     }
 
 
+# Brackets bigger than this get a second side bar splitting each quarter into
+# fixed-size segments, so long quarters stay easy to navigate.
+SEGMENT_THRESHOLD_PLAYERS = 64
+SEGMENT_PLAYERS = 16
+
+
+def _render_match_row(match_idx):
+    slots = []
+    for side in (0, 1):
+        pos = (match_idx - 1) * 2 + side + 1
+        slots.append(
+            f'<div class="slot-box" id="slot-{pos}">'
+            f'<span class="pos">{pos}</span><span class="name"></span></div>'
+        )
+    return (
+        f'<div class="match"><span class="match-no">#{match_idx}</span>'
+        f'<div class="slots">{"".join(slots)}</div></div>'
+    )
+
+
 def _render_bracket_list(number_of_matches):
     """Emit the static first-round list, grouped into Q1-Q4 quarter sections.
+
+    Brackets with more than SEGMENT_THRESHOLD_PLAYERS players additionally get a
+    second side bar right of the quarter bar, splitting the bracket into
+    segments of SEGMENT_PLAYERS players labelled "k / N" (numbered across the
+    whole bracket).
 
     Each slot row has id="slot-{pos}" and an empty .name span; the JS fills text
     and toggles highlight classes per snapshot. Quarter grouping is static
@@ -144,25 +169,31 @@ def _render_bracket_list(number_of_matches):
     for match_idx in range(1, number_of_matches + 1):
         quarters.setdefault(geo.match_quarter(match_idx), []).append(match_idx)
 
+    use_segments = 2 * number_of_matches > SEGMENT_THRESHOLD_PLAYERS
+    matches_per_segment = SEGMENT_PLAYERS // 2
+    total_segments = -(-number_of_matches // matches_per_segment)
+
     sections = []
     for quarter in sorted(quarters):
-        rows = []
-        for match_idx in quarters[quarter]:
-            slots = []
-            for side in (0, 1):
-                pos = (match_idx - 1) * 2 + side + 1
-                slots.append(
-                    f'<div class="slot-box" id="slot-{pos}">'
-                    f'<span class="pos">{pos}</span><span class="name"></span></div>'
-                )
-            rows.append(
-                f'<div class="match"><span class="match-no">#{match_idx}</span>'
-                f'<div class="slots">{"".join(slots)}</div></div>'
+        if use_segments:
+            segments = {}
+            for match_idx in quarters[quarter]:
+                segments.setdefault((match_idx - 1) // matches_per_segment, []).append(match_idx)
+            body = "".join(
+                f'<div class="segment">'
+                f'<div class="segment-label">{segment + 1} / {total_segments}</div>'
+                f'<div class="segment-body">{"".join(_render_match_row(m) for m in segments[segment])}</div>'
+                f'</div>'
+                for segment in sorted(segments)
             )
+            body_class = "quarter-body segmented"
+        else:
+            body = "".join(_render_match_row(m) for m in quarters[quarter])
+            body_class = "quarter-body"
         sections.append(
             f'<section class="quarter quarter-{quarter}">'
             f'<div class="quarter-label">Q{quarter + 1}</div>'
-            f'<div class="quarter-body">{"".join(rows)}</div></section>'
+            f'<div class="{body_class}">{body}</div></section>'
         )
 
     return f'<div class="bracket-list">{"".join(sections)}</div>'
@@ -198,6 +229,15 @@ body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; backg
 .quarter-1 .quarter-label { border-right: 5px solid #d98a3d; }
 .quarter-2 .quarter-label { border-right: 5px solid #b060d0; }
 .quarter-3 .quarter-label { border-right: 5px solid #d0b040; }
+.quarter-body.segmented { padding: 0; }
+.segment { display: flex; align-items: stretch; }
+.segment + .segment { border-top: 1px solid #3a3a3a; }
+.segment-label {
+  flex: none; width: 26px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; letter-spacing: 1px; color: #bbb; background: #2d2d2d; white-space: nowrap;
+  border-left: 1px solid #3a3a3a; writing-mode: vertical-rl; transform: rotate(180deg);
+}
+.segment-body { flex: 1; padding: 6px 0; }
 .match { display: flex; align-items: stretch; gap: 8px; padding: 6px 12px; }
 .match-no { flex: none; width: 44px; color: #777; font-size: 12px; align-self: center; text-align: right; }
 .slots { flex: 1; display: flex; flex-direction: column; gap: 3px; }
