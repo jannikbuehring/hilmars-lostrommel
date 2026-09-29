@@ -7,6 +7,20 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## 1.4.0 - 2026-09-29
+
+### Added
+
 - A live status line below the spinner while groups and brackets are drawn. It shows the class and what the draw is doing right now, and it disappears when the section is done
 - Bracket HTML pages for brackets with more than 64 players show a second side bar right of the Q1–Q4 bar. It splits the bracket into segments of 16 players, labelled `1 / 8` … `8 / 8` for a 128-player bracket
 
@@ -14,17 +28,11 @@ and [keeps a changelog](https://keepachangelog.com).
 
 - The message "Could not achieve perfect group draw" is now written to the log instead of the terminal, where it broke the spinner line. The "Validating group draws" step still lists every remaining violation.
 
-### Deprecated
-
 ### Removed
 
 - The terminal views of groups and brackets. Choosing a class under Groups or Bracket now opens its HTML page directly, which has the same snapshot stepper.
 - Config key `mode` (`normal`/`interactive`), which only switched between those terminal views.
 - Config key `max_draw_phase`. The bracket draw always runs all phases.
-
-### Fixed
-
-### Security
 
 ## 1.3.0 - 2026-09-26
 
