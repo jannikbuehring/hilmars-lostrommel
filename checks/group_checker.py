@@ -52,7 +52,7 @@ def check_country_distribution(competition, groups):
 def check_base_uniqueness(groups):
 	"""
 	Ensure no two opponents in a group have the same base.
-	Returns a list of (competition_class, group_no, base, count) for violations.
+	Returns a list of (group_no, base, count) for violations.
 	"""
 	violations = []
 
@@ -84,7 +84,8 @@ def check_base_uniqueness(groups):
 def get_qttr_violations(groups):
 	"""
 	Check for violations in the distribution of players without a QTTR rating across groups (singles only).
-	Returns a list of (competition_class, group_no, count_no_qttr) for groups with players lacking QTTR, only if the distribution is unbalanced.
+	Returns a list of (group_no, count_no_qttr, no_qttr_counts) for groups with players lacking QTTR, only if the distribution is unbalanced.
+	no_qttr_counts maps every group_no to its count of players without QTTR.
 	"""
 	violations = []
 

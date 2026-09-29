@@ -1,6 +1,6 @@
 # Changelog for hilmars-lostrommel
 
-This projects adheres to the guidelines of [semantic versioning](https://semver.org/)
+This project adheres to the guidelines of [semantic versioning](https://semver.org/)
 and [keeps a changelog](https://keepachangelog.com).
 
 ## Unreleased
@@ -136,7 +136,8 @@ and [keeps a changelog](https://keepachangelog.com).
 
 - Improved the group draw HTML output layout to make it more readable
 
-
 ## 1.0.0 - 2026-09-08
 
-- Initial release
+### Added
+
+- Initial release: group draws and knock-out brackets (main and consolation) for singles, doubles and mixed, written to one combined CSV, with HTML pages and an interactive menu to browse the results

@@ -1,17 +1,21 @@
-S_D_M        für alle Auslosungen    S für single, D für doubles, M für mixed doubles
-class            für alle Auslosungen    M1 (2;3) für men 1 (2;3), W1 (2;3) für women 1 (2;3),  X1 (2;3) für mixed 1 (2;3)
-seeding    nur für Vorrunde    Hier muss die Setzziffer (aus dem Input) eingetragen werden. Höherer Wert = stärker (z. B. 1000 = bester Spieler); eine klassische Setzziffer (1 = bester) muss vorher umgedreht werden. In den Zeilen für Hauptrunde/Consolation bleibt die Spalte leer: die Setzziffer wird aus der Vorrunden-Zeile desselben Spielers/Paares übernommen, die deshalb vorhanden sein muss.
-group_no    für alle Auslosungen    Gruppennummer des Spielers/Paares in der Vorrunde (bei Vorrunde: Output; beim Rest: aus dem Input)
-group_pos    für alle Auslosungen    Ergebnis-Platz des Spielers/Paares in der Vorrunde (Einzel: im Normalfall 1 bis 6; Doppel/Mixed: im Normalfall 1 bis 4; bei Vorrunde: Output; beim Rest: aus dem Input)
-for_main_round    Input: 1 für Hauptrunde, sonst leer oder 0. Output: True in Hauptrunden-Zeilen, False in Consolation-Zeilen, leer in Vorrunden-Zeilen
-for_consolation    Input: 1 für Consolation, sonst leer oder 0. Output: True in Consolation-Zeilen, False in Hauptrunden-Zeilen, leer in Vorrunden-Zeilen
-draw_number   für Hauptrunde/Consolation: die Rasterzahl des KO-Feldes, also immer eine Potenz von 2. Beim 16er-Feld also eine Zahl zwischen 1 und 16 (am besten auch in dieser Reihenfolge).
-startnumber_A    für alle Auslosungen: Schlüsselnummer der players-Datei; im Einzel: Schlüsselnummer des Spielers, im Doppel: Schlüsselnummer des Spielers A; bei einem Freilos leer (siehe is_bye)
-last_name_A    für alle Auslosungen: Nachname aus der players-Datei; im Einzel: des Spielers, im Doppel: des Spielers A
-country_A    für alle Auslosungen: Land aus der players-Datei; im Einzel: des Spielers, im Doppel: des Spielers A
-PPP_chapter_A    für alle Auslosungen: PPP-Stützpunkt aus der players-Datei; im Einzel: des Spielers, im Doppel: des Spielers A
-startnumber_B    für Doppel- und Mixed-Auslosungen: Schlüsselnummer des Spielers B aus der players-Datei
-last_name_B    für Doppel- und Mixed-Auslosungen: Nachname des Spielers B aus der players-Datei
-country_B    für Doppel- und Mixed-Auslosungen: Land des Spielers B aus der players-Datei
-PPP_chapter_B    für Doppel- und Mixed-Auslosungen: PPP-Stützpunkt des Spielers B aus der players-Datei
-is_bye    für Hauptrunde/Consolation: True, wenn die Position ein Freilos ist (dann sind nur S_D_M, class, for_main_round, for_consolation und draw_number gefüllt), sonst False; in Vorrunden-Zeilen leer
+# Output file columns
+
+| Column | Applies to | Meaning |
+|---|---|---|
+| `S_D_M` | all draws | S for singles, D for doubles, M for mixed doubles |
+| `class` | all draws | M1 (2, 3) for men 1 (2, 3), W1 (2, 3) for women 1 (2, 3), X1 (2, 3) for mixed 1 (2, 3) |
+| `seeding` | group stage only | The seeding from the input. A higher value means a stronger entry (e.g. 1000 = best player), so a classic seeding number (1 = best) must be inverted first. Main round and consolation rows leave this column blank: the seeding is taken from the group-stage row of the same player or pair, which therefore has to exist. |
+| `group_no` | all draws | Group number of the player or pair in the group stage (group stage: drawn by the tool; main round and consolation: taken from the input) |
+| `group_pos` | all draws | Final position of the player or pair in their group (singles: usually 1 to 6; doubles/mixed: usually 1 to 4; group stage: drawn by the tool; main round and consolation: taken from the input) |
+| `for_main_round` | all draws | Input: 1 for the main round, otherwise blank or 0. Output: True in main round rows, False in consolation rows, blank in group-stage rows |
+| `for_consolation` | all draws | Input: 1 for the consolation, otherwise blank or 0. Output: True in consolation rows, False in main round rows, blank in group-stage rows |
+| `draw_number` | main round and consolation | The position in the knock-out bracket, so the bracket size is always a power of 2. In a 16-player bracket it is a number from 1 to 16, and the rows are ordered by it. |
+| `startnumber_A` | all draws | Start number from the players file; singles: the player's start number, doubles/mixed: player A's start number; blank for a bye (see `is_bye`) |
+| `last_name_A` | all draws | Last name from the players file; singles: of the player, doubles/mixed: of player A |
+| `country_A` | all draws | Country from the players file; singles: of the player, doubles/mixed: of player A |
+| `PPP_chapter_A` | all draws | PPP chapter (training base) from the players file; singles: of the player, doubles/mixed: of player A |
+| `startnumber_B` | doubles and mixed | Player B's start number from the players file |
+| `last_name_B` | doubles and mixed | Player B's last name from the players file |
+| `country_B` | doubles and mixed | Player B's country from the players file |
+| `PPP_chapter_B` | doubles and mixed | Player B's PPP chapter from the players file |
+| `is_bye` | main round and consolation | True if the position is a bye (then only `S_D_M`, `class`, `for_main_round`, `for_consolation` and `draw_number` are filled), otherwise False; blank in group-stage rows |

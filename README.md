@@ -2,7 +2,7 @@
 
 A CLI tool for creating (table tennis) group draws and knock-out brackets (main + consolation), for singles, doubles, and mixed competitions.
 
-For the full technical breakdown (data flow, algorithms, data model, config keys, known bugs), see [ARCHITECTURE.md](ARCHITECTURE.md) — this README is a quick-start/overview only.
+For the full technical breakdown (data flow, algorithms, data model, config keys, known issues), see [ARCHITECTURE.md](ARCHITECTURE.md) — this README is a quick-start/overview only.
 
 # How to use
 
@@ -11,7 +11,7 @@ Prerequisites (place in `input/`):
 - `players.csv` — all players
 - `draw_input.csv` — competition entries per player/team, referencing players by start number
 
-Format examples: `input/players_example.csv` and `input/draw_input_example.csv`. The `seeding` column is given on the group-stage row only; a **higher** value means a **stronger** entry (e.g. 1000 = best), so a classic Setzziffer (1 = best) must be inverted first. Bracket rows (main round / consolation) leave `seeding` blank and take it from the same player's or pair's group-stage row, which therefore has to exist.
+Format examples: `input/players_example.csv` and `input/draw_input_example.csv`. The `seeding` column is given on the group-stage row only; a **higher** value means a **stronger** entry (e.g. 1000 = best), so a classic seeding number (1 = best) must be inverted first. Bracket rows (main round / consolation) leave `seeding` blank and take it from the same player's or pair's group-stage row, which therefore has to exist.
 
 Before the first run, copy `config/config_template.ini` to `config/config.ini` (the latter is gitignored, so each machine keeps its own).
 
@@ -42,7 +42,7 @@ Group winners are placed first, each seeding batch assigned as a whole rather th
 
 # Output
 
-Every run writes `output/output.csv` — one semicolon-delimited file covering all competitions, with one row per group member and one row per **bracket slot** (`draw_number` is the Rasterzahl of the KO field, `1..bracket_size`). The `_A`/`_B` columns are the two players of a doubles/mixed pair, not the two sides of a match. Column reference: `output/output_explainer.md` (German) and [ARCHITECTURE.md § Input/output formats](ARCHITECTURE.md#4-inputoutput-formats-data_io).
+Every run writes `output/output.csv` — one semicolon-delimited file covering all competitions, with one row per group member and one row per **bracket slot** (`draw_number` is the position in the knock-out bracket, `1..bracket_size`). The `_A`/`_B` columns are the two players of a doubles/mixed pair, not the two sides of a match. Column reference: `output/output_explainer.md` and [ARCHITECTURE.md § Input/output formats](ARCHITECTURE.md#4-inputoutput-formats-data_io).
 
 Next to it, every run writes a **draw report** (`output/<output name>_report.csv`) with one row per group class and per bracket and a `status` of `ok`, `imbalanced`, `violations`, `degraded` or `failed`. A bracket whose best-effort layout still breaks a hard rule or gives a bye to a lower seed than a player without one (`degraded`), or that breaks a hard rule (group separation in the halves or quarters, or two group winners meeting in round one), is also listed in **red on the terminal** and marked at the top of its HTML page. So is a bracket whose byes, group winners, runners-up or 3rd places are split more than one apart over the two halves (`imbalanced`, e.g. `byes 8/6 over the halves`). Some such splits cannot be avoided in small or uneven brackets, so read the `details` column before redrawing. Check the report before posting a draw.
 
@@ -54,7 +54,7 @@ Every group draw (all singles/doubles/mixed classes) is **exported to a self-con
 
 # Bracket viewer
 
-Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. Choosing a class (and main/consolation) in the Bracket menu opens the pre-exported file in the browser — an SVG bracket tree with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets. Each exported file ends with a provenance footer recording the app version that produced it, how long that specific bracket took to draw, the total run time, the random seed, and a timestamp. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. Choosing a class (and main/consolation) in the Bracket menu opens the pre-exported file in the browser — the first round grouped by quarter, with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets. Each exported file ends with a provenance footer recording the app version that produced it, how long that specific bracket took to draw, the total run time, the random seed, and a timestamp. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
 
 # Configuration
 
@@ -62,4 +62,4 @@ Runtime behavior (file paths, log level, random seed, Monte Carlo tuning, bracke
 
 # Known issues
 
-See [ARCHITECTURE.md § Known Issues](ARCHITECTURE.md#9-known-issues) for the current list of known bugs, dead code, and config mismatches.
+See [ARCHITECTURE.md § Known Issues](ARCHITECTURE.md#9-known-issues) for the current list of known issues.
