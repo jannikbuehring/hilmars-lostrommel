@@ -1,19 +1,13 @@
-"""Helpers shared by the terminal viewers and the HTML exporters.
+"""Helpers shared by the viewers and the HTML exporters.
 
 Kept in a module of its own so the group and bracket sides can both use them
 without importing each other (the bracket viewer and its HTML exporter used to
 form an import cycle around participant_display_fields).
 """
-import os
 import webbrowser
 from pathlib import Path
 
 from models.player import players_by_start_number
-
-
-def clear_screen():
-    """Clear the terminal screen in a cross-platform way."""
-    os.system("cls" if os.name == "nt" else "clear")
 
 
 def open_in_browser(path):
@@ -40,8 +34,8 @@ def participant_display_fields(p, include_qttr=False):
     export repeats every participant in every snapshot, where an unused field
     would be paid for thousands of times.
 
-    Consumed by format_participant_display (terminal) and by both HTML
-    exporters, so all renderers stay in sync with a single source of truth.
+    Consumed by both HTML exporters, so they stay in sync with a single
+    source of truth.
     """
     if p is None:
         return None

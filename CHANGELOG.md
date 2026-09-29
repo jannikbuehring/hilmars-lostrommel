@@ -13,6 +13,10 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Removed
 
+- The terminal views of groups and brackets. Choosing a class under Groups or Bracket now opens its HTML page directly, which has the same snapshot stepper.
+- Config key `mode` (`normal`/`interactive`), which only switched between those terminal views.
+- Config key `max_draw_phase`. The bracket draw always runs all phases.
+
 ### Fixed
 
 ### Security

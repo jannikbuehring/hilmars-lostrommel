@@ -205,10 +205,12 @@ def _result_rank(snapshots):
     )
 
 
-def draw_bracket(class_subset: list[DrawDataRow]):
+def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False):
     """
     Build a single-elimination bracket from seeded participants.
     class_subset: players advancing from groups
+    phase1_only: stop after Phase 1 and return the partial bracket with only the
+    top-group-pos players placed (used by tests to isolate Phase 1)
 
     Phase 1 balances the byes and tiers over the halves (review finding N2).  On
     the tightest shapes that can pick a winner layout Phase 2 cannot fill, where
@@ -218,13 +220,13 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     by _result_rank is kept: a separation is never paid for an even split.
     """
     rng_state = random.getstate()
-    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True)
+    matches, snapshots = _draw_bracket_attempt(class_subset, half_balance=True, phase1_only=phase1_only)
     if not _took_degrade_path(snapshots):
         return matches, snapshots
     balanced_rng_state = random.getstate()
     random.setstate(rng_state)
     try:
-        fallback_matches, fallback_snapshots = _draw_bracket_attempt(class_subset, half_balance=False)
+        fallback_matches, fallback_snapshots = _draw_bracket_attempt(class_subset, half_balance=False, phase1_only=phase1_only)
     except Exception as exc:  # the balanced result stands; see N1 for the known crash
         logging.warning("Bracket fallback draw without half balance failed: %s", exc)
         random.setstate(balanced_rng_state)
@@ -235,7 +237,7 @@ def draw_bracket(class_subset: list[DrawDataRow]):
     return matches, snapshots
 
 
-def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool):
+def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool, phase1_only: bool = False):
     """One full draw.  *half_balance* False drops the bye/tier half balance
     from Phase 1 (projected_half_balance_units, the lookahead), which leaves
     the pre-N2 objective: only the byes already on the board are balanced.
@@ -363,14 +365,6 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool):
         joint_batch_max_evaluations = config.getint(
             "bracket_draw", "joint_batch_max_evaluations", fallback=joint_batch_max_evaluations
         )
-    except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
-        pass
-
-    # max_draw_phase controls how many phases to execute (1-5; default=5=all).
-    # Set to 1 in config to stop after the top-group-pos seeded placement only.
-    max_draw_phase = 5
-    try:
-        max_draw_phase = config.getint("bracket_draw", "max_draw_phase", fallback=max_draw_phase)
     except (TypeError, ValueError, KeyError, AttributeError, configparser.Error):
         pass
 
@@ -1493,7 +1487,7 @@ def _draw_bracket_attempt(class_subset: list[DrawDataRow], half_balance: bool):
         )
     )
 
-    if max_draw_phase <= 1:
+    if phase1_only:
         # Return the partial bracket (only top-group-pos players placed).
         return post_top_matches, snapshots
 

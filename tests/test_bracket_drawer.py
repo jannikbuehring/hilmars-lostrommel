@@ -595,11 +595,10 @@ def test_batch_is_assigned_jointly_not_player_by_player():
 
         config.read_dict({'bracket_draw': {
             'joint_batch_max_evaluations': str(budget),
-            'max_draw_phase': '1',
         }})
         random.seed(rng_seed)
-        # max_draw_phase = 1 returns the bracket with only the winners placed.
-        matches, _snapshots = draw_bracket(rows)
+        # phase1_only returns the bracket with only the winners placed.
+        matches, _snapshots = draw_bracket(rows, phase1_only=True)
         number_of_matches = len(matches)
         tier_units = sum(
             v[-1] for v in check_placement_balance_quarters(matches, number_of_matches)

@@ -11,7 +11,7 @@ thousands of them (max_iterations = 20000, up to two snapshots per iteration).
 Storing a full state each time would produce hundred-megabyte files, so the
 page embeds the roster once, the state the history starts from, and one small
 step object per snapshot, replaying them in JS exactly the way
-viewer/group_viewer.py::display_snapshot replays them in Python.
+_apply_snapshot replays them in Python.
 """
 import html
 import json
@@ -55,7 +55,7 @@ def _roster_entry(p):
 def _apply_snapshot(state, snapshot, forward=True):
     """Apply one snapshot's delta to *state* (dict of group_no -> list of keys).
 
-    Mirrors viewer/group_viewer.py::display_snapshot: a "swap" put p2 where p1
+    A "swap" put p2 where p1
     was and vice versa, a "revert" put them back. Going backward is the inverse
     assignment. Used here to fast-forward the truncated head of a long history;
     the exported JS applies the identical rule.

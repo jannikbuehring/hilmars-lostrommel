@@ -48,7 +48,7 @@ def escape_heavy_config():
 
 
 def _replay(snapshots):
-    """Rebuild the final groups from the swap/revert deltas, as the viewers do."""
+    """Rebuild the final groups from the swap/revert deltas, as the HTML exporter does."""
     groups = {g: list(m) for g, m in snapshots[0].initial_groups.items()}
     for snap in snapshots[1:]:
         g1, g2 = snap.groups

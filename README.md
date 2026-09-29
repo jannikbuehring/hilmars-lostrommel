@@ -50,11 +50,11 @@ At the start of every run, the previous run's output CSV, report and HTML files 
 
 # Group viewer
 
-Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. From the Groups menu, groups can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — one group card per row so no column is ever cut off, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+Every group draw (all singles/doubles/mixed classes) is **exported to a self-contained HTML file** automatically at startup, into `output/groups/`. Choosing a class in the Groups menu opens the pre-exported file in the browser — one group card per row so no column is ever cut off, with an in-browser stepper through the Monte Carlo draw history. The page opens on the final groups. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
 
 # Bracket viewer
 
-Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. From the Bracket menu, brackets can be viewed in the terminal, or **"View HTML"** opens the pre-exported file in the browser — an SVG bracket tree with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets without terminal scroll/cutoff. Each exported file ends with a provenance footer recording the app version that produced it, how long that specific bracket took to draw, the total run time, the random seed, and a timestamp. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
+Every bracket (all singles/doubles/mixed classes, main and consolation) is **exported to a self-contained HTML file** automatically at startup, into `output/brackets/`. Choosing a class (and main/consolation) in the Bracket menu opens the pre-exported file in the browser — an SVG bracket tree with an in-browser stepper through every draw snapshot, useful for verifying the draw logic on large brackets. Each exported file ends with a provenance footer recording the app version that produced it, how long that specific bracket took to draw, the total run time, the random seed, and a timestamp. Details: [ARCHITECTURE.md § Viewer / CLI UX](ARCHITECTURE.md#7-viewer--cli-ux-viewer-miscmenupy).
 
 # Configuration
 
