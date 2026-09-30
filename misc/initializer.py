@@ -53,10 +53,13 @@ class DrawResults:
     groups[c][cls] holds `group`, `snapshots`, `draw_seconds` and, after
     validation, `violation_count`; brackets[c][cls] holds one section dict per
     `main`/`consolation` (see draw_bracket_with_snapshot_fallback).
+    `html_exported` is False when the run skipped the HTML export (--no-html),
+    so the HTML pages on disk are not from this run.
     """
 
     groups: dict = field(default_factory=lambda: {code: {} for code, _ in COMPETITIONS})
     brackets: dict = field(default_factory=lambda: {code: {} for code, _ in COMPETITIONS})
+    html_exported: bool = True
 
 
 def _by_class(entries):
@@ -67,8 +70,11 @@ def _by_class(entries):
     return by_class
 
 
-def initialize_data(results: DrawResults):
+def initialize_data(results: DrawResults, export_html=True):
     """Read players and draw data, draw every group and bracket into `results`, and export them.
+
+    With `export_html=False` no HTML is written, and the HTML pages of earlier
+    runs are neither archived nor overwritten.
 
     Returns True when the pipeline ran to its end (possibly with warnings), False
     when a stage aborted it -- then no current output.csv / HTML exist, because
@@ -260,7 +266,7 @@ def initialize_data(results: DrawResults):
     ########################################################################################
     with yaspin(text="Moving previous outputs to 'previous'...", color="cyan") as spinner:
         try:
-            moved = archive_previous_outputs()
+            moved = archive_previous_outputs(include_html=export_html)
             spinner.text = f"Moved {len(moved)} file(s) of the previous run to 'previous'"
             spinner.ok()
         except PermissionError as exc:
@@ -473,6 +479,13 @@ def initialize_data(results: DrawResults):
             return False
 
     ########################################################################################
+    results.html_exported = export_html
+    if not export_html:
+        with yaspin(text="Exporting groups and brackets to HTML...", color="cyan") as spinner:
+            spinner.text = "Skipped HTML export (--no-html)"
+            spinner.ok("INFO")
+        return True
+
     with yaspin(text="Exporting groups and brackets to HTML...", color="cyan") as spinner:
         from viewer.bracket_html_exporter import export_bracket_html
         from viewer.group_html_exporter import export_group_html

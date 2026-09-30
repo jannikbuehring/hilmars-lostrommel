@@ -4,7 +4,8 @@ Every module reads the shared `settings` object (`from misc.config import settin
 instead of the raw ini file. A key left out of config.ini keeps the default below
 (the same values as config/config_template.ini). An unknown key logs a warning,
 so a typo cannot silently fall back to the default; a value that is not a whole
-number where one is expected stops the run with a ConfigError.
+number where one is expected stops the run with a ConfigError. Command-line
+arguments (misc/cli.py) override the matching keys for one run.
 """
 
 import configparser
@@ -143,14 +144,41 @@ def reset_settings():
     apply_settings(Settings())
 
 
-def initialize_config(base_dir):
-    """Load config/config.ini into `settings`, seed `random` and configure logging."""
-    config_path = os.path.join(base_dir, "config", "config.ini")
+# CLI argument -> (Settings attribute, field)
+_CLI_OVERRIDES = {
+    "players": ("files", "players_path"),
+    "draw_input": ("files", "draw_data_path"),
+    "output": ("files", "output_file_path"),
+    "seed": ("general", "random_seed"),
+    "log_level": ("general", "log_level"),
+}
+
+
+def apply_cli_overrides(parsed: Settings, args):
+    """Overwrite the settings whose command-line argument was given (not None)."""
+    for arg, (section, key) in _CLI_OVERRIDES.items():
+        value = getattr(args, arg, None)
+        if value is not None:
+            setattr(getattr(parsed, section), key, value)
+
+
+def initialize_config(base_dir, args=None):
+    """Load the config file into `settings`, seed `random` and configure logging.
+
+    The file is `args.config` if given, else config/config.ini under `base_dir`.
+    The other command-line arguments in `args` (misc/cli.py) override its values.
+    """
+    if args is not None and args.config:
+        config_path = args.config
+    else:
+        config_path = os.path.join(base_dir, "config", "config.ini")
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
     parser = configparser.ConfigParser()
     parser.read(config_path)
     parsed, warnings = parse_settings(parser)
+    if args is not None:
+        apply_cli_overrides(parsed, args)
     apply_settings(parsed)
 
     if settings.general.random_seed != "":

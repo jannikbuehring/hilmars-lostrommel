@@ -311,6 +311,21 @@ def test_archive_moves_previous_outputs(output_dirs, output_file_path):
     assert (out / "example_output.csv").exists()
 
 
+def test_archive_without_html_leaves_the_html_pages(output_dirs, output_file_path):
+    """--no-html: the CSV and report are archived, the HTML pages of the last run stay."""
+    out = output_dirs
+    output_file_path.write_text("old csv")
+    (out / "brackets" / "S_M1_main_bracket.html").write_text("old bracket")
+    (out / "groups" / "S_M1_groups.html").write_text("old groups")
+
+    moved = archive_previous_outputs(include_html=False)
+
+    assert moved == [str(output_file_path)]
+    assert (out / "previous" / "output.csv").read_text() == "old csv"
+    assert (out / "brackets" / "S_M1_main_bracket.html").read_text() == "old bracket"
+    assert (out / "groups" / "S_M1_groups.html").read_text() == "old groups"
+
+
 def test_archive_propagates_a_locked_file(output_dirs, output_file_path, monkeypatch):
     """A file open in Excel must stop the run before drawing, not after."""
     output_file_path.write_text("old csv")

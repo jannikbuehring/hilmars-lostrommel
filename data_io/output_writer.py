@@ -290,14 +290,15 @@ def write_report_csv(rows):
     return path
 
 
-def archive_previous_outputs():
+def archive_previous_outputs(include_html=True):
     """Move the previous run's outputs to `<output dir>/previous/`.
 
     Run before anything is drawn, so a run that fails part-way can never leave
     the last run's CSV or HTML in place looking current.  `previous/` is emptied
     first -- it only ever holds what this function put there.  Only the output
     CSV, the report and the generated `*_bracket.html` / `*_groups.html` files
-    are moved.  A PermissionError (a file open in Excel on Windows) propagates,
+    are moved; with `include_html=False` the HTML files stay where they are.
+    A PermissionError (a file open in Excel on Windows) propagates,
     so the caller can abort before the long draw instead of after it.
 
     Returns the list of source paths that were moved.
@@ -308,10 +309,11 @@ def archive_previous_outputs():
     group_dir = settings.files.group_html_output_dir
 
     moves = [(path, previous_dir) for path in (output_file_path, report_file_path()) if os.path.isfile(path)]
-    for directory, pattern, target in (
+    html_dirs = (
         (bracket_dir, "*_bracket.html", os.path.join(previous_dir, "brackets")),
         (group_dir, "*_groups.html", os.path.join(previous_dir, "groups")),
-    ):
+    )
+    for directory, pattern, target in html_dirs if include_html else ():
         moves.extend((path, target) for path in sorted(glob.glob(os.path.join(directory, pattern))))
 
     if os.path.isdir(previous_dir):

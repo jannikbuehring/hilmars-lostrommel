@@ -17,6 +17,25 @@ Before the first run, copy `config/config_template.ini` to `config/config.ini` (
 
 Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact and, if `NEXTCLOUD_SHARE_URL` is set, uploaded to that Nextcloud share), then use the interactive menu to browse Players / Groups / Bracket results.
 
+Command-line options override the matching `config.ini` keys for one run, which is handy for development and testing (`--help` lists them all):
+
+| Option | Effect |
+|---|---|
+| `--config PATH` | Load this config file instead of `config/config.ini` |
+| `--players PATH`, `--draw-input PATH` | Input CSVs (`players_path`, `draw_data_path`) |
+| `--output PATH` | Output CSV (`output_file_path`); the report is written next to it. The HTML folders stay as configured |
+| `--seed SEED` | Random seed (`random_seed`) |
+| `--log-level LEVEL` | `debug`/`info`/`warning`/`error`/`critical` or 10–50 (`log_level`) |
+| `--no-html` | Skip the HTML export and leave the existing HTML pages untouched; the menu then only offers Players |
+| `--no-menu` | Exit after the draw instead of opening the menu; exit code 1 if the draw did not complete |
+| `--version` | Print the version and exit |
+
+For example, a reproducible test run on the example input that leaves your real output alone:
+
+```
+python hilmars_lostrommel.py --players input/players_example.csv --draw-input input/draw_input_example.csv --output output/test/output.csv --seed 1 --no-html --no-menu
+```
+
 Surrounding whitespace is trimmed from every input field (so `"GER "` is read as `GER`). Before drawing, validity checks run against the input data. Every check aborts the run, except the "entered in at least one competition" check, which only warns:
 - No player has the same start number twice
 - Every player referenced in the draw data exists

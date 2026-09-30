@@ -4,7 +4,8 @@ import configparser
 
 import pytest
 
-from misc.config import ConfigError, Settings, parse_settings
+from misc.cli import parse_args
+from misc.config import ConfigError, Settings, apply_cli_overrides, initialize_config, parse_settings, settings
 
 
 def _parse(text):
@@ -85,3 +86,33 @@ def test_template_parses_without_warnings():
 
     assert parsed == Settings()
     assert warnings == []
+
+
+def test_cli_overrides_only_the_given_settings():
+    parsed, _ = _parse(
+        "[files]\nplayers_path = ini/players.csv\ndraw_data_path = ini/draw.csv\n[settings]\nlog_level = 20\n"
+    )
+
+    apply_cli_overrides(parsed, parse_args(["--players", "cli/players.csv", "--seed", "7", "--log-level", "debug"]))
+
+    assert parsed.files.players_path == "cli/players.csv"
+    assert parsed.files.draw_data_path == "ini/draw.csv"
+    assert parsed.files.output_file_path == Settings().files.output_file_path
+    assert parsed.general.random_seed == "7"
+    assert parsed.general.log_level == 10
+
+
+def test_config_argument_loads_that_file(tmp_path):
+    config = tmp_path / "other.ini"
+    config.write_text("[files]\nplayers_path = from/other.csv\n[group_draw]\nmax_iterations = 42\n")
+
+    initialize_config("does/not/exist", parse_args(["--config", str(config), "--output", "cli/out.csv"]))
+
+    assert settings.files.players_path == "from/other.csv"
+    assert settings.group_draw.max_iterations == 42
+    assert settings.files.output_file_path == "cli/out.csv"
+
+
+def test_missing_config_argument_file_is_an_error(tmp_path):
+    with pytest.raises(FileNotFoundError, match="missing.ini"):
+        initialize_config(".", parse_args(["--config", str(tmp_path / "missing.ini")]))

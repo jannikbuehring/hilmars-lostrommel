@@ -72,3 +72,13 @@ def test_exit_leaves_the_main_menu(results, answers):
 
     with pytest.raises(SystemExit):
         menu.show_main_menu(results)
+
+
+def test_without_html_only_players_can_be_viewed(results, answers):
+    queue, prompts = answers
+    results.html_exported = False
+    queue.append("Back")
+
+    menu._view_menu(results)
+
+    assert prompts == [("Choose what to view", ["Players", "Back"])]

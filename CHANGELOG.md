@@ -8,6 +8,9 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Added
 
 - A warning at startup for every unknown key or section in `config.ini`, so a misspelled key no longer silently falls back to its default
+- Command-line options `--config`, `--players`, `--draw-input`, `--output`, `--seed` and `--log-level`, which override the config file for one run
+- `--no-html` to skip the HTML export and leave the existing HTML pages untouched
+- `--no-menu` to exit after the draw, with exit code 1 if it did not complete, and `--version`
 
 ### Changed
 

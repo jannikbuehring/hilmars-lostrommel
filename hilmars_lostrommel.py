@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 
+from misc.cli import parse_args
 from misc.config import initialize_config
 from misc.initializer import DrawResults, initialize_data
 from misc.menu import show_main_menu
@@ -30,22 +31,26 @@ def print_incomplete_run_banner():
     print(f"{'=' * 78}{_RESET}")
 
 
-def main():
+def main(argv=None):
     """Main function to initialize and start the application."""
+    # Parsed before the banner, so --help, --version and a bad argument print nothing else.
+    args = parse_args(argv)
     results = DrawResults()
     try:
         print_startup_info()
-        initialize_config(BASE_DIR)
-        completed = initialize_data(results)
+        initialize_config(BASE_DIR, args)
+        completed = initialize_data(results, export_html=not args.no_html)
         if not completed:
             print_incomplete_run_banner()
-
-        print("")
-        show_main_menu(results)
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e} - Returning to main menu\n")
+        logging.error(f"An unexpected error occurred: {e}\n")
         print_incomplete_run_banner()
-        show_main_menu(results)
+        completed = False
+
+    if args.no_menu:
+        sys.exit(0 if completed else 1)
+    print("")
+    show_main_menu(results)
 
 
 if __name__ == "__main__":

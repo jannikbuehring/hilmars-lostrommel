@@ -20,7 +20,10 @@ def show_main_menu(results: DrawResults):
 def _view_menu(results):
     """Choose Players, Groups or Bracket. Returns to the main menu after showing something."""
     while True:
-        what_to_view = inquirer.list_input("Choose what to view", choices=["Groups", "Bracket", "Players", "Back"])
+        # Groups and Bracket open the exported HTML pages; after --no-html those
+        # are from an earlier run, so they are not offered.
+        views = ["Groups", "Bracket", "Players"] if results.html_exported else ["Players"]
+        what_to_view = inquirer.list_input("Choose what to view", choices=[*views, "Back"])
         match what_to_view:
             case "Back":
                 return
