@@ -20,6 +20,7 @@ and [keeps a changelog](https://keepachangelog.com).
 - The `misc/` package is split by layer: `core/` (config, version) and `app/` (pipeline, which was `initializer.py`, plus menu, cli, banner, which was `startup_info.py`, and progress spinner). `DrawResults` and `COMPETITIONS` moved to `models/draw_results.py`
 - The group checks return named records (`CountryViolation`, `BaseViolation`, `QttrViolation`, `TeamCountryViolation`) instead of positional tuples
 - `Player` and `DrawDataRow` are dataclasses with typed, already-parsed fields. CSV parsing moved into `data_io/input_reader.py`. Public functions in the checkers, drawers, output writer and HTML exporters have type hints
+- The bracket drawer is split from one 2,000-line function into the package `draw/bracket/`, one module per phase, with its fixed inputs in `BracketContext` and its placement in `BracketState`. Draws are unchanged: golden tests pin the exact brackets, snapshot trails and random-number use. `draw.bracket_drawer` is now `draw.bracket`, and the checker's `participant_countries` is shared with the drawer instead of duplicated
 
 ### Deprecated
 
