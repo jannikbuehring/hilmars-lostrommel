@@ -32,6 +32,10 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Security
 
+- The build workflow reads the Nextcloud share URL from the repository secret `NEXTCLOUD_SHARE_URL`, so the share token is masked in the Actions logs
+
+## 1.5.0 - 2026-10-01
+
 ## 1.4.0 - 2026-09-29
 
 ### Added

@@ -15,7 +15,7 @@ Format examples: `input/players_example.csv` and `input/draw_input_example.csv`.
 
 Before the first run, copy `config/config_template.ini` to `config/config.ini` (the latter is gitignored, so each machine keeps its own).
 
-Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact and, if `NEXTCLOUD_SHARE_URL` is set, uploaded to that Nextcloud share), then use the interactive menu to browse Players / Groups / Bracket results.
+Run `python hilmars_lostrommel.py` (or the Windows exe that the GitHub Actions workflow `build-exe` builds, available as a workflow artifact and, if the repository secret `NEXTCLOUD_SHARE_URL` is set, uploaded to that Nextcloud share), then use the interactive menu to browse Players / Groups / Bracket results.
 
 Command-line options override the matching `config.ini` keys for one run, which is handy for development and testing (`--help` lists them all):
 

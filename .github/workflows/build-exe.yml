@@ -75,14 +75,20 @@ jobs:
       # Public share without password: the share token is the WebDAV user,
       # the password stays empty. The share must allow uploads.
       - name: Upload to Nextcloud
-        if: vars.NEXTCLOUD_SHARE_URL != ''
         shell: bash
         env:
-          NEXTCLOUD_SHARE_URL: ${{ vars.NEXTCLOUD_SHARE_URL }}
+          # Secrets can't be used in a step's if:, so the script skips instead.
+          NEXTCLOUD_SHARE_URL: ${{ secrets.NEXTCLOUD_SHARE_URL }}
           ZIP: ${{ steps.zip.outputs.name }}
         run: |
+          if [ -z "$NEXTCLOUD_SHARE_URL" ]; then
+            echo "NEXTCLOUD_SHARE_URL not set, skipping upload."
+            exit 0
+          fi
           url="${NEXTCLOUD_SHARE_URL%/}"
           token="${url##*/s/}"
+          # Masking matches the whole secret only, not this part of it.
+          echo "::add-mask::$token"
           host="${url%%/s/*}"
           curl --fail --show-error -T "dist/$ZIP" -u "$token:" \
                -H "X-Requested-With: XMLHttpRequest" \
