@@ -18,6 +18,8 @@ binaries = []
 hiddenimports = []
 tmp_ret = collect_all('readchar')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+# CSS/JS inlined into the exported HTML pages (read via viewer_shared.read_asset).
+datas += [(os.path.join(SPECPATH, 'viewer', 'assets'), os.path.join('viewer', 'assets'))]
 
 
 a = Analysis(

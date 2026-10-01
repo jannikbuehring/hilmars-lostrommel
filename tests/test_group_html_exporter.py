@@ -11,6 +11,7 @@ from draw.group_drawer import draw_groups_monte_carlo
 from models.draw_data import DrawDataRow
 from models.player import Player, players_by_start_number, players_list
 from viewer.group_html_exporter import export_group_html, group_html_filename
+from viewer.viewer_shared import read_asset
 
 DATA_SCRIPT_RE = re.compile(r'<script type="application/json" id="group-data">(.*?)</script>', re.DOTALL)
 
@@ -124,6 +125,17 @@ def test_export_writes_html_with_valid_embedded_json(eight_players, group_draw_c
     assert entry["names"][0]["last_name"] == "Alpha"
     assert entry["names"][0]["country"] == "GER"
     assert entry["names"][0]["qttr"] == 1200
+
+
+def test_export_inlines_the_css_and_js_assets(eight_players, group_draw_config, tmp_path):
+    _, _, html, _ = _export_and_parse("S", "M1", _singles_rows([1, 2, 3, 4, 5, 6, 7, 8]), tmp_path)
+
+    # The page must stay self-contained: styles and script are inlined from
+    # viewer/assets/, never linked.
+    assert read_asset("groups.css") in html
+    assert read_asset("groups.js") in html
+    assert ".group-card" in html
+    assert "function applyStep" in html
 
 
 def test_replaying_every_step_reproduces_the_drawn_groups(eight_players, group_draw_config, tmp_path):

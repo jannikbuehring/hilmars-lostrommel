@@ -26,6 +26,9 @@ build-backend = "setuptools.build_meta"
 packages = ["app", "checks", "core", "data_io", "draw", "models", "viewer"]
 py-modules = ["hilmars_lostrommel"]
 
+[tool.setuptools.package-data]
+viewer = ["assets/*"]
+
 [tool.setuptools.dynamic]
 version = { attr = "core.version.__version__" }
 

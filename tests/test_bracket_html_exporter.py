@@ -9,7 +9,8 @@ from core.version import APP_NAME, __version__
 from draw.bracket_drawer import draw_bracket
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
-from viewer.bracket_html_exporter import _format_duration, _render_bracket_list, export_bracket_html
+from viewer.bracket_html_exporter import _render_bracket_list, export_bracket_html
+from viewer.viewer_shared import format_duration, read_asset
 
 DATA_SCRIPT_RE = re.compile(r'<script type="application/json" id="bracket-data">(.*?)</script>', re.DOTALL)
 
@@ -77,6 +78,20 @@ def test_export_writes_html_with_valid_embedded_json(eight_players, tmp_path):
 
     original_start_numbers = {row.start_number_a for row in rows}
     assert original_start_numbers <= exported_start_numbers
+
+
+def test_export_inlines_the_css_and_js_assets(eight_players, tmp_path):
+    _, matches, snapshots = _draw_eight_player_bracket()
+    paths = export_bracket_html("S", "M1", {"main": {"matches": matches, "snapshots": snapshots}}, str(tmp_path))
+
+    html = open(paths[0], encoding="utf-8").read()
+
+    # The page must stay self-contained: styles and script are inlined from
+    # viewer/assets/, never linked.
+    assert read_asset("bracket.css") in html
+    assert read_asset("bracket.js") in html
+    assert ".slot-box.top25" in html
+    assert "function changedSlots" in html
 
 
 def test_degraded_bracket_shows_a_quality_notice(eight_players, tmp_path):
@@ -210,7 +225,7 @@ def test_export_without_run_meta_still_reports_version(eight_players, tmp_path):
     ],
 )
 def test_format_duration(seconds, expected):
-    assert _format_duration(seconds) == expected
+    assert format_duration(seconds) == expected
 
 
 def test_brackets_up_to_64_players_have_no_segment_bar():

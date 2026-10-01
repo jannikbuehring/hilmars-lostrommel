@@ -1,0 +1,66 @@
+body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 0; background: #1e1e1e; color: #ddd; }
+.controls {
+  position: sticky; top: 0; z-index: 10; background: #262626; padding: 10px 16px;
+  border-bottom: 1px solid #444; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.controls button { background: #3a3a3a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+.controls button:disabled { opacity: 0.4; cursor: default; }
+.controls input[type=number] { width: 70px; background: #1e1e1e; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 5px; }
+.class-title { font-size: 15px; font-weight: bold; color: #eee; margin-right: 8px; }
+.quality-notice { font-size: 13px; font-weight: bold; color: #fff; background: #a32; border-radius: 4px; padding: 4px 8px; margin-right: 8px; }
+.meta { margin-left: auto; font-size: 13px; color: #aaa; text-align: right; }
+.meta .violations { font-size: 12px; color: #e0a; }
+.export-meta {
+  max-width: 1100px; margin: 0 auto; padding: 12px 20px 24px;
+  border-top: 1px solid #333; font-size: 12px; color: #777;
+}
+
+.bracket-list { max-width: 1100px; margin: 0 auto; padding: 20px; }
+.quarter { display: flex; align-items: stretch; margin-bottom: 26px; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; }
+.quarter-label {
+  flex: none; width: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 15px; letter-spacing: 1px; font-weight: bold; background: #333;
+  border-right: 1px solid #3a3a3a; writing-mode: vertical-rl; transform: rotate(180deg);
+}
+.quarter-body { flex: 1; padding: 6px 0; }
+.quarter-0 .quarter-label { border-right: 5px solid #4f8cff; }
+.quarter-1 .quarter-label { border-right: 5px solid #d98a3d; }
+.quarter-2 .quarter-label { border-right: 5px solid #b060d0; }
+.quarter-3 .quarter-label { border-right: 5px solid #d0b040; }
+.quarter-body.segmented { padding: 0; }
+.segment { display: flex; align-items: stretch; }
+.segment + .segment { border-top: 1px solid #3a3a3a; }
+.segment-label {
+  flex: none; width: 26px; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; letter-spacing: 1px; color: #bbb; background: #2d2d2d; white-space: nowrap;
+  border-left: 1px solid #3a3a3a; writing-mode: vertical-rl; transform: rotate(180deg);
+}
+.segment-body { flex: 1; padding: 6px 0; }
+.match { display: flex; align-items: stretch; gap: 8px; padding: 6px 12px; }
+.match-no { flex: none; width: 44px; color: #777; font-size: 12px; align-self: center; text-align: right; }
+.slots { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.slot-box {
+  box-sizing: border-box; border: 1px solid #555; border-radius: 4px;
+  background: #2b2b2b; display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 13px;
+  white-space: nowrap;
+}
+.pos { color: #888; flex: none; min-width: 34px; }
+.name { overflow: hidden; text-overflow: ellipsis; }
+/* Metadata columns. Their widths are measured once at load (widest value in the
+   whole history) and written to --col-* , so every row's columns line up no
+   matter how many digits a value has. */
+.fld { display: inline-block; }
+.fld-seeding { width: var(--col-seeding, auto); }
+.fld-group_no { width: var(--col-group_no, auto); }
+.fld-group_pos { width: var(--col-group_pos, auto); }
+.measure-probe { position: absolute; visibility: hidden; top: -9999px; left: -9999px; white-space: nowrap; }
+.slot-box.bye .name { color: #888; font-style: italic; }
+.slot-box.empty { border-style: dashed; }
+.slot-box.top25 { background: #1f5d33; border-color: #4ec36e; }
+.slot-box.top25 .pos { color: #bfe8c9; }
+.slot-box.changed { animation: flash 1.1s ease-out; }
+@keyframes flash {
+  0% { box-shadow: 0 0 0 3px #ffd54a, 0 0 14px 4px #ffd54a; border-color: #ffd54a; }
+  100% { box-shadow: 0 0 0 0 rgba(255,213,74,0); }
+}
+.controls label { font-size: 13px; color: #aaa; display: flex; align-items: center; gap: 4px; }
