@@ -123,7 +123,7 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
                 None,
                 current_violations,
                 current_violation_score,
-                initial_groups=copy.deepcopy(groups),
+                state=copy.deepcopy(groups),
             )
         )
 

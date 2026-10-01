@@ -148,7 +148,7 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
     locked_top_ids = {row.start_number_a for row in top_rows}
     seeded_snapshot_slots = None
     for snapshot in snapshots:
-        state = snapshot.initial_groups
+        state = snapshot.state
         if not state:
             continue
         current_slots = participant_slots(state)
@@ -411,7 +411,7 @@ def test_degrade_fill_keeps_the_hard_rules_and_the_winners():
 
             quality = bracket_quality(snapshots)
             assert not quality["hard"], f"rng_seed={rng_seed}: {quality['hard']}"
-            assert winner_slots(matches) == winner_slots(degrade.initial_groups), f"rng_seed={rng_seed}"
+            assert winner_slots(matches) == winner_slots(degrade.state), f"rng_seed={rng_seed}"
         assert degraded_draws > 0, "No seed degrades any more; the test lost its subject."
     finally:
         seeding_by_start_numbers.clear()
@@ -469,8 +469,8 @@ def test_bracket_quality_only_flags_an_unrepaired_degrade():
         def quality_of(final_matches):
             return bracket_quality(
                 [
-                    Snapshot("quarter_capacity_degrade", [], None, [], {}, 0, initial_groups={}),
-                    Snapshot("final", None, None, None, {}, 0, initial_groups=final_matches),
+                    Snapshot("quarter_capacity_degrade", [], None, [], {}, 0, state={}),
+                    Snapshot("final", None, None, None, {}, 0, state=final_matches),
                 ]
             )
 
@@ -502,7 +502,7 @@ def test_bracket_quality_reads_the_returned_state(eight_players):
             for idx, participants in match_map.items()
         }
 
-    assert keys(snapshots[-1].initial_groups) == keys(matches)
+    assert keys(snapshots[-1].state) == keys(matches)
     quality = bracket_quality(snapshots)
     assert not quality["degraded"]
     assert quality["hard"] == {}
@@ -1180,7 +1180,7 @@ def test_phase_1c_never_moves_a_group_winner():
                         if p not in (None, "BYE") and p.group_pos == top_group_pos
                     }
 
-                assert winner_matches(matches) == winner_matches(after_phase_1.initial_groups), (
+                assert winner_matches(matches) == winner_matches(after_phase_1.state), (
                     f"A group winner changed match after Phase 1 ({case})."
                 )
                 seeding_by_start_numbers.clear()

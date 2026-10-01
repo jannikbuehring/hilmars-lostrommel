@@ -36,7 +36,7 @@ Error-handling summary: **stages 0-3 abort the whole pipeline (as does an unexpe
 |---|---|---|
 | `Player` | `models/player.py` | One competitor: `start_number, first_name, last_name, country, base, gender, qttr`. Appends itself to the module-global `players_list` on construction. |
 | `DrawDataRow` | `models/draw_data.py` | One line of `draw_input.csv`: a group-stage entry (`group_pos is None`) or a bracket-stage entry (`group_pos` set). Registers its seeding into the module-global `seeding_by_start_numbers` (keyed `"A"` or `"A/B"`) on construction. |
-| `Snapshot` | `models/snapshot.py` | Audit-trail entry (`action, groups, index, participants, violations, violation_score, initial_groups`) appended after every meaningful step of the group and bracket draws. Powers the HTML step-through viewers and failure diagnostics. |
+| `Snapshot` | `models/snapshot.py` | Audit-trail entry (`action, groups, index, participants, violations, violation_score, state`) appended after every meaningful step of the group and bracket draws. Powers the HTML step-through viewers and failure diagnostics. |
 | `BracketGeometry`, `allowed_quarters` | `models/bracket_geometry.py` | The single source for half/quarter geometry and for the group-separation quarter rule. The drawer places by it, `bracket_checker` checks by it, and the HTML viewer groups quarters by it, so the three cannot drift apart. |
 
 **Module-level registries** (import/call order matters):

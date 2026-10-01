@@ -101,7 +101,7 @@ def _build_bracket_payload(bracket_type, matches, snapshots):
             violations = {}
             violation_score = None
         else:
-            state = snapshot.initial_groups if getattr(snapshot, "initial_groups", None) is not None else matches
+            state = snapshot.state if getattr(snapshot, "state", None) is not None else matches
             action = snapshot.action
             violations = snapshot.violations
             violation_score = snapshot.violation_score

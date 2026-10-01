@@ -78,7 +78,7 @@ def _build_group_payload(competition, competition_class, groups, snapshots, max_
     """Build the JSON-serializable payload embedded in the exported HTML."""
     # snapshots[0] holds the padded initial state (empty slots included); the
     # drawn groups are only the fallback for a history-less export.
-    initial_groups = getattr(snapshots[0], "initial_groups", None) if snapshots else None
+    initial_groups = getattr(snapshots[0], "state", None) if snapshots else None
     if initial_groups is None:
         initial_groups = groups
 

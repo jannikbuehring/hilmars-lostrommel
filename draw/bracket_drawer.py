@@ -152,7 +152,7 @@ def bracket_quality(snapshots):
     regular bracket.
     """
     violations = (snapshots[-1].violations or {}) if snapshots else {}
-    final_matches = (snapshots[-1].initial_groups or {}) if snapshots else {}
+    final_matches = (snapshots[-1].state or {}) if snapshots else {}
     hard = {
         rule: [_describe_hard_violation(rule, v) for v in violations[rule]]
         for rule in HARD_BRACKET_RULES
@@ -506,7 +506,7 @@ def _draw_bracket_attempt(
             participants,
             violations,
             score_bracket(current_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-            initial_groups=copy.deepcopy(current_matches),
+            state=copy.deepcopy(current_matches),
         )
         snapshots.append(snapshot)
         error = ValueError(failure_details.get("message", "Bracket slotting failed."))
@@ -524,7 +524,7 @@ def _draw_bracket_attempt(
             None,
             get_bracket_violations(initial_matches),
             score_bracket(initial_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-            initial_groups=copy.deepcopy(initial_matches),
+            state=copy.deepcopy(initial_matches),
         )
     )
 
@@ -1371,7 +1371,7 @@ def _draw_bracket_attempt(
                     score_bracket(
                         step_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
                     ),
-                    initial_groups=copy.deepcopy(step_matches),
+                    state=copy.deepcopy(step_matches),
                 )
             )
         return best_slots
@@ -1441,7 +1441,7 @@ def _draw_bracket_attempt(
                     score_bracket(
                         trial_matches_det, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
                     ),
-                    initial_groups=copy.deepcopy(trial_matches_det),
+                    state=copy.deepcopy(trial_matches_det),
                 )
             )
         else:
@@ -1475,7 +1475,7 @@ def _draw_bracket_attempt(
             list(top_sorted),
             get_bracket_violations(post_top_matches),
             score_bracket(post_top_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-            initial_groups=copy.deepcopy(post_top_matches),
+            state=copy.deepcopy(post_top_matches),
         )
     )
 
@@ -1825,7 +1825,7 @@ def _draw_bracket_attempt(
                     score_bracket(
                         stepped_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
                     ),
-                    initial_groups=copy.deepcopy(stepped_matches),
+                    state=copy.deepcopy(stepped_matches),
                 )
             )
 
@@ -1847,7 +1847,7 @@ def _draw_bracket_attempt(
                 score_bracket(
                     seeded_bye_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
                 ),
-                initial_groups=copy.deepcopy(seeded_bye_matches),
+                state=copy.deepcopy(seeded_bye_matches),
             )
         )
 
@@ -1939,7 +1939,7 @@ def _draw_bracket_attempt(
                 list(residual_players),
                 get_bracket_violations(start_matches),
                 score_bracket(start_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-                initial_groups=copy.deepcopy(start_matches),
+                state=copy.deepcopy(start_matches),
             )
         )
 
@@ -2065,7 +2065,7 @@ def _draw_bracket_attempt(
                             score_bracket(
                                 m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count
                             ),
-                            initial_groups=copy.deepcopy(m_try),
+                            state=copy.deepcopy(m_try),
                         )
                     )
                     continue
@@ -2081,7 +2081,7 @@ def _draw_bracket_attempt(
                         None,
                         get_bracket_violations(m_try),
                         score_bracket(m_try, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-                        initial_groups=copy.deepcopy(m_try),
+                        state=copy.deepcopy(m_try),
                     )
                 )
 
@@ -2094,7 +2094,7 @@ def _draw_bracket_attempt(
                 None,
                 get_bracket_violations(best_matches),
                 score_bracket(best_matches, number_of_matches, weights=bracket_weights, top_count=bracket_top_count),
-                initial_groups=copy.deepcopy(best_matches),
+                state=copy.deepcopy(best_matches),
             )
         )
         return best_matches, snapshots
@@ -2169,7 +2169,7 @@ def _draw_bracket_attempt(
                 None,
                 first_full_violations,
                 first_full_score,
-                initial_groups=copy.deepcopy(first_full_matches),
+                state=copy.deepcopy(first_full_matches),
             )
         )
         return first_full_matches, snapshots
@@ -2193,7 +2193,7 @@ def _draw_bracket_attempt(
             None,
             first_full_violations,
             first_full_score,
-            initial_groups=copy.deepcopy(first_full_matches),
+            state=copy.deepcopy(first_full_matches),
         )
     )
 
@@ -2224,7 +2224,7 @@ def _draw_bracket_attempt(
                 None,
                 get_bracket_violations(best_matches),
                 best_score,
-                initial_groups=copy.deepcopy(best_matches),
+                state=copy.deepcopy(best_matches),
             )
         )
 
@@ -2255,7 +2255,7 @@ def _draw_bracket_attempt(
                         None,
                         violations,
                         score,
-                        initial_groups=copy.deepcopy(m_try),
+                        state=copy.deepcopy(m_try),
                     )
                 )
                 if best_score == 0:
@@ -2270,7 +2270,7 @@ def _draw_bracket_attempt(
                         None,
                         violations,
                         score,
-                        initial_groups=copy.deepcopy(m_try),
+                        state=copy.deepcopy(m_try),
                     )
                 )
 
@@ -2287,7 +2287,7 @@ def _draw_bracket_attempt(
             None,
             final_violations,
             final_score,
-            initial_groups=copy.deepcopy(best_matches),
+            state=copy.deepcopy(best_matches),
         )
     )
 
