@@ -25,6 +25,8 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Fixed
 
+- An unexpected error now logs its full traceback instead of only its message. A config error still shows just the message naming the key
+
 ### Security
 
 ## 1.4.0 - 2026-09-29

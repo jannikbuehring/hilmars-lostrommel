@@ -6,7 +6,7 @@ from app.banner import print_startup_info
 from app.cli import parse_args
 from app.menu import show_main_menu
 from app.pipeline import initialize_data
-from core.config import initialize_config
+from core.config import ConfigError, initialize_config
 from models.draw_results import DrawResults
 
 
@@ -43,8 +43,13 @@ def main(argv=None):
         completed = initialize_data(results, export_html=not args.no_html)
         if not completed:
             print_incomplete_run_banner()
-    except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}\n")
+    except ConfigError as e:
+        # A bad config value is the user's to fix: the message names the key, a traceback would only bury it.
+        logging.error(f"Invalid configuration: {e}\n")
+        print_incomplete_run_banner()
+        completed = False
+    except Exception:
+        logging.exception("An unexpected error occurred")
         print_incomplete_run_banner()
         completed = False
 
