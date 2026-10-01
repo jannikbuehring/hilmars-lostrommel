@@ -21,7 +21,7 @@
             "args": [
                 "--players", "input/players_example.csv",
                 "--draw-input", "input/draw_input_example.csv",
-                "--output", "output/test/output.csv",
+                "--output", "output/output_example.csv",
                 "--seed", "1",
                 "--no-html"
             ]
