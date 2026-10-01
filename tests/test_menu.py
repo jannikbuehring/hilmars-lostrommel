@@ -1,9 +1,9 @@
-"""Tests for misc/menu.py navigation."""
+"""Tests for app/menu.py navigation."""
 
 import pytest
 
-import misc.menu as menu
-from misc.initializer import DrawResults
+import app.menu as menu
+from models.draw_results import DrawResults
 
 
 @pytest.fixture

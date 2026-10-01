@@ -29,7 +29,7 @@ from checks.bracket_checker import (
     score_round_two,
     split_first_vs_first,
 )
-from misc.config import settings
+from core.config import settings
 from models.bracket_geometry import BracketGeometry, allowed_quarters
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import players_by_start_number
@@ -381,7 +381,7 @@ def _draw_bracket_attempt(
     joint_batch_max_evaluations = settings.bracket_draw.joint_batch_max_evaluations
 
     # Uses the shared global `random` module (seeded once from
-    # settings.general.random_seed by misc.config.initialize_config), the same
+    # settings.general.random_seed by core.config.initialize_config), the same
     # RNG stream draw/group_drawer.py uses, so a single config seed
     # deterministically drives the whole pipeline instead of each bracket_draw
     # call restarting its own Random() from the same seed.

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.config import settings
 from data_io.output_writer import (
     HEADERS,
     REPORT_HEADERS,
@@ -17,7 +18,6 @@ from data_io.output_writer import (
     write_to_csv,
 )
 from draw.bracket_drawer import draw_bracket
-from misc.config import settings
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 

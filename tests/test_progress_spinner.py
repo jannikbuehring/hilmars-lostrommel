@@ -1,8 +1,8 @@
-"""Tests for misc/progress_spinner.py."""
+"""Tests for app/progress_spinner.py."""
 
 import io
 
-from misc.progress_spinner import DetailSpinner
+from app.progress_spinner import DetailSpinner
 
 
 class _TtyStream(io.StringIO):

@@ -1,11 +1,11 @@
-"""Tests for misc/config.py: parsing config.ini into typed settings."""
+"""Tests for core/config.py: parsing config.ini into typed settings."""
 
 import configparser
 
 import pytest
 
-from misc.cli import parse_args
-from misc.config import ConfigError, Settings, apply_cli_overrides, initialize_config, parse_settings, settings
+from app.cli import parse_args
+from core.config import ConfigError, Settings, apply_cli_overrides, initialize_config, parse_settings, settings
 
 
 def _parse(text):

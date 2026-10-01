@@ -2,7 +2,7 @@
 
 import os
 
-from misc.config import settings
+from core.config import settings
 from viewer.group_html_exporter import export_group_html, group_html_path
 from viewer.viewer_shared import open_in_browser
 

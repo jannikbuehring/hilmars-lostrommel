@@ -1,7 +1,7 @@
 """Tests for data_io/input_reader.py."""
 
+from core.config import settings
 from data_io.input_reader import read_draw_data, read_players
-from misc.config import settings
 
 HEADER = "S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B\n"
 

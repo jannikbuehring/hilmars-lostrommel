@@ -1,9 +1,9 @@
-"""Tests for misc/cli.py: parsing the command-line arguments."""
+"""Tests for app/cli.py: parsing the command-line arguments."""
 
 import pytest
 
-from misc.cli import parse_args
-from misc.version import __version__
+from app.cli import parse_args
+from core.version import __version__
 
 
 def test_no_arguments_override_nothing():

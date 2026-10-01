@@ -23,11 +23,11 @@ requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["checks", "data_io", "draw", "misc", "models", "viewer"]
+packages = ["app", "checks", "core", "data_io", "draw", "models", "viewer"]
 py-modules = ["hilmars_lostrommel"]
 
 [tool.setuptools.dynamic]
-version = { attr = "misc.version.__version__" }
+version = { attr = "core.version.__version__" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

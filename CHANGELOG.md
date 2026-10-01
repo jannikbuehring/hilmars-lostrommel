@@ -17,6 +17,7 @@ and [keeps a changelog](https://keepachangelog.com).
 - A config value that is not a whole number where one is expected now stops the run with a message naming the key. Before, a bracket weight such as `1000.0` silently fell back to its default
 - Every config key is now optional. A missing key uses the default value shown in `config_template.ini`
 - The bracket weight order is checked once at startup instead of once per bracket, so each warning appears only once
+- The `misc/` package is split by layer: `core/` (config, version) and `app/` (pipeline, which was `initializer.py`, plus menu, cli, banner, which was `startup_info.py`, and progress spinner). `DrawResults` and `COMPETITIONS` moved to `models/draw_results.py`
 
 ### Deprecated
 

@@ -18,6 +18,7 @@ from checks.bracket_checker import (
     score_bracket_tiers,
     score_round_two,
 )
+from core.config import settings
 from draw.bracket_drawer import (
     HARD_BRACKET_RULES,
     TIER_QUARTER_BALANCE_WEIGHT,
@@ -26,7 +27,6 @@ from draw.bracket_drawer import (
     bracket_quality,
     draw_bracket,
 )
-from misc.config import settings
 from models.bracket_geometry import BracketGeometry
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list

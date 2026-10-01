@@ -1,4 +1,4 @@
-from misc.config import settings
+from core.config import settings
 from models.draw_data import DrawDataRow
 from models.player import Player
 

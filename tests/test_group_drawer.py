@@ -4,8 +4,8 @@ import random
 
 import pytest
 
+from core.config import settings
 from draw.group_drawer import EmptySlot, draw_groups_monte_carlo
-from misc.config import settings
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 

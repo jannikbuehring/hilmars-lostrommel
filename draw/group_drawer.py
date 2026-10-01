@@ -10,7 +10,7 @@ from checks.group_checker import (
     check_team_country_distribution,
     get_qttr_violations,
 )
-from misc.config import settings
+from core.config import settings
 from models.draw_data import DrawDataRow
 from models.snapshot import Snapshot
 

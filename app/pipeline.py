@@ -1,16 +1,13 @@
-"""
-Initializer module for setting up configuration, reading data,
-performing draws, and exporting results.
-"""
+"""The draw pipeline: read the input, validate it, draw every group and bracket, and export the results."""
 
 import logging
 import time
 import traceback
-from dataclasses import dataclass, field
 from datetime import datetime
 
 from yaspin import yaspin
 
+from app.progress_spinner import detail_spinner
 from checks.group_checker import (
     check_base_uniqueness,
     check_country_distribution,
@@ -24,6 +21,8 @@ from checks.validity_checker import (
     find_players_in_wrong_competition,
     find_players_not_in_draw_data,
 )
+from core.config import settings
+from core.version import __version__
 from data_io.input_reader import read_draw_data, read_players
 from data_io.output_writer import (
     archive_previous_outputs,
@@ -35,31 +34,10 @@ from data_io.output_writer import (
 )
 from draw.bracket_drawer import bracket_quality, draw_bracket
 from draw.group_drawer import draw_groups_monte_carlo
-from misc.config import settings
-from misc.progress_spinner import detail_spinner
-from misc.version import __version__
+from models.draw_results import COMPETITIONS, DrawResults
 
 _RED = "\033[91m"
 _RESET = "\033[0m"
-
-# (code in the draw input, label shown to the user)
-COMPETITIONS = (("S", "Singles"), ("D", "Doubles"), ("M", "Mixed"))
-
-
-@dataclass
-class DrawResults:
-    """Everything one run drew, keyed [competition][competition_class].
-
-    groups[c][cls] holds `group`, `snapshots`, `draw_seconds` and, after
-    validation, `violation_count`; brackets[c][cls] holds one section dict per
-    `main`/`consolation` (see draw_bracket_with_snapshot_fallback).
-    `html_exported` is False when the run skipped the HTML export (--no-html),
-    so the HTML pages on disk are not from this run.
-    """
-
-    groups: dict = field(default_factory=lambda: {code: {} for code, _ in COMPETITIONS})
-    brackets: dict = field(default_factory=lambda: {code: {} for code, _ in COMPETITIONS})
-    html_exported: bool = True
 
 
 def _by_class(entries):

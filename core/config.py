@@ -1,11 +1,11 @@
 """Typed application settings, parsed once from config/config.ini.
 
-Every module reads the shared `settings` object (`from misc.config import settings`)
+Every module reads the shared `settings` object (`from core.config import settings`)
 instead of the raw ini file. A key left out of config.ini keeps the default below
 (the same values as config/config_template.ini). An unknown key logs a warning,
 so a typo cannot silently fall back to the default; a value that is not a whole
 number where one is expected stops the run with a ConfigError. Command-line
-arguments (misc/cli.py) override the matching keys for one run.
+arguments (app/cli.py) override the matching keys for one run.
 """
 
 import configparser
@@ -134,7 +134,7 @@ def parse_settings(parser: configparser.ConfigParser) -> tuple[Settings, list[st
 
 
 def apply_settings(new_settings: Settings):
-    """Replace the shared settings in place, so every `from misc.config import settings` sees them."""
+    """Replace the shared settings in place, so every `from core.config import settings` sees them."""
     for f in fields(Settings):
         setattr(settings, f.name, getattr(new_settings, f.name))
 
@@ -166,7 +166,7 @@ def initialize_config(base_dir, args=None):
     """Load the config file into `settings`, seed `random` and configure logging.
 
     The file is `args.config` if given, else config/config.ini under `base_dir`.
-    The other command-line arguments in `args` (misc/cli.py) override its values.
+    The other command-line arguments in `args` (app/cli.py) override its values.
     """
     if args is not None and args.config:
         config_path = args.config

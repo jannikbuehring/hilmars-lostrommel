@@ -1,6 +1,6 @@
 import pytest
 
-from misc.config import reset_settings
+from core.config import reset_settings
 from models.player import players_by_start_number, players_list
 
 

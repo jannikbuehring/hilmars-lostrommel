@@ -4,7 +4,7 @@ import os
 
 import inquirer
 
-from misc.config import settings
+from core.config import settings
 from viewer.bracket_html_exporter import bracket_html_path, export_bracket_html
 from viewer.viewer_shared import open_in_browser
 

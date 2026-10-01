@@ -12,7 +12,7 @@ import json
 import os
 from datetime import datetime
 
-from misc.version import APP_NAME, __version__
+from core.version import APP_NAME, __version__
 from models.bracket_geometry import BracketGeometry
 from viewer.viewer_shared import participant_display_fields
 
@@ -551,7 +551,7 @@ def _quality_notice(quality):
     """Operator warning for a degraded or rule-breaking bracket, or None.
 
     *quality* is `bracket_drawer.bracket_quality`'s dict, stored in the bracket
-    dict by the initializer; the viewer's fallback re-export may not carry it.
+    dict by the pipeline; the viewer's fallback re-export may not carry it.
     """
     if not quality or quality.get("failed"):
         return None

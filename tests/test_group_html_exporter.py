@@ -5,9 +5,9 @@ import re
 
 import pytest
 
+from core.config import settings
+from core.version import APP_NAME, __version__
 from draw.group_drawer import draw_groups_monte_carlo
-from misc.config import settings
-from misc.version import APP_NAME, __version__
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 from viewer.group_html_exporter import export_group_html, group_html_filename

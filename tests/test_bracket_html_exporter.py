@@ -5,8 +5,8 @@ import re
 
 import pytest
 
+from core.version import APP_NAME, __version__
 from draw.bracket_drawer import draw_bracket
-from misc.version import APP_NAME, __version__
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 from viewer.bracket_html_exporter import _format_duration, _render_bracket_list, export_bracket_html

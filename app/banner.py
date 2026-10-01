@@ -1,4 +1,4 @@
-from misc.version import __version__
+from core.version import __version__
 
 # Total width of the banner box, including both border characters.
 _BOX_WIDTH = 101

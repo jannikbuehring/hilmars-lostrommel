@@ -6,7 +6,7 @@ import os
 import shutil
 from types import SimpleNamespace
 
-from misc.config import settings
+from core.config import settings
 from models.player import players_by_start_number
 
 HEADERS = [
@@ -208,7 +208,7 @@ def prepare_report(groups, group_failures, bracket_payload):
     `groups` is `{'S': {class: {...}}, ...}` as drawn (each class dict may carry
     a `violation_count` of group rule violations), `group_failures` a list of
     `(competition, class, message)` for classes whose group draw failed, and
-    `bracket_payload` the initializer's bracket dict, whose main/consolation
+    `bracket_payload` the pipeline's bracket dict, whose main/consolation
     sections carry a `quality` entry (see `bracket_drawer.bracket_quality`, or
     `{"failed": True, "message": ...}`).
     """
@@ -230,7 +230,7 @@ def prepare_report(groups, group_failures, bracket_payload):
     rows = []
     for competition, classes in groups.items():
         for competition_class in sorted(classes):
-            # Set by the initializer's group validation stage.
+            # Set by the pipeline's group validation stage.
             count = classes[competition_class].get("violation_count", 0)
             rows.append(row(competition, competition_class, "groups", "violations" if count else "ok", other=count))
     for competition, competition_class, message in group_failures:

@@ -1,14 +1,14 @@
 """Command-line arguments of hilmars_lostrommel.py.
 
 Every override defaults to None ("not given"), so a run without arguments
-behaves exactly like one that only reads config.ini. misc.config applies the
+behaves exactly like one that only reads config.ini. core.config applies the
 given values on top of the parsed ini file.
 """
 
 import argparse
 import logging
 
-from misc.version import APP_NAME, __version__
+from core.version import APP_NAME, __version__
 
 
 def _log_level(text):

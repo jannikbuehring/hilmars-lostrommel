@@ -9,9 +9,9 @@ import sys
 from PyInstaller.utils.hooks import collect_all
 
 # Put the version into the exe name (e.g. hilmars_lostrommel_v1.2.1.exe);
-# misc/version.py stays the single source of truth.
+# core/version.py stays the single source of truth.
 sys.path.insert(0, SPECPATH)
-from misc.version import __version__
+from core.version import __version__
 
 datas = []
 binaries = []

@@ -18,8 +18,8 @@ import html
 import json
 import os
 
+from core.version import APP_NAME, __version__
 from draw.group_drawer import EmptySlot
-from misc.version import APP_NAME, __version__
 
 # Shared with the bracket export so both files carry an identical heading and
 # provenance footer.

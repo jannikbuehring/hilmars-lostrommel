@@ -323,8 +323,8 @@ def test_find_draw_data_errors_accepts_valid_input():
 
 def test_find_draw_data_errors_on_committed_test_input():
     """Guards against false positives on a real-size input."""
+    from core.config import settings
     from data_io.input_reader import read_draw_data, read_players
-    from misc.config import settings
 
     settings.files.draw_data_path = "input/draw_input_example.csv"
     settings.files.players_path = "input/players_example.csv"

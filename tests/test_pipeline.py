@@ -1,9 +1,9 @@
-"""Tests for misc/initializer.py's failure path (review finding H3)."""
+"""Tests for app/pipeline.py's failure path (review finding H3)."""
 
 import pytest
 
-import misc.initializer as initializer
-from misc.config import settings
+import app.pipeline as pipeline
+from core.config import settings
 
 
 @pytest.fixture
@@ -25,9 +25,9 @@ def test_failed_run_returns_false_and_leaves_no_stale_output(output_config, monk
     def missing():
         raise FileNotFoundError("players.csv")
 
-    monkeypatch.setattr(initializer, "read_players", missing)
+    monkeypatch.setattr(pipeline, "read_players", missing)
 
-    assert initializer.initialize_data(initializer.DrawResults()) is False
+    assert pipeline.initialize_data(pipeline.DrawResults()) is False
 
     # Nothing from the previous run is left where it would look current.
     assert not (out / "output.csv").exists()
@@ -48,7 +48,7 @@ def test_locked_previous_output_aborts_before_reading_input(output_config, monke
         raise AssertionError("the run must stop before reading input")
 
     monkeypatch.setattr("data_io.output_writer.os.replace", locked)
-    monkeypatch.setattr(initializer, "read_players", must_not_run)
+    monkeypatch.setattr(pipeline, "read_players", must_not_run)
 
-    assert initializer.initialize_data(initializer.DrawResults()) is False
+    assert pipeline.initialize_data(pipeline.DrawResults()) is False
     assert (out / "output.csv").read_text() == "open in Excel"

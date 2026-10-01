@@ -2,7 +2,7 @@ import sys
 
 import inquirer
 
-from misc.initializer import COMPETITIONS, DrawResults
+from models.draw_results import COMPETITIONS, DrawResults
 from viewer.bracket_viewer import show_bracket
 from viewer.group_viewer import show_groups
 from viewer.player_viewer import show_players_table
