@@ -14,8 +14,8 @@ def assign_quarter_buckets(ctx: BracketContext, state: BracketState, non_top_par
 
     Uses the group_top_quarter map built during Phase 1.  Capacity is tracked
     dynamically: after every commit the remaining slot count for the chosen
-    quarter is decremented.  Bye recipients (those in ctx.non_top_bye_ids)
-    consume two slots (player + adjacent BYE).
+    quarter is decremented.  *non_top_participants* are the residual players,
+    none of whom has a bye, so each takes exactly one slot.
 
     Selection criterion for delta=1 (2nd-place) players when both options
     are valid: primary = most remaining quarter capacity, secondary =
@@ -84,12 +84,9 @@ def assign_quarter_buckets(ctx: BracketContext, state: BracketState, non_top_par
         else:
             unconstrained_players.append(p)
 
-    def _slots_for(p):
-        return 2 if id(p) in ctx.non_top_bye_ids else 1
-
     def _commit(p, q):
         required_quarter_map[id(p)] = q
-        quarter_remaining[q] -= _slots_for(p)
+        quarter_remaining[q] -= 1
         for country in participant_countries(p):
             quarter_country_counts[q][country] = quarter_country_counts[q].get(country, 0) + 1
 
@@ -168,7 +165,7 @@ def assign_quarter_buckets(ctx: BracketContext, state: BracketState, non_top_par
         unc_by_group.setdefault(key, []).append(p)
 
     for group_members in unc_by_group.values():
-        n = sum(_slots_for(p) for p in group_members)
+        n = len(group_members)
         viable = [q for q in range(4) if quarter_remaining[q] >= n]
         chosen_q = max(viable if viable else range(4), key=lambda q: quarter_remaining[q])
         for p in group_members:

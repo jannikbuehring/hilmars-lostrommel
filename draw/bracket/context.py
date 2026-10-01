@@ -67,7 +67,6 @@ class BracketContext:
     bye_recipient_ids: set
     # The bye recipients below the winners, placed by Phase 1b.
     non_top_bye_recipients: list
-    non_top_bye_ids: set
     # Everyone below the winners without a bye: what Phase 2 places.
     residual_players: list
 
@@ -253,7 +252,6 @@ def build_context(class_subset: list[DrawDataRow], half_balance: bool, progress=
         bye_recipients=bye_recipients,
         bye_recipient_ids=bye_recipient_ids,
         non_top_bye_recipients=non_top_bye_recipients,
-        non_top_bye_ids={id(p) for p in non_top_bye_recipients},
         residual_players=[p for p in class_subset if p.group_pos != top_group_pos and id(p) not in bye_recipient_ids],
         top_net_load=top_net_load,
         winner_groups=winner_groups,
