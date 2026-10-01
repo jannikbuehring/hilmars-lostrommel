@@ -8,7 +8,7 @@ import pytest
 from core.config import settings
 from core.version import APP_NAME, __version__
 from draw.group_drawer import draw_groups_monte_carlo
-from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.draw_data import DrawDataRow
 from models.player import Player, players_by_start_number, players_list
 from viewer.group_html_exporter import export_group_html, group_html_filename
 
@@ -28,9 +28,6 @@ def eight_players():
     Player(8, "Hana", "Hotel", "GER", "Base6", "F", 950)
     for p in players_list:
         players_by_start_number[p.start_number] = p
-    seeding_by_start_numbers.clear()
-    yield
-    seeding_by_start_numbers.clear()
 
 
 @pytest.fixture
@@ -52,7 +49,6 @@ def _singles_rows(start_numbers, amount_of_groups=2):
     rows = []
     for i, sn in enumerate(start_numbers, start=1):
         seeding = 300 - i
-        seeding_by_start_numbers[str(sn)] = seeding
         rows.append(DrawDataRow("S", "M1", seeding, amount_of_groups, None, None, True, False, sn, None))
     return rows
 
@@ -62,7 +58,6 @@ def _doubles_rows(pairs, amount_of_groups=2):
     rows = []
     for i, (a, b) in enumerate(pairs, start=1):
         seeding = 300 - i
-        seeding_by_start_numbers[f"{a}/{b}"] = seeding
         rows.append(DrawDataRow("D", "W1", seeding, amount_of_groups, None, None, True, False, a, b))
     return rows
 

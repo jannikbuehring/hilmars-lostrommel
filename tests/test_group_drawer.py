@@ -6,7 +6,7 @@ import pytest
 
 from core.config import settings
 from draw.group_drawer import EmptySlot, draw_groups_monte_carlo
-from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.draw_data import DrawDataRow
 from models.player import Player, players_by_start_number, players_list
 
 
@@ -21,14 +21,11 @@ def crowded_class():
         Player(sn, f"First{sn}", f"Last{sn}", countries[sn - 1], bases[sn - 1], "M", 2000 - sn * 10)
     for p in players_list:
         players_by_start_number[p.start_number] = p
-    seeding_by_start_numbers.clear()
     rows = []
     for sn in range(1, 41):
         seeding = 300 - sn
-        seeding_by_start_numbers[str(sn)] = seeding
         rows.append(DrawDataRow("S", "M1", seeding, 8, None, None, True, False, sn, None))
-    yield rows
-    seeding_by_start_numbers.clear()
+    return rows
 
 
 @pytest.fixture
@@ -77,7 +74,6 @@ def test_one_entry_per_group_does_not_crash(escape_heavy_config):
 
     assert {g: [p.start_number_a for p in m] for g, m in groups.items()} == {1: [1], 2: [2], 3: [3], 4: [4]}
     assert len(snapshots) == 1  # only the initial placement, no swaps
-    seeding_by_start_numbers.clear()
 
 
 def test_reports_progress_in_plain_language(crowded_class, escape_heavy_config):

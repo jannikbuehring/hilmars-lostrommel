@@ -32,7 +32,7 @@ from checks.bracket_checker import (
     validate_bracket_weights,
 )
 from models.bracket_geometry import BracketGeometry
-from models.draw_data import DrawDataRow, seeding_by_start_numbers
+from models.draw_data import DrawDataRow
 from models.player import Player, players_by_start_number, players_list
 
 # score_bracket's own defaults, passed explicitly so a partially-specified weights
@@ -59,13 +59,6 @@ def doubles(start_number_a, start_number_b):
 def tiered(start_number, group_no, group_pos):
     """A singles row that carries a group placement (singles() leaves it blank)."""
     return DrawDataRow("S", "M1", None, None, group_no, group_pos, True, False, start_number, None)
-
-
-@pytest.fixture(autouse=True)
-def clear_seeding():
-    seeding_by_start_numbers.clear()
-    yield
-    seeding_by_start_numbers.clear()
 
 
 def test_country_spread_one_per_quarter_is_clean():

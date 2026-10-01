@@ -2,6 +2,7 @@
 
 from core.config import settings
 from data_io.input_reader import read_draw_data, read_players
+from models.draw_data import DrawDataRow, seeding_by_start_numbers
 
 HEADER = "S_D_M;class;#groups;seeding;group_no;group_pos;for_main_round;for_consolation;startnumber_A;startnumber_B\n"
 
@@ -75,3 +76,22 @@ def test_read_players_parses_empty_base_and_qttr_as_none(tmp_path):
     player = _read_with_config_path("players_path", csv_file, read_players)[0]
 
     assert (player.base, player.qttr) == (None, None)
+
+
+def test_read_draw_data_registers_seeding_by_start_numbers(tmp_path):
+    """Group-stage rows register their seeding; bracket-stage rows (empty seeding) look it up later."""
+    csv_file = tmp_path / "draw_input.csv"
+    csv_file.write_text(
+        HEADER + "S;M1;2;1000;;;;;1001;\n" + "D;W1;2;900;;;;;1002;1003\n" + "S;M1;;;1;1;1;;1001;\n",
+        encoding="utf-8",
+    )
+
+    _read_with_config_path("draw_data_path", csv_file, read_draw_data)
+
+    assert seeding_by_start_numbers == {"1001": 1000, "1002/1003": 900}
+
+
+def test_draw_data_row_construction_has_no_side_effect():
+    DrawDataRow("S", "M1", 1000, 2, None, None, True, False, 1001, None)
+
+    assert seeding_by_start_numbers == {}

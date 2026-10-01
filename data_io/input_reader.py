@@ -1,5 +1,5 @@
 from core.config import settings
-from models.draw_data import DrawDataRow
+from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player
 
 
@@ -11,6 +11,14 @@ def _parse_bool(value: str) -> bool:
 def _parse_optional_int(value: str) -> int | None:
     """Parse an optional integer field ('' = None)."""
     return int(value) if value != "" else None
+
+
+def _register_seeding(row: DrawDataRow) -> None:
+    """Record a row's seeding under "A" or "A/B" so bracket-stage rows (no seeding in the CSV) can look it up."""
+    if row.seeding is None:
+        return
+    key = str(row.start_number_a) if row.start_number_b is None else f"{row.start_number_a}/{row.start_number_b}"
+    seeding_by_start_numbers[key] = row.seeding
 
 
 def read_draw_data() -> list[DrawDataRow]:
@@ -32,20 +40,20 @@ def read_draw_data() -> list[DrawDataRow]:
                 start_number_a,
                 start_number_b,
             ) = [field.strip() for field in line.strip().split(";")]
-            draw_data.append(
-                DrawDataRow(
-                    competition=competition,
-                    competition_class=competition_class,
-                    seeding=_parse_optional_int(seeding),
-                    amount_of_groups=_parse_optional_int(amount_of_groups),
-                    group_no=_parse_optional_int(group_no),
-                    group_pos=_parse_optional_int(group_pos),
-                    main_round=_parse_bool(main_round),
-                    consolation_round=_parse_bool(consolation_round),
-                    start_number_a=int(start_number_a),
-                    start_number_b=_parse_optional_int(start_number_b),
-                )
+            row = DrawDataRow(
+                competition=competition,
+                competition_class=competition_class,
+                seeding=_parse_optional_int(seeding),
+                amount_of_groups=_parse_optional_int(amount_of_groups),
+                group_no=_parse_optional_int(group_no),
+                group_pos=_parse_optional_int(group_pos),
+                main_round=_parse_bool(main_round),
+                consolation_round=_parse_bool(consolation_round),
+                start_number_a=int(start_number_a),
+                start_number_b=_parse_optional_int(start_number_b),
             )
+            _register_seeding(row)
+            draw_data.append(row)
         return draw_data
 
 

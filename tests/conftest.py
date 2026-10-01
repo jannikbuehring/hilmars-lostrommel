@@ -1,17 +1,22 @@
 import pytest
 
 from core.config import reset_settings
+from models.draw_data import seeding_by_start_numbers
 from models.player import players_by_start_number, players_list
 
 
+def _clear_registries():
+    players_list.clear()
+    players_by_start_number.clear()
+    seeding_by_start_numbers.clear()
+
+
 @pytest.fixture(autouse=True)
-def reset_player_globals():
-    """Player construction mutates module-level globals as a side effect; isolate each test."""
-    players_list.clear()
-    players_by_start_number.clear()
+def reset_registries():
+    """Player construction and read_draw_data fill module-level registries; isolate each test."""
+    _clear_registries()
     yield
-    players_list.clear()
-    players_by_start_number.clear()
+    _clear_registries()
 
 
 @pytest.fixture(autouse=True)

@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from models.player import players_by_start_number
 
-seeding_by_start_numbers = {}
+# "A" or "A/B" -> seeding; filled by data_io.input_reader.read_draw_data, read by the bracket drawer.
+seeding_by_start_numbers: dict[str, int] = {}
 
 
 @dataclass(eq=False)
@@ -21,13 +22,6 @@ class DrawDataRow:
     consolation_round: bool
     start_number_a: int
     start_number_b: int | None
-
-    def __post_init__(self):
-        if self.seeding is not None:
-            key = str(self.start_number_a)
-            if self.start_number_b is not None:
-                key += "/" + str(self.start_number_b)
-            seeding_by_start_numbers[key] = self.seeding
 
     def __repr__(self):
         return f"{self.competition} {self.competition_class} (Seeding: {self.seeding}, Player A: {self.start_number_a}, {players_by_start_number[self.start_number_a].country}. Player B: {self.start_number_b}, {players_by_start_number[self.start_number_b].country if self.start_number_b is not None else ''})"

@@ -27,9 +27,6 @@ def eight_players():
     Player(8, "Hana", "Hotel", "GER", "Base6", "F", 950)
     for p in players_list:
         players_by_start_number[p.start_number] = p
-    seeding_by_start_numbers.clear()
-    yield
-    seeding_by_start_numbers.clear()
 
 
 def _draw_eight_player_bracket():

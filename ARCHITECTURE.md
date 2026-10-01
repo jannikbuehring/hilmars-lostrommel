@@ -36,13 +36,13 @@ Error-handling summary: **stages 0-3 abort the whole pipeline (as does an unexpe
 | Class | File | Role |
 |---|---|---|
 | `Player` | `models/player.py` | Dataclass for one competitor: `start_number, first_name, last_name, country, base, gender, qttr`. Fields arrive already parsed (`int`, or `None` for an empty `base`/`qttr`), because `data_io/input_reader.py` does the parsing. Appends itself to the module-global `players_list` on construction. |
-| `DrawDataRow` | `models/draw_data.py` | Dataclass for one line of `draw_input.csv`, with fields already parsed by the reader (empty number fields become `None`): a group-stage entry (`group_pos is None`) or a bracket-stage entry (`group_pos` set). Registers its seeding into the module-global `seeding_by_start_numbers` (keyed `"A"` or `"A/B"`) on construction. |
+| `DrawDataRow` | `models/draw_data.py` | Dataclass for one line of `draw_input.csv`, with fields already parsed by the reader (empty number fields become `None`): a group-stage entry (`group_pos is None`) or a bracket-stage entry (`group_pos` set). Constructing one has no side effects. |
 | `Snapshot` | `models/snapshot.py` | Audit-trail entry (`action, groups, index, participants, violations, violation_score, state`) appended after every meaningful step of the group and bracket draws. Powers the HTML step-through viewers and failure diagnostics. |
 | `BracketGeometry`, `allowed_quarters` | `models/bracket_geometry.py` | The single source for half/quarter geometry and for the group-separation quarter rule. The drawer places by it, `bracket_checker` checks by it, and the HTML viewer groups quarters by it, so the three cannot drift apart. |
 
 **Module-level registries** (import/call order matters):
 - `players_list`, `players_by_start_number` (`models/player.py`). The latter is only populated by `check_all_players_only_exist_once()`, not by `Player` construction, so anything that reads it requires that check to have run.
-- `seeding_by_start_numbers` (`models/draw_data.py`) — used by the bracket drawer to re-attach seeding to bracket-stage rows, which carry none in the CSV.
+- `seeding_by_start_numbers` (`models/draw_data.py`, keyed `"A"` or `"A/B"`) — filled by `read_draw_data` from the rows that carry a seeding; used by the bracket drawer to re-attach seeding to bracket-stage rows, which carry none in the CSV.
 
 **Runtime data shapes:**
 - Groups = `dict[group_no, list[DrawDataRow]]` (padded internally with `EmptySlot` placeholders, stripped before returning).
