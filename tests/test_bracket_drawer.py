@@ -31,6 +31,7 @@ from models.bracket_geometry import BracketGeometry
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 from models.snapshot import Snapshot
+from tests.bracket_shapes import build_tiered_rows
 
 
 def participant_slots(match_map):
@@ -704,49 +705,6 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
 # already assigned to its quarter.  Before the post-pass the real input produced 22
 # rule-A violations across the singles draws; after it, zero.
 # ---------------------------------------------------------------------------
-
-
-def build_tiered_rows(
-    number_of_groups, positions, competition_class="M1", first_start_number=201, short_groups=(), country_for=None
-):
-    """Register fresh players and return rows for number_of_groups x positions.
-
-    Unique countries and bases per player so the country/base terms cannot
-    manufacture unrelated violations, and strictly descending seedings.
-
-    *short_groups* lists group numbers that omit the LAST position, i.e. an uneven
-    class where not every group sent a qualifier for that tier.
-
-    *country_for* optionally overrides that: a ``(group_no, group_pos) -> country
-    or None`` callable, so a test can give two participants the SAME country and
-    make the country terms actually bite.  Returning None keeps the unique default.
-    """
-    group_positions = {
-        group_no: (positions[:-1] if group_no in short_groups else positions)
-        for group_no in range(1, number_of_groups + 1)
-    }
-    # Countries are decided per (group_no, group_pos), so resolve the layout before
-    # registering the players -- start numbers are handed out in that same order.
-    layout = [
-        (group_no, group_pos) for group_no in range(1, number_of_groups + 1) for group_pos in group_positions[group_no]
-    ]
-    for offset, (group_no, group_pos) in enumerate(layout):
-        sn = first_start_number + offset
-        country = country_for(group_no, group_pos) if country_for is not None else None
-        Player(sn, f"Last{sn}", f"First{sn}", country or f"C{sn}", f"Base{sn}", "F", 2000 - sn)
-    for p in players_list:
-        players_by_start_number[p.start_number] = p
-
-    rows = []
-    seed = 300
-    for offset, (group_no, group_pos) in enumerate(layout):
-        sn = first_start_number + offset
-        seeding_by_start_numbers[str(sn)] = seed
-        rows.append(
-            DrawDataRow("S", competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, None)
-        )
-        seed -= 1
-    return rows
 
 
 @pytest.mark.slow
