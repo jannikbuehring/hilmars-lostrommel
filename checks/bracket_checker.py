@@ -247,12 +247,11 @@ def _bracket_position_bounds(matches: Dict[int, List]):
     return min(positions), max(positions)
 
 
-def _participant_countries(participant):
+def participant_countries(participant):
     """Return the country/countries a bracket participant brings to a match.
 
     A doubles/mixed participant is a team of two and therefore carries two
-    countries.  Duplicated from draw.bracket_drawer's identically named closure,
-    which is nested inside draw_bracket() and so cannot be imported.
+    countries.  Shared with the bracket drawer (draw/bracket).
     """
     countries = []
     try:
@@ -379,7 +378,7 @@ def check_country_conflicts_first_round(matches: Dict[int, List]):
         if pair is None:
             continue
         a, b = pair
-        shared = {c for c in _participant_countries(a) if c} & {c for c in _participant_countries(b) if c}
+        shared = {c for c in participant_countries(a) if c} & {c for c in participant_countries(b) if c}
         if shared:
             violations.append((match_idx, sorted(shared), a, b))
     return violations
@@ -593,7 +592,7 @@ def check_placement_balance_halves(matches: Dict[int, List], number_of_matches: 
     Unlike :func:`check_placement_balance_quarters` this is a half-level count, so
     it is decided by the group winners' halves: a winner's 2nd/3rd are pinned to
     the opposite half.  The drawer therefore charges it in Phase 1, where the
-    winners are placed (bracket_drawer's projected_half_balance_units).
+    winners are placed (draw.bracket.costs.projected_half_balance_units).
 
     A difference of 1 is allowed (an odd tier count cannot split evenly).
     Returns (group_pos, (count_half0, count_half1), violation_amount) per
@@ -840,12 +839,12 @@ def score_bracket_tiers(
     # none of them can be improved by the phase-5 Monte Carlo, so each would be a
     # constant -- and any bracket that cannot satisfy it would then never reach
     # score 0, defeating the early exits in all four phase-5 quarter loops.  All
-    # three are enforced where they still can be, by bracket_drawer's Phase
+    # three are enforced where they still can be, by the bracket drawer's Phase
     # 1/1b/1c objective (and the bye balance also by the degrade fill, which is
     # the one later phase that moves byes), and reported via
-    # get_bracket_violations so both viewers still surface them.
+    # bracket_violations so both viewers still surface them.
     #   * check_bye_balance_halves -- outside the degrade fill the byes are locked
-    #     into place by Phase 1/1b.  bracket_drawer scores it directly in
+    #     into place by Phase 1/1b; the bracket drawer scores it directly in
     #     assignment_quality_cost, where they are still being placed.
     #   * check_round_two_matchups -- every bye recipient sits opposite a BYE and
     #     every remaining free slot's partner is free too, so from Phase 2 on a

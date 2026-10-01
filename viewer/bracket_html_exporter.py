@@ -69,7 +69,7 @@ def _serialize_participant(p):
 def _serialize_matches(matches):
     """Serialize matches, padding every match to exactly two slots.
 
-    slots_to_matches (draw/bracket_drawer.py) only appends filled slots, so a
+    slots_to_matches (draw/bracket/state.py) only appends filled slots, so a
     partially-drawn match can be [] or length 1. Padding to two None slots
     guarantees the JS renderer always finds both sides and never indexes past
     the array (which would otherwise crash render() on partial/phase-1 draws).
@@ -195,7 +195,7 @@ def _render_bracket_list(number_of_matches):
 def _quality_notice(quality):
     """Operator warning for a degraded or rule-breaking bracket, or None.
 
-    *quality* is `bracket_drawer.bracket_quality`'s dict, stored in the bracket
+    *quality* is `draw.bracket.bracket_quality`'s dict, stored in the bracket
     dict by the pipeline; the viewer's fallback re-export may not carry it.
     """
     if not quality or quality.get("failed"):

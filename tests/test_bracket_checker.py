@@ -438,8 +438,8 @@ def test_new_weights_outrank_country_distribution():
 def test_default_ladders_are_consistent():
     """The default weights keep every in-tier order and the round-two band.
 
-    The live config.ini is checked by the same function at draw time
-    (bracket_drawer logs a warning per problem), not here: the suite runs on
+    The live config.ini is checked by the same function at startup
+    (the config loader logs a warning per problem), not here: the suite runs on
     the defaults only.
     """
     assert validate_bracket_weights(DEFAULT_WEIGHTS, ROUND_TWO_DEFAULT_WEIGHTS) == []

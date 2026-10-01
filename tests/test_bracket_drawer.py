@@ -1,4 +1,4 @@
-"""Tests for draw/bracket_drawer.py, converted from the original run_bracket_smoke.py script."""
+"""Tests for draw/bracket, converted from the original run_bracket_smoke.py script."""
 
 import random
 
@@ -19,13 +19,13 @@ from checks.bracket_checker import (
     score_round_two,
 )
 from core.config import settings
-from draw.bracket_drawer import (
+from draw.bracket import (
     HARD_BRACKET_RULES,
     TIER_QUARTER_BALANCE_WEIGHT,
-    _draw_bracket_attempt,
-    _result_rank,
     bracket_quality,
     draw_bracket,
+    draw_bracket_attempt,
+    result_rank,
 )
 from models.bracket_geometry import BracketGeometry
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
@@ -860,8 +860,8 @@ def test_half_balance_never_costs_a_hard_rule():
             random.seed(rng_seed)
             _, snapshots = draw_bracket(rows)
             random.seed(rng_seed)
-            _, unbalanced_snapshots = _draw_bracket_attempt(rows, half_balance=False)
-            assert _result_rank(snapshots) <= _result_rank(unbalanced_snapshots), f"rng_seed={rng_seed}"
+            _, unbalanced_snapshots = draw_bracket_attempt(rows, half_balance=False)
+            assert result_rank(snapshots) <= result_rank(unbalanced_snapshots), f"rng_seed={rng_seed}"
     finally:
         seeding_by_start_numbers.clear()
 

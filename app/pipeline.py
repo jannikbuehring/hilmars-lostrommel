@@ -32,7 +32,7 @@ from data_io.output_writer import (
     write_report_csv,
     write_to_csv,
 )
-from draw.bracket_drawer import bracket_quality, draw_bracket
+from draw.bracket import bracket_quality, draw_bracket
 from draw.group_drawer import draw_groups_monte_carlo
 from models.draw_results import COMPETITIONS, DrawResults
 
@@ -79,7 +79,7 @@ def initialize_data(results: DrawResults, export_html=True):
         """Draw one bracket and return its section dict.
 
         The dict carries `matches`, `snapshots`, `draw_seconds` and `quality`
-        (`bracket_drawer.bracket_quality`, or `{"failed": True, "message": ...}`).
+        (`draw.bracket.bracket_quality`, or `{"failed": True, "message": ...}`).
         The elapsed time is reported on the failure path too, so a bracket that
         exhausted its attempts still shows how long that search took.
         """

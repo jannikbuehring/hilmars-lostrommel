@@ -17,7 +17,7 @@ from data_io.output_writer import (
     write_report_csv,
     write_to_csv,
 )
-from draw.bracket_drawer import draw_bracket
+from draw.bracket import draw_bracket
 from models.draw_data import DrawDataRow, seeding_by_start_numbers
 from models.player import Player, players_by_start_number, players_list
 

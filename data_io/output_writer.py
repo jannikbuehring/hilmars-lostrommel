@@ -55,7 +55,7 @@ def _clear_pair_fields(row):
 def _iter_bracket_slots(matches):
     """Yield (slot_number, participant_or_None) for every slot in Rasterzahl order.
 
-    Inverse of `bracket_drawer.slot_to_match`: match `m` owns slots `2m-1` and
+    Inverse of `BracketGeometry.slot_to_match`: match `m` owns slots `2m-1` and
     `2m`. `slots_to_matches` can leave a match with 0 or 1 entries (partially
     drawn brackets), so missing sides are yielded as None -- the same padding
     `bracket_html_exporter._serialize_matches` applies.
@@ -214,7 +214,7 @@ def prepare_report(
     a `violation_count` of group rule violations), `group_failures` a list of
     `(competition, class, message)` for classes whose group draw failed, and
     `bracket_payload` the pipeline's bracket dict, whose main/consolation
-    sections carry a `quality` entry (see `bracket_drawer.bracket_quality`, or
+    sections carry a `quality` entry (see `draw.bracket.bracket_quality`, or
     `{"failed": True, "message": ...}`).
     """
 

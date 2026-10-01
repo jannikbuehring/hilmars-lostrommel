@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from draw.bracket_drawer import draw_bracket
+from draw.bracket import draw_bracket
 from models.draw_data import DrawDataRow
 from tests.bracket_shapes import build_doubles_rows, build_tiered_rows
 
@@ -74,9 +74,7 @@ def fingerprint(rows, matches, snapshots):
         "rows": [(_canon(r), r.seeding) for r in rows],
         "matches": _canon(matches),
         "snapshots": [
-            _canon(
-                [s.action, s.groups, s.index, s.participants, s.violations, s.violation_score, s.state]
-            )
+            _canon([s.action, s.groups, s.index, s.participants, s.violations, s.violation_score, s.state])
             for s in snapshots
         ],
         # Pins how much randomness the draw consumed.
