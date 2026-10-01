@@ -7,6 +7,20 @@ and [keeps a changelog](https://keepachangelog.com).
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## 1.5.0 - 2026-10-01
+
+### Added
+
 - A warning at startup for every unknown key or section in `config.ini`, so a misspelled key no longer silently falls back to its default
 - Command-line options `--config`, `--players`, `--draw-input`, `--output`, `--seed` and `--log-level`, which override the config file for one run
 - `--no-html` to skip the HTML export and leave the existing HTML pages untouched
@@ -22,10 +36,6 @@ and [keeps a changelog](https://keepachangelog.com).
 - `Player` and `DrawDataRow` are dataclasses with typed, already-parsed fields. CSV parsing moved into `data_io/input_reader.py`. Public functions in the checkers, drawers, output writer and HTML exporters have type hints
 - The bracket drawer is split from one 2,000-line function into the package `draw/bracket/`, one module per phase, with its fixed inputs in `BracketContext` and its placement in `BracketState`. Draws are unchanged: golden tests pin the exact brackets, snapshot trails and random-number use. `draw.bracket_drawer` is now `draw.bracket`, and the checker's `participant_countries` is shared with the drawer instead of duplicated
 
-### Deprecated
-
-### Removed
-
 ### Fixed
 
 - An unexpected error now logs its full traceback instead of only its message. A config error still shows just the message naming the key
@@ -33,8 +43,6 @@ and [keeps a changelog](https://keepachangelog.com).
 ### Security
 
 - The build workflow reads the Nextcloud share URL from the repository secret `NEXTCLOUD_SHARE_URL`, so the share token is masked in the Actions logs
-
-## 1.5.0 - 2026-10-01
 
 ## 1.4.0 - 2026-09-29
 
