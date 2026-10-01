@@ -616,18 +616,20 @@ def _render_html_document(title, heading, payload, list_markup, footer_markup, n
 """
 
 
-def bracket_html_filename(competition, competition_class, bracket_type):
+def bracket_html_filename(competition: str, competition_class: str, bracket_type: str) -> str:
     """Return the HTML filename for a single bracket type (shared naming convention)."""
     return f"{competition}_{competition_class}_{bracket_type}_bracket.html"
 
 
-def bracket_html_path(competition, competition_class, bracket_type, output_dir):
+def bracket_html_path(competition: str, competition_class: str, bracket_type: str, output_dir: str) -> str:
     """Return the full HTML path for a single bracket type."""
     filename = bracket_html_filename(competition, competition_class, bracket_type)
     return os.path.join(output_dir, filename)
 
 
-def export_bracket_html(competition, competition_class, bracket, output_dir, run_meta=None):
+def export_bracket_html(
+    competition: str, competition_class: str, bracket: dict, output_dir: str, run_meta: dict | None = None
+) -> list[str]:
     """Write one self-contained HTML file per bracket type present in *bracket*.
 
     *run_meta* carries the run-wide provenance shown in each file's footer

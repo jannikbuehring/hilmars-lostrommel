@@ -382,28 +382,28 @@ def initialize_data(results: DrawResults, export_html=True):
                         spinner.fail("WARN")
                         for v in country_violations:
                             print(
-                                f"Country distribution violation in {group_type}: class={competition_class}, country={v[0]}, max={v[1]}, min={v[2]}, group_counts={v[3]}"
+                                f"Country distribution violation in {group_type}: class={competition_class}, country={v.country}, max={v.max_count}, min={v.min_count}, group_counts={v.group_counts}"
                             )
                     if base_violations:
                         spinner.text = f"Base uniqueness violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in base_violations:
                             print(
-                                f"Base uniqueness violation in {group_type}: class={competition_class}, group={v[0]}, base={v[1]}, count={v[2]}"
+                                f"Base uniqueness violation in {group_type}: class={competition_class}, group={v.group_no}, base={v.base}, count={v.count}"
                             )
                     if team_country_violations:
                         spinner.text = f"Team country distribution violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in team_country_violations:
                             print(
-                                f"Team country distribution violation in {group_type}: class={competition_class}, team_type={v[0]}, country={v[1]}, max={v[3]}, min={v[2]}, group_counts={v[4]}"
+                                f"Team country distribution violation in {group_type}: class={competition_class}, team_type={v.team_type}, country={v.country}, max={v.max_count}, min={v.min_count}, group_counts={v.group_counts}"
                             )
                     if qttr_violations:
                         spinner.text = f"QTTR distribution violations detected in {group_type}!"
                         spinner.fail("WARN")
                         for v in qttr_violations:
                             print(
-                                f"Distribution of players without QTTR rating in {group_type}: class={competition_class}, group={v[0]} - {v[1]} players without QTTR. Distribution: {v[2]}"
+                                f"Distribution of players without QTTR rating in {group_type}: class={competition_class}, group={v.group_no} - {v.count} players without QTTR. Distribution: {v.counts_by_group}"
                             )
 
             if not invalid_groups:

@@ -3,6 +3,7 @@
 import copy
 import logging
 import random
+from collections.abc import Callable
 
 from checks.group_checker import (
     check_base_uniqueness,
@@ -38,7 +39,9 @@ class EmptySlot:
         return type(self)()
 
 
-def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, progress=None):
+def draw_groups_monte_carlo(
+    class_subset: list[DrawDataRow], amount_of_groups: int, progress: Callable[[str], None] | None = None
+) -> tuple[dict[int, list[DrawDataRow]] | None, list[Snapshot] | None]:
     """Draw groups for a competition class using Monte Carlo optimization to minimize country conflicts.
     Retries with different random seeds if the score is not 0, up to a configurable limit.
 
@@ -83,8 +86,8 @@ def draw_groups_monte_carlo(class_subset: list[DrawDataRow], amount_of_groups, p
 
         def calculate_violation_score(violations):
             return (
-                sum(v[4] for v in violations["country"]) * group_settings.country_violation_weight
-                + sum(v[5] for v in violations["team_country"]) * group_settings.team_country_violation_weight
+                sum(v.severity for v in violations["country"]) * group_settings.country_violation_weight
+                + sum(v.severity for v in violations["team_country"]) * group_settings.team_country_violation_weight
                 + len(violations["base"]) * group_settings.base_violation_weight
                 + len(violations["qttr"]) * group_settings.qttr_violation_weight
             )

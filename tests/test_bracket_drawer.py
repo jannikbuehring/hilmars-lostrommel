@@ -124,7 +124,7 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
         (8, 2, 4),
     ]
     rows = [
-        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, "")
+        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, None)
         for sn, group_no, group_pos in group_layout
     ]
 
@@ -172,11 +172,11 @@ def test_group_qualifiers_bracket_half_separation_and_seeding(eight_players):
 
 def test_bye_distribution_is_balanced_and_separates_group_top_two(eight_players):
     small_rows = [
-        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, ""),
-        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, ""),
-        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, ""),
-        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, ""),
-        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, ""),
+        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, None),
+        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, None),
+        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, None),
+        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, None),
+        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, None),
     ]
 
     for row in small_rows:
@@ -209,14 +209,14 @@ def test_bye_distribution_is_balanced_and_separates_group_top_two(eight_players)
 
 def test_relative_top_half_relation_for_consolation_like_bracket(eight_players):
     relative_rows = [
-        DrawDataRow("S", "M1", 400, 2, 1, 2, True, False, 1, ""),
-        DrawDataRow("S", "M1", 390, 2, 1, 3, True, False, 2, ""),
-        DrawDataRow("S", "M1", 380, 2, 1, 4, True, False, 3, ""),
-        DrawDataRow("S", "M1", 370, 2, 1, 5, True, False, 4, ""),
-        DrawDataRow("S", "M1", 360, 2, 2, 2, True, False, 5, ""),
-        DrawDataRow("S", "M1", 350, 2, 2, 3, True, False, 6, ""),
-        DrawDataRow("S", "M1", 340, 2, 2, 4, True, False, 7, ""),
-        DrawDataRow("S", "M1", 330, 2, 2, 5, True, False, 8, ""),
+        DrawDataRow("S", "M1", 400, 2, 1, 2, True, False, 1, None),
+        DrawDataRow("S", "M1", 390, 2, 1, 3, True, False, 2, None),
+        DrawDataRow("S", "M1", 380, 2, 1, 4, True, False, 3, None),
+        DrawDataRow("S", "M1", 370, 2, 1, 5, True, False, 4, None),
+        DrawDataRow("S", "M1", 360, 2, 2, 2, True, False, 5, None),
+        DrawDataRow("S", "M1", 350, 2, 2, 3, True, False, 6, None),
+        DrawDataRow("S", "M1", 340, 2, 2, 4, True, False, 7, None),
+        DrawDataRow("S", "M1", 330, 2, 2, 5, True, False, 8, None),
     ]
 
     for row in relative_rows:
@@ -251,7 +251,7 @@ def test_five_groups_three_positions_no_capacity_degrade():
             for group_pos in range(1, 4):
                 sn = start_numbers.pop(0)
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, ""))
+                rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, None))
                 seed -= 1
         return rows
 
@@ -301,7 +301,7 @@ def test_uneven_consolation_layout_no_capacity_degrade():
         sn = 101
         for group_no, group_pos in layout:
             seeding_by_start_numbers[str(sn)] = seed
-            rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, ""))
+            rows.append(DrawDataRow("S", "W1", seed, 5, group_no, group_pos, True, False, sn, None))
             seed -= 1
             sn += 1
         return rows
@@ -348,7 +348,7 @@ def test_phase_1c_keeps_consolation_half_separation():
         for group_no in range(1, 4):
             for group_pos in (4, 5, 6):
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow("S", "M1", seed, 3, group_no, group_pos, False, True, sn, ""))
+                rows.append(DrawDataRow("S", "M1", seed, 3, group_no, group_pos, False, True, sn, None))
                 seed -= 1
                 sn += 1
         return rows
@@ -425,10 +425,10 @@ def test_over_constrained_layout_degrades_to_best_effort(eight_players):
     the snapshots (half/quarter separation become soft, heavily weighted goals).
     """
     over_constrained_rows = [
-        DrawDataRow("S", "M1", 500, 1, 1, 1, True, False, 1, ""),
-        DrawDataRow("S", "M1", 490, 1, 1, 2, True, False, 2, ""),
-        DrawDataRow("S", "M1", 480, 1, 1, 2, True, False, 3, ""),
-        DrawDataRow("S", "M1", 470, 1, 1, 3, True, False, 4, ""),
+        DrawDataRow("S", "M1", 500, 1, 1, 1, True, False, 1, None),
+        DrawDataRow("S", "M1", 490, 1, 1, 2, True, False, 2, None),
+        DrawDataRow("S", "M1", 480, 1, 1, 2, True, False, 3, None),
+        DrawDataRow("S", "M1", 470, 1, 1, 3, True, False, 4, None),
     ]
 
     for row in over_constrained_rows:
@@ -461,10 +461,10 @@ def test_bracket_quality_only_flags_an_unrepaired_degrade():
         for sn in (901, 902, 903, 904):
             Player(sn, f"Last{sn}", f"First{sn}", f"C{sn}", f"Base{sn}", "F", 1500)
             players_by_start_number[sn] = players_list[-1]
-        winner_a = DrawDataRow("S", "M1", 300, 2, 1, 1, True, False, 901, "")
-        winner_b = DrawDataRow("S", "M1", 299, 2, 2, 1, True, False, 902, "")
-        second_high = DrawDataRow("S", "M1", 290, 2, 2, 2, True, False, 903, "")
-        second_low = DrawDataRow("S", "M1", 280, 2, 1, 2, True, False, 904, "")
+        winner_a = DrawDataRow("S", "M1", 300, 2, 1, 1, True, False, 901, None)
+        winner_b = DrawDataRow("S", "M1", 299, 2, 2, 1, True, False, 902, None)
+        second_high = DrawDataRow("S", "M1", 290, 2, 2, 2, True, False, 903, None)
+        second_low = DrawDataRow("S", "M1", 280, 2, 1, 2, True, False, 904, None)
 
         def quality_of(final_matches):
             return bracket_quality(
@@ -491,7 +491,7 @@ def test_bracket_quality_reads_the_returned_state(eight_players):
     rows = []
     for index, sn in enumerate(range(1, 9)):
         seeding_by_start_numbers[str(sn)] = 300 - index
-        rows.append(DrawDataRow("S", "M1", 300 - index, 2, 1 if index < 4 else 2, index % 4 + 1, True, False, sn, ""))
+        rows.append(DrawDataRow("S", "M1", 300 - index, 2, 1 if index < 4 else 2, index % 4 + 1, True, False, sn, None))
 
     random.seed(0)
     matches, snapshots = draw_bracket(rows)
@@ -552,7 +552,7 @@ def test_group_winner_countries_spread_across_quarters():
             for group_no in range(1, 9):
                 sn = group_no if group_pos == 1 else group_no + 8
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow("S", "M1", seed, 8, group_no, group_pos, True, False, sn, ""))
+                rows.append(DrawDataRow("S", "M1", seed, 8, group_no, group_pos, True, False, sn, None))
                 seed -= 1
         return rows
 
@@ -611,12 +611,12 @@ def test_batch_is_assigned_jointly_not_player_by_player():
         seed = 300
         for group_no in range(1, 13):
             seeding_by_start_numbers[str(group_no)] = seed
-            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 1, True, False, group_no, ""))
+            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 1, True, False, group_no, None))
             seed -= 1
         for offset, group_no in enumerate((1, 2, 3, 4, 5)):
             sn = 13 + offset
             seeding_by_start_numbers[str(sn)] = seed
-            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 2, True, False, sn, ""))
+            rows.append(DrawDataRow("S", "M1", seed, 12, group_no, 2, True, False, sn, None))
             seed -= 1
 
         settings.bracket_draw.joint_batch_max_evaluations = budget
@@ -672,7 +672,7 @@ def test_phase_1b_continues_the_seeded_slot_hierarchy():
             for group_no in range(1, 11):
                 sn = group_no if group_pos == 1 else group_no + 10
                 seeding_by_start_numbers[str(sn)] = seed
-                rows.append(DrawDataRow("S", "M1", seed, 10, group_no, group_pos, True, False, sn, ""))
+                rows.append(DrawDataRow("S", "M1", seed, 10, group_no, group_pos, True, False, sn, None))
                 seed -= 1
         return rows
 
@@ -746,7 +746,7 @@ def build_tiered_rows(
         sn = first_start_number + offset
         seeding_by_start_numbers[str(sn)] = seed
         rows.append(
-            DrawDataRow("S", competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, "")
+            DrawDataRow("S", competition_class, seed, number_of_groups, group_no, group_pos, True, False, sn, None)
         )
         seed -= 1
     return rows
@@ -1409,11 +1409,11 @@ def test_every_placed_member_sits_in_an_allowed_quarter(number_of_groups, positi
 def test_draw_bracket_reports_its_phases(eight_players):
     """Five players in an 8-slot bracket: three byes, so the bye phase reports too."""
     rows = [
-        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, ""),
-        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, ""),
-        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, ""),
-        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, ""),
-        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, ""),
+        DrawDataRow("S", "M1", 100, 2, 1, 1, True, False, 1, None),
+        DrawDataRow("S", "M1", 95, 2, 2, 1, True, False, 2, None),
+        DrawDataRow("S", "M1", 90, 2, 1, 2, True, False, 3, None),
+        DrawDataRow("S", "M1", 85, 2, 2, 5, True, False, 4, None),
+        DrawDataRow("S", "M1", 80, 2, 1, 5, True, False, 5, None),
     ]
     for row in rows:
         seeding_by_start_numbers[str(row.start_number_a)] = row.seeding

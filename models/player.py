@@ -1,21 +1,25 @@
 """Module defining the Player class and managing player instances."""
 
+from dataclasses import dataclass
+
 # for validation
 players_list = []
 players_by_start_number = {}
 
 
+@dataclass(eq=False)
 class Player:
-    """Class representing a player."""
+    """A player with already-parsed fields (parsing lives in data_io.input_reader)."""
 
-    def __init__(self, start_number: int, first_name, last_name, country, base, gender, qttr):
-        self.start_number = int(start_number)
-        self.first_name = first_name
-        self.last_name = last_name
-        self.country = country
-        self.base = base if base != "" else None
-        self.gender = gender
-        self.qttr = int(qttr) if qttr not in (None, "") else None
+    start_number: int
+    first_name: str
+    last_name: str
+    country: str
+    base: str | None
+    gender: str
+    qttr: int | None
+
+    def __post_init__(self):
         players_list.append(self)
 
     def __repr__(self):

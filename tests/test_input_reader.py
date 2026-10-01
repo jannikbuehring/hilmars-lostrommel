@@ -53,3 +53,25 @@ def test_read_players_strips_whitespace_around_fields(tmp_path):
     assert player.start_number == 1001
     assert (player.last_name, player.first_name) == ("Wang", "Chuqin")
     assert (player.country, player.base, player.gender, player.qttr) == ("GER", "Base", "F", 2796)
+
+
+def test_read_draw_data_parses_empty_fields_as_none(tmp_path):
+    csv_file = tmp_path / "draw_input.csv"
+    csv_file.write_text(HEADER + "D;W1;;;;;1;;1001;1002\n", encoding="utf-8")
+
+    row = _read_with_config_path("draw_data_path", csv_file, read_draw_data)[0]
+
+    assert (row.seeding, row.amount_of_groups, row.group_no, row.group_pos) == (None, None, None, None)
+    assert (row.start_number_a, row.start_number_b) == (1001, 1002)
+
+
+def test_read_players_parses_empty_base_and_qttr_as_none(tmp_path):
+    csv_file = tmp_path / "players.csv"
+    csv_file.write_text(
+        "Startnumber;Last_name;First_name;Country;PPP_chapter;Gender;QTTR\n" + "1001;Wang;Chuqin;GER;;F;\n",
+        encoding="utf-8",
+    )
+
+    player = _read_with_config_path("players_path", csv_file, read_players)[0]
+
+    assert (player.base, player.qttr) == (None, None)

@@ -1,11 +1,47 @@
 """Checks related to group assignments in competitions."""
 
 from collections import defaultdict
+from typing import TYPE_CHECKING, NamedTuple
 
+from models.draw_data import DrawDataRow
 from models.player import players_by_start_number
 
+if TYPE_CHECKING:
+    from draw.group_drawer import EmptySlot
 
-def _distribution_severity(counts):
+type Groups = dict[int, list[DrawDataRow | EmptySlot]]
+
+
+class CountryViolation(NamedTuple):
+    country: str
+    max_count: int
+    min_count: int
+    group_counts: dict[int, int]
+    severity: int
+
+
+class BaseViolation(NamedTuple):
+    group_no: int
+    base: str
+    count: int
+
+
+class QttrViolation(NamedTuple):
+    group_no: int
+    count: int
+    counts_by_group: dict[int, int]
+
+
+class TeamCountryViolation(NamedTuple):
+    team_type: str  # "full-country" or "half-country"
+    country: str
+    min_count: int
+    max_count: int
+    group_counts: dict[int, int]
+    severity: int
+
+
+def _distribution_severity(counts: list[int]) -> int:
     """
     Number of entries outside the ideal band [floor(n/G), ceil(n/G)] summed over all groups.
     Used to weight violations by how uneven a distribution is, not just whether it is uneven.
@@ -16,10 +52,10 @@ def _distribution_severity(counts):
     return sum(max(0, c - hi) + max(0, lo - c) for c in counts)
 
 
-def check_country_distribution(competition, groups):
+def check_country_distribution(competition: str, groups: Groups) -> list[CountryViolation]:
     """
     For each country, ensure the difference between the group with the most and least participants is at most 1.
-    Returns a list of (country, max_count, min_count, group_counts, severity) for violations.
+    Returns a CountryViolation for each country that violates this.
     severity is the number of players outside the ideal per-group band (at least 1).
     """
     violations = []
@@ -51,15 +87,17 @@ def check_country_distribution(competition, groups):
         if max(counts) - min(counts) > allowed_diff:
             severity = max(1, _distribution_severity(counts))
             violations.append(
-                (country, max(counts), min(counts), dict((g, group_counts.get(g, 0)) for g in all_group_nos), severity)
+                CountryViolation(
+                    country, max(counts), min(counts), {g: group_counts.get(g, 0) for g in all_group_nos}, severity
+                )
             )
     return violations
 
 
-def check_base_uniqueness(groups):
+def check_base_uniqueness(groups: Groups) -> list[BaseViolation]:
     """
     Ensure no two opponents in a group have the same base.
-    Returns a list of (group_no, base, count) for violations.
+    Returns a BaseViolation for each base that appears more than once in a group.
     """
     violations = []
 
@@ -85,15 +123,15 @@ def check_base_uniqueness(groups):
                 base_to_teams[base].append(member)
         for base, team_list in base_to_teams.items():
             if len(team_list) > 1:
-                violations.append((group_no, base, len(team_list)))
+                violations.append(BaseViolation(group_no, base, len(team_list)))
     return violations
 
 
-def get_qttr_violations(groups):
+def get_qttr_violations(groups: Groups) -> list[QttrViolation]:
     """
     Check for violations in the distribution of players without a QTTR rating across groups (singles only).
-    Returns a list of (group_no, count_no_qttr, no_qttr_counts) for groups with players lacking QTTR, only if the distribution is unbalanced.
-    no_qttr_counts maps every group_no to its count of players without QTTR.
+    Returns a QttrViolation for each group with too many players lacking QTTR, only if the distribution is unbalanced.
+    counts_by_group maps every group_no to its count of players without QTTR.
     """
     violations = []
 
@@ -104,7 +142,7 @@ def get_qttr_violations(groups):
             if member.start_number_a is None or member.start_number_a == "EMPTY":
                 continue
             a = players_by_start_number[member.start_number_a]
-            if a.qttr is None or a.qttr == "" or a.qttr == "None":
+            if a.qttr is None:
                 count_no_qttr += 1
         no_qttr_counts[group_no] = count_no_qttr
     if no_qttr_counts:
@@ -113,14 +151,14 @@ def get_qttr_violations(groups):
         if max_count > min_count + 1:
             for group_no, count in no_qttr_counts.items():
                 if count > min_count + 1:
-                    violations.append((group_no, count, no_qttr_counts))
+                    violations.append(QttrViolation(group_no, count, no_qttr_counts))
     return violations
 
 
-def check_team_country_distribution(groups):
+def check_team_country_distribution(groups: Groups) -> list[TeamCountryViolation]:
     """
     For doubles/mixed: Checks that full-country teams (e.g. <Germany, Germany>) and half-country teams (e.g. <Germany, Other>) are evenly distributed across groups.
-    Returns a list of violations: (team_type, country, min_count, max_count, group_counts, severity)
+    Returns a TeamCountryViolation for each country whose full- or half-country teams are unevenly distributed.
     severity is the number of teams outside the ideal per-group band (at least 1).
     """
     violations = []
@@ -159,7 +197,9 @@ def check_team_country_distribution(groups):
             max_count = max(counts)
             if max_count > min_count + 1:
                 severity = max(1, _distribution_severity(counts))
-                violations.append(("full-country", country, min_count, max_count, dict(group_counts), severity))
+                violations.append(
+                    TeamCountryViolation("full-country", country, min_count, max_count, dict(group_counts), severity)
+                )
     # Check for violations in half-country teams
     for country, group_counts in half_country_counts.items():
         counts = [group_counts.get(group_no, 0) for group_no in groups.keys()]
@@ -168,5 +208,7 @@ def check_team_country_distribution(groups):
             max_count = max(counts)
             if max_count > min_count + 1:
                 severity = max(1, _distribution_severity(counts))
-                violations.append(("half-country", country, min_count, max_count, dict(group_counts), severity))
+                violations.append(
+                    TeamCountryViolation("half-country", country, min_count, max_count, dict(group_counts), severity)
+                )
     return violations

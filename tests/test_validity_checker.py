@@ -21,14 +21,23 @@ from models.player import Player, players_by_start_number
 from tests.conftest import populate_players_by_start_number
 
 
-def make_row(competition_class, start_number_a, start_number_b=""):
-    return DrawDataRow("S", competition_class, "", "", "", "", True, False, start_number_a, start_number_b)
+def make_row(competition_class, start_number_a, start_number_b=None):
+    return DrawDataRow("S", competition_class, None, None, None, None, True, False, start_number_a, start_number_b)
 
 
-def group_row(competition, competition_class, start_number_a, start_number_b="", amount_of_groups="2", seeding="100"):
+def group_row(competition, competition_class, start_number_a, start_number_b=None, amount_of_groups=2, seeding=100):
     """A group-stage row (no group_no/group_pos, no bracket flags)."""
     return DrawDataRow(
-        competition, competition_class, seeding, amount_of_groups, "", "", False, False, start_number_a, start_number_b
+        competition,
+        competition_class,
+        seeding,
+        amount_of_groups,
+        None,
+        None,
+        False,
+        False,
+        start_number_a,
+        start_number_b,
     )
 
 
@@ -38,7 +47,7 @@ def bracket_row(
     group_no,
     group_pos,
     start_number_a,
-    start_number_b="",
+    start_number_b=None,
     main_round=True,
     consolation_round=False,
 ):
@@ -46,8 +55,8 @@ def bracket_row(
     return DrawDataRow(
         competition,
         competition_class,
-        "",
-        "",
+        None,
+        None,
         group_no,
         group_pos,
         main_round,
@@ -143,8 +152,8 @@ def test_find_players_in_wrong_competition_all_correct():
 def test_find_invalid_round_flags_accepts_valid_rows():
     draw_data = [
         group_row("S", "M1", 1),
-        bracket_row("S", "M1", "1", "1", 2),
-        bracket_row("S", "M1", "1", "4", 3, main_round=False, consolation_round=True),
+        bracket_row("S", "M1", 1, 1, 2),
+        bracket_row("S", "M1", 1, 4, 3, main_round=False, consolation_round=True),
     ]
 
     assert find_invalid_round_flags(draw_data) == []
@@ -152,9 +161,9 @@ def test_find_invalid_round_flags_accepts_valid_rows():
 
 def test_find_invalid_round_flags_detects_both_and_neither():
     draw_data = [
-        bracket_row("S", "M1", "1", "1", 1, main_round=True, consolation_round=True),
-        bracket_row("S", "M1", "1", "2", 2, main_round=False, consolation_round=False),
-        DrawDataRow("S", "M1", "", "2", "", "", True, False, 3, ""),
+        bracket_row("S", "M1", 1, 1, 1, main_round=True, consolation_round=True),
+        bracket_row("S", "M1", 1, 2, 2, main_round=False, consolation_round=False),
+        DrawDataRow("S", "M1", None, 2, None, None, True, False, 3, None),
     ]
 
     errors = find_invalid_round_flags(draw_data)
@@ -166,9 +175,9 @@ def test_find_invalid_round_flags_detects_both_and_neither():
 def test_find_group_no_pos_mismatch():
     draw_data = [
         group_row("S", "M1", 1),
-        bracket_row("S", "M1", "1", "1", 2),
-        DrawDataRow("S", "M1", "", "", "1", "", False, False, 3, ""),
-        DrawDataRow("S", "M1", "", "", "", "2", True, False, 4, ""),
+        bracket_row("S", "M1", 1, 1, 2),
+        DrawDataRow("S", "M1", None, None, 1, None, False, False, 3, None),
+        DrawDataRow("S", "M1", None, None, None, 2, True, False, 4, None),
     ]
 
     errors = find_group_no_pos_mismatch(draw_data)
@@ -197,7 +206,7 @@ def test_find_duplicate_players_in_class_allows_other_class_and_stage():
         group_row("S", "M1", 1),
         group_row("S", "M2", 1),
         group_row("D", "M1", 1, 2),
-        bracket_row("S", "M1", "1", "1", 1),
+        bracket_row("S", "M1", 1, 1, 1),
     ]
 
     assert find_duplicate_players_in_class(draw_data) == []
@@ -205,11 +214,11 @@ def test_find_duplicate_players_in_class_allows_other_class_and_stage():
 
 def test_find_duplicate_group_positions():
     draw_data = [
-        bracket_row("S", "M1", "1", "1", 1),
-        bracket_row("S", "M1", "1", "2", 2),
-        bracket_row("S", "M1", "1", "2", 3),
-        bracket_row("S", "M1", "2", "2", 4),
-        bracket_row("S", "M2", "1", "2", 5),
+        bracket_row("S", "M1", 1, 1, 1),
+        bracket_row("S", "M1", 1, 2, 2),
+        bracket_row("S", "M1", 1, 2, 3),
+        bracket_row("S", "M1", 2, 2, 4),
+        bracket_row("S", "M2", 1, 2, 5),
     ]
 
     errors = find_duplicate_group_positions(draw_data)
@@ -257,12 +266,12 @@ def test_find_invalid_mixed_pairs():
 
 def test_find_inconsistent_group_counts():
     draw_data = [
-        group_row("S", "M1", 1, amount_of_groups="2"),
-        group_row("S", "M1", 2, amount_of_groups="3"),
-        group_row("S", "M2", 3, amount_of_groups=""),
-        group_row("S", "W1", 4, amount_of_groups="2"),
-        group_row("S", "W1", 5, amount_of_groups="2"),
-        bracket_row("S", "W1", "1", "1", 6),
+        group_row("S", "M1", 1, amount_of_groups=2),
+        group_row("S", "M1", 2, amount_of_groups=3),
+        group_row("S", "M2", 3, amount_of_groups=None),
+        group_row("S", "W1", 4, amount_of_groups=2),
+        group_row("S", "W1", 5, amount_of_groups=2),
+        bracket_row("S", "W1", 1, 1, 6),
     ]
 
     errors = find_inconsistent_group_counts(draw_data)
@@ -275,8 +284,8 @@ def test_find_inconsistent_group_counts():
 def test_find_missing_group_seedings():
     draw_data = [
         group_row("S", "M1", 1),
-        group_row("S", "M1", 2, seeding=""),
-        bracket_row("S", "M1", "1", "1", 3),  # bracket rows carry no seeding
+        group_row("S", "M1", 2, seeding=None),
+        bracket_row("S", "M1", 1, 1, 3),  # bracket rows carry no seeding
     ]
 
     errors = find_missing_group_seedings(draw_data)
@@ -287,14 +296,14 @@ def test_find_missing_group_seedings():
 def test_find_too_few_group_entries():
     draw_data = [
         # 3 entries for 4 groups: one group would be empty
-        *[group_row("S", "M1", sn, amount_of_groups="4") for sn in (1, 2, 3)],
+        *[group_row("S", "M1", sn, amount_of_groups=4) for sn in (1, 2, 3)],
         # 4 entries for 4 groups: one per group is allowed
-        *[group_row("S", "M2", sn, amount_of_groups="4") for sn in (4, 5, 6, 7)],
-        group_row("S", "W1", 8, amount_of_groups="0"),
+        *[group_row("S", "M2", sn, amount_of_groups=4) for sn in (4, 5, 6, 7)],
+        group_row("S", "W1", 8, amount_of_groups=0),
         # inconsistent #groups is left to find_inconsistent_group_counts
-        group_row("S", "W2", 9, amount_of_groups="2"),
-        group_row("S", "W2", 10, amount_of_groups="5"),
-        bracket_row("S", "W3", "1", "1", 11),
+        group_row("S", "W2", 9, amount_of_groups=2),
+        group_row("S", "W2", 10, amount_of_groups=5),
+        bracket_row("S", "W3", 1, 1, 11),
     ]
 
     errors = find_too_few_group_entries(draw_data)
@@ -313,9 +322,9 @@ def test_find_draw_data_errors_accepts_valid_input():
     draw_data = [
         group_row("S", "M1", 2),
         group_row("S", "M1", 3),
-        group_row("D", "M1", 2, 3, amount_of_groups="1"),
-        group_row("M", "X1", 1, 2, amount_of_groups="1"),
-        bracket_row("S", "W1", "1", "1", 1),
+        group_row("D", "M1", 2, 3, amount_of_groups=1),
+        group_row("M", "X1", 1, 2, amount_of_groups=1),
+        bracket_row("S", "W1", 1, 1, 1),
     ]
 
     assert find_draw_data_errors(draw_data) == []

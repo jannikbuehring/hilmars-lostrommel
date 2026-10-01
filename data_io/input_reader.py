@@ -8,6 +8,11 @@ def _parse_bool(value: str) -> bool:
     return value.strip() == "1"
 
 
+def _parse_optional_int(value: str) -> int | None:
+    """Parse an optional integer field ('' = None)."""
+    return int(value) if value != "" else None
+
+
 def read_draw_data() -> list[DrawDataRow]:
     """Read draw data from the specified CSV file and return a list of DrawDataRow objects."""
     draw_data_file_path = settings.files.draw_data_path
@@ -31,14 +36,14 @@ def read_draw_data() -> list[DrawDataRow]:
                 DrawDataRow(
                     competition=competition,
                     competition_class=competition_class,
-                    seeding=seeding,
-                    amount_of_groups=amount_of_groups,
-                    group_no=group_no,
-                    group_pos=group_pos,
+                    seeding=_parse_optional_int(seeding),
+                    amount_of_groups=_parse_optional_int(amount_of_groups),
+                    group_no=_parse_optional_int(group_no),
+                    group_pos=_parse_optional_int(group_pos),
                     main_round=_parse_bool(main_round),
                     consolation_round=_parse_bool(consolation_round),
-                    start_number_a=start_number_a,
-                    start_number_b=start_number_b,
+                    start_number_a=int(start_number_a),
+                    start_number_b=_parse_optional_int(start_number_b),
                 )
             )
         return draw_data
@@ -56,13 +61,13 @@ def read_players() -> list[Player]:
             ]
             players.append(
                 Player(
-                    start_number=start_number,
+                    start_number=int(start_number),
                     first_name=first_name,
                     last_name=last_name,
                     country=country,
-                    base=base,
+                    base=base if base != "" else None,
                     gender=gender,
-                    qttr=qttr,
+                    qttr=_parse_optional_int(qttr),
                 )
             )
         return players

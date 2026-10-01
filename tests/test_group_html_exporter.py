@@ -53,7 +53,7 @@ def _singles_rows(start_numbers, amount_of_groups=2):
     for i, sn in enumerate(start_numbers, start=1):
         seeding = 300 - i
         seeding_by_start_numbers[str(sn)] = seeding
-        rows.append(DrawDataRow("S", "M1", seeding, amount_of_groups, "", "", True, False, sn, ""))
+        rows.append(DrawDataRow("S", "M1", seeding, amount_of_groups, None, None, True, False, sn, None))
     return rows
 
 
@@ -63,7 +63,7 @@ def _doubles_rows(pairs, amount_of_groups=2):
     for i, (a, b) in enumerate(pairs, start=1):
         seeding = 300 - i
         seeding_by_start_numbers[f"{a}/{b}"] = seeding
-        rows.append(DrawDataRow("D", "W1", seeding, amount_of_groups, "", "", True, False, a, b))
+        rows.append(DrawDataRow("D", "W1", seeding, amount_of_groups, None, None, True, False, a, b))
     return rows
 
 

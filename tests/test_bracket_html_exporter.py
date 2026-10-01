@@ -47,7 +47,7 @@ def _draw_eight_player_bracket():
         (8, 2, 4),
     ]
     rows = [
-        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, "")
+        DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, None)
         for sn, group_no, group_pos in group_layout
     ]
     matches, snapshots = draw_bracket(rows)

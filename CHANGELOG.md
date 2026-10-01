@@ -18,6 +18,8 @@ and [keeps a changelog](https://keepachangelog.com).
 - Every config key is now optional. A missing key uses the default value shown in `config_template.ini`
 - The bracket weight order is checked once at startup instead of once per bracket, so each warning appears only once
 - The `misc/` package is split by layer: `core/` (config, version) and `app/` (pipeline, which was `initializer.py`, plus menu, cli, banner, which was `startup_info.py`, and progress spinner). `DrawResults` and `COMPETITIONS` moved to `models/draw_results.py`
+- The group checks return named records (`CountryViolation`, `BaseViolation`, `QttrViolation`, `TeamCountryViolation`) instead of positional tuples
+- `Player` and `DrawDataRow` are dataclasses with typed, already-parsed fields. CSV parsing moved into `data_io/input_reader.py`. Public functions in the checkers, drawers, output writer and HTML exporters have type hints
 
 ### Deprecated
 

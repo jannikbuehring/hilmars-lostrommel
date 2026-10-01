@@ -26,7 +26,7 @@ def crowded_class():
     for sn in range(1, 41):
         seeding = 300 - sn
         seeding_by_start_numbers[str(sn)] = seeding
-        rows.append(DrawDataRow("S", "M1", seeding, 8, "", "", True, False, sn, ""))
+        rows.append(DrawDataRow("S", "M1", seeding, 8, None, None, True, False, sn, None))
     yield rows
     seeding_by_start_numbers.clear()
 
@@ -70,7 +70,7 @@ def test_one_entry_per_group_does_not_crash(escape_heavy_config):
         Player(sn, f"First{sn}", f"Last{sn}", "GER", "Base1", "M", 2000 - sn * 10)
     for p in players_list:
         players_by_start_number[p.start_number] = p
-    rows = [DrawDataRow("S", "M1", 300 - sn, 4, "", "", False, False, sn, "") for sn in range(1, 5)]
+    rows = [DrawDataRow("S", "M1", 300 - sn, 4, None, None, False, False, sn, None) for sn in range(1, 5)]
     settings.group_draw.max_seed_retries = 5
 
     groups, snapshots = draw_groups_monte_carlo(rows, 4)

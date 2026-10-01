@@ -49,16 +49,16 @@ def register_players(specs):
 
 
 def singles(start_number):
-    return DrawDataRow("S", "M1", "", "", "", "", True, False, start_number, "")
+    return DrawDataRow("S", "M1", None, None, None, None, True, False, start_number, None)
 
 
 def doubles(start_number_a, start_number_b):
-    return DrawDataRow("D", "W1", "", "", "", "", True, False, start_number_a, start_number_b)
+    return DrawDataRow("D", "W1", None, None, None, None, True, False, start_number_a, start_number_b)
 
 
 def tiered(start_number, group_no, group_pos):
     """A singles row that carries a group placement (singles() leaves it blank)."""
-    return DrawDataRow("S", "M1", "", "", group_no, group_pos, True, False, start_number, "")
+    return DrawDataRow("S", "M1", None, None, group_no, group_pos, True, False, start_number, None)
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +174,7 @@ def test_quarter_country_term_contributes_to_score():
     """A country concentrated in one quarter must cost more than a spread one."""
     register_players([(i, "GER" if i <= 4 else f"C{i}") for i in range(1, 17)])
     # score_bracket's group-separation checks need real group_no/group_pos values.
-    grouped = {sn: DrawDataRow("S", "M1", "", "", sn, 1, True, False, sn, "") for sn in range(1, 17)}
+    grouped = {sn: DrawDataRow("S", "M1", None, None, sn, 1, True, False, sn, None) for sn in range(1, 17)}
     # All 4 GER players in quarter 0 of an 8-match bracket.
     matches = {i: [grouped[i * 2 - 1], grouped[i * 2]] for i in range(1, 9)}
 
@@ -222,7 +222,7 @@ def test_uneven_byes_across_halves_violate():
 def test_bye_balance_is_not_part_of_the_score():
     """Byes never move after Phase 1b, so scoring the term would only stop the
     phase-5 `score == 0` early exits from ever firing."""
-    grouped = {sn: DrawDataRow("S", "M1", "", "", sn, 1, True, False, sn, "") for sn in range(1, 17)}
+    grouped = {sn: DrawDataRow("S", "M1", None, None, sn, 1, True, False, sn, None) for sn in range(1, 17)}
     register_players([(i, f"C{i}") for i in range(1, 17)])
     balanced = {i: [grouped[i * 2 - 1], "BYE" if i in (1, 2, 3, 5, 6, 7) else grouped[i * 2]] for i in range(1, 9)}
     lopsided = {i: [grouped[i * 2 - 1], "BYE" if i in (1, 2, 3, 4, 5, 6) else grouped[i * 2]] for i in range(1, 9)}

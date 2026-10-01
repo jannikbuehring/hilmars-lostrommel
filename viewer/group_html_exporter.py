@@ -20,6 +20,7 @@ import os
 
 from core.version import APP_NAME, __version__
 from draw.group_drawer import EmptySlot
+from models.snapshot import Snapshot
 
 # Shared with the bracket export so both files carry an identical heading and
 # provenance footer.
@@ -442,19 +443,26 @@ def _render_html_document(heading, payload, cards_markup, footer_markup):
 """
 
 
-def group_html_filename(competition, competition_class):
+def group_html_filename(competition: str, competition_class: str) -> str:
     """Return the HTML filename for one competition class's groups (shared naming convention)."""
     return f"{competition}_{competition_class}_groups.html"
 
 
-def group_html_path(competition, competition_class, output_dir):
+def group_html_path(competition: str, competition_class: str, output_dir: str) -> str:
     """Return the full HTML path for one competition class's groups."""
     return os.path.join(output_dir, group_html_filename(competition, competition_class))
 
 
 def export_group_html(
-    competition, competition_class, groups, snapshots, output_dir, run_meta=None, max_snapshots=None, draw_seconds=None
-):
+    competition: str,
+    competition_class: str,
+    groups: dict[int, list],
+    snapshots: list[Snapshot],
+    output_dir: str,
+    run_meta: dict | None = None,
+    max_snapshots: int | None = None,
+    draw_seconds: float | None = None,
+) -> str | None:
     """Write one self-contained HTML file for a competition class's group draw.
 
     *run_meta* carries the run-wide provenance shown in the footer (version,

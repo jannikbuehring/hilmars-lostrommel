@@ -58,7 +58,7 @@ def _singles_rows(start_numbers):
         group_no = 1 if index < 4 else 2
         group_pos = index % 4 + 1
         rows.append(
-            DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, "")
+            DrawDataRow("S", "M1", seeding_by_start_numbers[str(sn)], 2, group_no, group_pos, True, False, sn, None)
         )
     return rows
 
@@ -128,8 +128,8 @@ def test_group_rows_carry_group_number_and_no_draw_number(eight_players):
         "S": {
             "M1": {
                 "group": {
-                    1: [DrawDataRow("S", "M1", 100, 2, "", "", False, False, 1, "")],
-                    2: [DrawDataRow("S", "M1", 90, 2, "", "", False, False, 2, "")],
+                    1: [DrawDataRow("S", "M1", 100, 2, None, None, False, False, 1, None)],
+                    2: [DrawDataRow("S", "M1", 90, 2, None, None, False, False, 2, None)],
                 }
             }
         }

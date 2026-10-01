@@ -5,6 +5,7 @@ import glob
 import os
 import shutil
 from types import SimpleNamespace
+from typing import Iterable
 
 from core.config import settings
 from models.player import players_by_start_number
@@ -66,7 +67,7 @@ def _iter_bracket_slots(matches):
             yield 2 * match_index - 1 + side, value
 
 
-def prepare_export_from_group_draw(groups):
+def prepare_export_from_group_draw(groups: dict[str, dict[str, dict]]) -> list[SimpleNamespace]:
     """Prepare export data from group draw data."""
     export = []
 
@@ -96,7 +97,7 @@ def prepare_export_from_group_draw(groups):
     return export
 
 
-def prepare_export_from_bracket_draw(draw_data):
+def prepare_export_from_bracket_draw(draw_data: dict[str, dict[str, dict]]) -> list[SimpleNamespace]:
     """Prepare export data from bracket draw data.
 
     `draw_data` expected format:
@@ -163,7 +164,7 @@ REPORT_HEADERS = [
 PREVIOUS_DIR_NAME = "previous"
 
 
-def report_file_path():
+def report_file_path() -> str:
     """Path of the draw report: `<output stem>_report.csv` next to the output CSV."""
     stem, _ = os.path.splitext(settings.files.output_file_path)
     return f"{stem}_report.csv"
@@ -195,14 +196,18 @@ def _write_csv_atomically(path, headers, rows):
             os.remove(tmp_path)
 
 
-def write_to_csv(draw_data):
+def write_to_csv(draw_data: Iterable[SimpleNamespace]) -> str:
     """Write the provided draw data to a CSV file and return the path written."""
     output_file_path = settings.files.output_file_path
     _write_csv_atomically(output_file_path, HEADERS, (vars(line) for line in draw_data))
     return output_file_path
 
 
-def prepare_report(groups, group_failures, bracket_payload):
+def prepare_report(
+    groups: dict[str, dict[str, dict]],
+    group_failures: list[tuple[str, str, str]],
+    bracket_payload: dict[str, dict[str, dict]],
+) -> list[dict]:
     """Build the draw report rows: one per group class and one per bracket.
 
     `groups` is `{'S': {class: {...}}, ...}` as drawn (each class dict may carry
@@ -283,14 +288,14 @@ def prepare_report(groups, group_failures, bracket_payload):
     return rows
 
 
-def write_report_csv(rows):
+def write_report_csv(rows: Iterable[dict]) -> str:
     """Write the draw report (see `prepare_report`) and return the path written."""
     path = report_file_path()
     _write_csv_atomically(path, REPORT_HEADERS, rows)
     return path
 
 
-def archive_previous_outputs(include_html=True):
+def archive_previous_outputs(include_html: bool = True) -> None:
     """Move the previous run's outputs to `<output dir>/previous/`.
 
     Run before anything is drawn, so a run that fails part-way can never leave

@@ -35,13 +35,13 @@ Error-handling summary: **stages 0-3 abort the whole pipeline (as does an unexpe
 
 | Class | File | Role |
 |---|---|---|
-| `Player` | `models/player.py` | One competitor: `start_number, first_name, last_name, country, base, gender, qttr`. Appends itself to the module-global `players_list` on construction. |
-| `DrawDataRow` | `models/draw_data.py` | One line of `draw_input.csv`: a group-stage entry (`group_pos is None`) or a bracket-stage entry (`group_pos` set). Registers its seeding into the module-global `seeding_by_start_numbers` (keyed `"A"` or `"A/B"`) on construction. |
+| `Player` | `models/player.py` | Dataclass for one competitor: `start_number, first_name, last_name, country, base, gender, qttr`. Fields arrive already parsed (`int`, or `None` for an empty `base`/`qttr`), because `data_io/input_reader.py` does the parsing. Appends itself to the module-global `players_list` on construction. |
+| `DrawDataRow` | `models/draw_data.py` | Dataclass for one line of `draw_input.csv`, with fields already parsed by the reader (empty number fields become `None`): a group-stage entry (`group_pos is None`) or a bracket-stage entry (`group_pos` set). Registers its seeding into the module-global `seeding_by_start_numbers` (keyed `"A"` or `"A/B"`) on construction. |
 | `Snapshot` | `models/snapshot.py` | Audit-trail entry (`action, groups, index, participants, violations, violation_score, state`) appended after every meaningful step of the group and bracket draws. Powers the HTML step-through viewers and failure diagnostics. |
 | `BracketGeometry`, `allowed_quarters` | `models/bracket_geometry.py` | The single source for half/quarter geometry and for the group-separation quarter rule. The drawer places by it, `bracket_checker` checks by it, and the HTML viewer groups quarters by it, so the three cannot drift apart. |
 
 **Module-level registries** (import/call order matters):
-- `players_list`, `players_by_start_number` (`models/player.py`). The latter is only populated by `check_all_players_only_exist_once()`, not by `Player.__init__`, so anything that reads it requires that check to have run.
+- `players_list`, `players_by_start_number` (`models/player.py`). The latter is only populated by `check_all_players_only_exist_once()`, not by `Player` construction, so anything that reads it requires that check to have run.
 - `seeding_by_start_numbers` (`models/draw_data.py`) — used by the bracket drawer to re-attach seeding to bracket-stage rows, which carry none in the CSV.
 
 **Runtime data shapes:**
@@ -139,7 +139,7 @@ On an unrecoverable failure, `raise_with_failure_snapshot` attaches a diagnostic
 ## 6. Validation (`checks/`)
 
 - **`validity_checker.py`** — pre-draw input checks: duplicate, missing and unused players; gender per competition; and `find_draw_data_errors`, which collects the structural checks: round flags (exactly one for bracket rows, none for group rows), `group_no`/`group_pos` set together, no duplicate player per class and stage, no duplicate `group_pos` per group, valid partners, one man and one woman per mixed pair, one consistent `#groups` per class, a seeding on every group-stage row, and at least `#groups` group-stage entries. All are fatal except the unused-player warning.
-- **`group_checker.py`** — `check_country_distribution`, `check_base_uniqueness`, `get_qttr_violations`, `check_team_country_distribution`. Used both for scoring during the Monte Carlo search and for the post-draw report.
+- **`group_checker.py`** — `check_country_distribution`, `check_base_uniqueness`, `get_qttr_violations`, `check_team_country_distribution`. They return lists of NamedTuples (`CountryViolation`, `BaseViolation`, `QttrViolation`, `TeamCountryViolation`), so consumers read fields by name and not by position. Used both for scoring during the Monte Carlo search and for the post-draw report.
 - **`bracket_checker.py`** — the separation, matchup, country, base and balance checks listed in the table in [§5](#5-algorithms-draw), the round-two family (`derive_round_two_matches`, `check_round_two_matchups`, `score_round_two`), and `score_bracket` / `score_bracket_tiers`.
 
 Key invariants:

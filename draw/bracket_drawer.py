@@ -5,6 +5,7 @@ import itertools
 import logging
 import math
 import random
+from collections.abc import Callable
 from typing import List
 
 from checks.bracket_checker import (
@@ -133,7 +134,7 @@ def _describe_hard_violation(rule, violation):
     return f"group {group_no}: {text}"
 
 
-def bracket_quality(snapshots):
+def bracket_quality(snapshots: list[Snapshot]) -> dict:
     """Summarise a finished draw_bracket result for the operator.
 
     Every return path of draw_bracket appends a snapshot of exactly the state it
@@ -212,7 +213,9 @@ def _result_rank(snapshots):
     )
 
 
-def draw_bracket(class_subset: list[DrawDataRow], phase1_only: bool = False, progress=None):
+def draw_bracket(
+    class_subset: list[DrawDataRow], phase1_only: bool = False, progress: Callable[[str], None] | None = None
+) -> tuple[dict[int, list], list[Snapshot]]:
     """
     Build a single-elimination bracket from seeded participants.
     class_subset: players advancing from groups
